@@ -134,6 +134,7 @@ class UserCreateSchema(BaseModel):
     first_name: str = Field(default="", max_length=150)
     last_name: str = Field(default="", max_length=150)
     role: str = Field(default="CLIENT")
+    sub_role: Optional[str] = Field(default=None)
 
 
 class UserUpdateSchema(BaseModel):

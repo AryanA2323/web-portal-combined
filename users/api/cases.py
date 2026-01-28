@@ -108,6 +108,40 @@ class RecentActivitySchema(Schema):
     time: str
 
 
+class CreateCaseSchema(Schema):
+    """Schema for creating a new case."""
+    title: str
+    description: str
+    category: str
+    priority: str
+    status: str = 'OPEN'
+    claim_number: str
+    client_code: str
+    insured_name: str
+    claimant_name: str
+    incident_address: str
+    incident_city: str
+    incident_state: str
+    incident_postal_code: str
+    incident_country: str = 'India'
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class CaseCreatedResponse(Schema):
+    """Response schema for case creation."""
+    id: int
+    case_number: str
+    title: str
+    message: str
+
+
+class ErrorResponse(Schema):
+    """Error response schema."""
+    error: str
+    detail: Optional[str] = None
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -233,6 +267,126 @@ def get_case(request: HttpRequest, case_id: int):
     except Exception as e:
         logger.error(f"Failed to fetch case {case_id}: {e}")
         return 500, {"error": "Failed to fetch case"}
+
+
+@router.post(
+    "/cases",
+    response={200: CaseCreatedResponse, 403: ErrorResponse, 400: ErrorResponse},
+    summary="Create New Case",
+    description="Create a new case in the system.",
+)
+def create_case(request: HttpRequest, payload: CreateCaseSchema):
+    """Create a new case."""
+    if not is_admin_or_super_admin(request.user):
+        return 403, {"error": "Admin access required"}
+    
+    try:
+        from django.utils import timezone
+        import uuid
+        
+        # Generate case number
+        case_number = f"CASE-{uuid.uuid4().hex[:8].upper()}"
+        
+        with connection.cursor() as cursor:
+            # Insert case into database with minimal required fields
+            insert_query = """
+                INSERT INTO cases_case (
+                    case_number,
+                    title,
+                    description,
+                    category,
+                    priority,
+                    status,
+                    claim_number,
+                    client_code,
+                    insured_name,
+                    claimant_name,
+                    incident_address,
+                    incident_city,
+                    incident_state,
+                    incident_postal_code,
+                    incident_country,
+                    latitude,
+                    longitude,
+                    formatted_address,
+                    created_by_id,
+                    client_id,
+                    source,
+                    workflow_type,
+                    investigation_progress,
+                    created_at,
+                    updated_at,
+                    chk_spot,
+                    chk_hospital,
+                    chk_claimant,
+                    chk_insured,
+                    chk_witness,
+                    chk_driver,
+                    chk_dl,
+                    chk_rc,
+                    chk_permit,
+                    chk_court,
+                    chk_notice,
+                    chk_134_notice,
+                    chk_rti,
+                    chk_medical_verification,
+                    chk_income
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                ) RETURNING id
+            """
+            
+            now = timezone.now()
+            
+            # Format address from components
+            formatted_address = f"{payload.incident_address}, {payload.incident_city}, {payload.incident_state} {payload.incident_postal_code}, {payload.incident_country}"
+            
+            cursor.execute(insert_query, [
+                case_number,
+                payload.title,
+                payload.description,
+                payload.category,
+                payload.priority,
+                payload.status,
+                payload.claim_number,
+                payload.client_code,
+                payload.insured_name,
+                payload.claimant_name,
+                payload.incident_address,
+                payload.incident_city,
+                payload.incident_state,
+                payload.incident_postal_code,
+                payload.incident_country,
+                payload.latitude,
+                payload.longitude,
+                formatted_address,
+                request.user.id,
+                1,  # Default client_id
+                'MANUAL',
+                'STANDARD',
+                0,  # investigation_progress
+                now,
+                now,
+                False, False, False, False, False,  # chk_spot through chk_driver
+                False, False, False, False, False,  # chk_dl through chk_notice
+                False, False, False, False, False   # chk_134_notice through chk_income
+            ])
+            
+            case_id = cursor.fetchone()[0]
+            
+            return 200, {
+                "id": case_id,
+                "case_number": case_number,
+                "title": payload.title,
+                "message": f"Case {case_number} created successfully"
+            }
+    
+    except Exception as e:
+        logger.error(f"Failed to create case: {e}")
+        return 400, {"error": "Failed to create case", "detail": str(e)}
 
 
 @router.get(

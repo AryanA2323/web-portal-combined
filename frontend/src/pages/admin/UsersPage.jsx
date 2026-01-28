@@ -82,6 +82,7 @@ const UsersPage = () => {
     first_name: '',
     last_name: '',
     role: 'VENDOR',
+    sub_role: '',
   });
   
   const [formData, setFormData] = useState({
@@ -89,6 +90,7 @@ const UsersPage = () => {
     last_name: '',
     email: '',
     role: 'VENDOR',
+    sub_role: '',
     is_active: true,
     permissions: [],
   });
@@ -121,6 +123,7 @@ const UsersPage = () => {
       first_name: '',
       last_name: '',
       role: 'VENDOR',
+      sub_role: '',
     });
     setCreateDialogOpen(true);
   };
@@ -135,6 +138,7 @@ const UsersPage = () => {
       first_name: '',
       last_name: '',
       role: 'VENDOR',
+      sub_role: '',
     });
   };
 
@@ -179,7 +183,7 @@ const UsersPage = () => {
         first_name: createFormData.first_name.trim() || '',
         last_name: createFormData.last_name.trim() || '',
         role: createFormData.role,
-        sub_role: sub_role,
+        sub_role: createFormData.sub_role || '',
       };
 
       await api.post('/users', payload);

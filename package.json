@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "@react-native-community/cli-platform-android": "^20.1.0"
+  },
+  "dependencies": {
+    "expo": "^54.0.32"
+  }
+}

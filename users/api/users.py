@@ -105,6 +105,7 @@ def create_user(request, payload: UserCreateSchema):
             first_name=payload.first_name or '',
             last_name=payload.last_name or '',
             role=role_upper,
+            sub_role=payload.sub_role or '',
             is_active=True,
         )
         
@@ -112,8 +113,9 @@ def create_user(request, payload: UserCreateSchema):
         
         return 201, UserResponseSchema.model_validate(user)
     except Exception as e:
-        logger.error(f"User creation failed: {e}")
-        return 400, {"error": "Failed to create user", "code": "USER_CREATION_FAILED"}
+        error_msg = str(e)
+        logger.error(f"User creation failed: {error_msg}", exc_info=True)
+        return 400, {"error": f"Failed to create user: {error_msg}", "code": "USER_CREATION_FAILED"}
 
 
 @router.get(
