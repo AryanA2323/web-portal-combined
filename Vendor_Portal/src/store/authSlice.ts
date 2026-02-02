@@ -17,7 +17,7 @@ const initialState: AuthState = {
   user: null,
   accessToken: null,
   refreshToken: null,
-  isLoading: false,
+  isLoading: true,
   isAuthenticated: false,
   error: null,
 };
@@ -34,12 +34,18 @@ export const loginUser = createAsyncThunk(
   }
 );
 
-export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { rejectWithValue }) => {
+export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   try {
+    // Call backend logout endpoint
     await apiService.logout();
-  } catch (error: any) {
-    return rejectWithValue(error.message || 'Logout failed');
+  } catch (error) {
+    // Even if backend call fails, we still want to clear local state
+    console.log('Backend logout call failed, clearing local state');
+  } finally {
+    // Always clear tokens from storage
+    await apiService.clearTokens();
   }
+  return { success: true };
 });
 
 export const restoreToken = createAsyncThunk('auth/restoreToken', async (_, { rejectWithValue }) => {
@@ -84,7 +90,7 @@ const authSlice = createSlice({
         state.refreshToken = action.payload.refresh;
         state.error = null;
         // Store user data
-        SecureStore.setItemAsync(STORAGE_KEYS.USER_DATA, JSON.stringify(action.payload.user));
+        SecureStore.setItemAsync(STORAGE_KEYS.USER_DATA, JSON.stringify(action.payload.user)).catch(() => {});
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -94,19 +100,25 @@ const authSlice = createSlice({
         state.accessToken = null;
         state.refreshToken = null;
       })
+      .addCase(logoutUser.pending, (state) => {
+        state.isLoading = true;
+      })
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
         state.accessToken = null;
         state.refreshToken = null;
         state.isAuthenticated = false;
         state.error = null;
-        SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA);
+        state.isLoading = false;
+        SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA).catch(() => {});
       })
       .addCase(logoutUser.rejected, (state) => {
         state.user = null;
         state.accessToken = null;
         state.refreshToken = null;
         state.isAuthenticated = false;
+        state.error = null;
+        state.isLoading = false;
       })
       .addCase(restoreToken.pending, (state) => {
         state.isLoading = true;

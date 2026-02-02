@@ -33,7 +33,6 @@ export default function LoginScreen() {
       await dispatch(
         loginUser({ email, password })
       ).unwrap();
-      // Navigation will happen automatically via the index.tsx useEffect
       router.replace('/(tabs)');
     } catch (err) {
       Alert.alert('Login Failed', error || 'Invalid credentials');
@@ -42,62 +41,77 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer}>
-      <ScrollView style={styles.container}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         <View style={styles.innerContainer}>
-          <View style={styles.header}>
+          {/* Header with gradient */}
+          <View style={styles.headerContainer}>
+            <View style={styles.logoCircle}>
+              <Text style={styles.logoText}>V</Text>
+            </View>
             <Text style={styles.title}>Vendor Portal</Text>
-            <Text style={styles.subtitle}>Login to your account</Text>
+            <Text style={styles.subtitle}>Welcome back! Please login to continue</Text>
           </View>
 
+          {/* Error Alert */}
           {error && (
             <View style={styles.errorBox}>
+              <Text style={styles.errorIcon}>⚠️</Text>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
 
-          <View style={styles.form}>
+          {/* Login Form Card */}
+          <View style={styles.formCard}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                value={email}
-                onChangeText={setEmail}
-                editable={!isLoading}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
+              <Text style={styles.label}>Email Address</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>📧</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={setEmail}
+                  editable={!isLoading}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                />
+              </View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                value={password}
-                onChangeText={setPassword}
-                editable={!isLoading}
-                secureTextEntry
-              />
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>🔒</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#999"
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!isLoading}
+                  secureTextEntry
+                  autoComplete="password"
+                />
+              </View>
             </View>
 
             <TouchableOpacity
               style={[styles.button, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
+              activeOpacity={0.8}
             >
               {isLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Login</Text>
+                <>
+                  <Text style={styles.buttonText}>Login</Text>
+                  <Text style={styles.buttonIcon}>→</Text>
+                </>
               )}
             </TouchableOpacity>
-          </View>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              Test vendor email: vendor@example.com
-            </Text>
           </View>
         </View>
       </ScrollView>
@@ -106,85 +120,144 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  safeContainer: {
+    flex: 1,
+    backgroundColor: '#f5f7fa',
+  },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   innerContainer: {
     flex: 1,
-    padding: theme.spacing.lg,
+    padding: 24,
     justifyContent: 'center',
   },
-  header: {
-    marginBottom: theme.spacing.xl,
+  headerContainer: {
     alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  logoText: {
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: '#fff',
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: theme.colors.primary,
-    marginBottom: theme.spacing.sm,
+    color: '#1a1a1a',
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: theme.colors.textSecondary,
+    color: '#666',
+    textAlign: 'center',
   },
   errorBox: {
     backgroundColor: '#fee',
-    borderColor: '#f00',
-    borderWidth: 1,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f44336',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  errorIcon: {
+    fontSize: 24,
+    marginRight: 12,
   },
   errorText: {
     color: '#c00',
     fontSize: 14,
+    flex: 1,
   },
-  form: {
-    marginBottom: theme.spacing.xl,
+  formCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+    marginBottom: 24,
   },
   inputGroup: {
-    marginBottom: theme.spacing.lg,
+    marginBottom: 20,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: theme.spacing.sm,
+    color: '#333',
+    marginBottom: 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    backgroundColor: '#f9f9f9',
+    paddingHorizontal: 16,
+  },
+  inputIcon: {
+    fontSize: 20,
+    marginRight: 12,
   },
   input: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    flex: 1,
+    paddingVertical: 14,
     fontSize: 16,
-    backgroundColor: '#fff',
+    color: '#333',
   },
   button: {
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.borderRadius.md,
-    paddingVertical: theme.spacing.md,
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    marginTop: 8,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
+    marginRight: 8,
   },
-  footer: {
-    alignItems: 'center',
-    paddingTop: theme.spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  footerText: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
+  buttonIcon: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
 });

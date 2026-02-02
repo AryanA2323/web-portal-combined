@@ -42,7 +42,10 @@ class ApiService {
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Don't try to refresh token for logout endpoint or if already retried
+        if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/logout')) {
+          originalRequest._retry = true;
+
           if (this.isRefreshing) {
             return new Promise((onSuccess, onFailed) => {
               this.failedQueue.push({ onSuccess, onFailed });
@@ -50,16 +53,24 @@ class ApiService {
               .then((token) => {
                 originalRequest.headers.Authorization = `Bearer ${token}`;
                 return this.api(originalRequest);
-              });
+              })
+              .catch(() => Promise.reject(error));
           }
 
-          originalRequest._retry = true;
           this.isRefreshing = true;
 
           try {
             const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
             if (!refreshToken) {
-              throw new Error('No refresh token available');
+              // No refresh token available, silently clear tokens and reject
+              await Promise.all([
+                SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
+                SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
+                SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA).catch(() => {})
+              ]);
+              this.isRefreshing = false;
+              this.processQueue(error, null);
+              return Promise.reject(error);
             }
 
             const response = await axios.post(
@@ -79,9 +90,12 @@ class ApiService {
           } catch (refreshError) {
             this.processQueue(refreshError as AxiosError, null);
             // Clear stored tokens on refresh failure
-            await SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-            await SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
-            return Promise.reject(refreshError);
+            await Promise.all([
+              SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
+              SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
+              SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA).catch(() => {})
+            ]);
+            return Promise.reject(error);
           } finally {
             this.isRefreshing = false;
           }
@@ -131,9 +145,19 @@ class ApiService {
       // Store the access token (refresh token not available from this endpoint)
       await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
       
+      // Transform backend user data to match VendorUser interface
+      const vendorUser = {
+        id: user.id,
+        email: user.email,
+        name: `${user.first_name} ${user.last_name}`.trim() || user.username,
+        phone: user.phone || '',
+        company: user.company || '',
+        role: user.role,
+      };
+      
       // Return formatted response matching AuthResponse type
       return {
-        user,
+        user: vendorUser,
         access: accessToken,
         refresh: null,
       };
@@ -144,12 +168,17 @@ class ApiService {
 
   async logout(): Promise<void> {
     try {
+      // Try to call logout endpoint, but don't fail if it errors
       await this.api.post('/auth/logout');
     } catch (error) {
-      console.error('Logout error:', error);
+      // Silently ignore logout endpoint errors - we'll clear tokens anyway
     } finally {
-      await SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-      await SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
+      // Always clear tokens regardless of API call result
+      await Promise.all([
+        SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
+        SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
+        SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA).catch(() => {})
+      ]);
     }
   }
 

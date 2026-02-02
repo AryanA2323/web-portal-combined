@@ -78,3 +78,9 @@ VendorPortal/.expo-shared/
 # Misc
 *.pem
 .cache/
+
+# OAuth tokens and sensitive files
+gmail_token.pickle
+*.pickle
+token.json
+credentials.json

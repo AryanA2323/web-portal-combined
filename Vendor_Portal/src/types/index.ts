@@ -15,6 +15,7 @@ export interface VendorUser {
   name: string;
   phone?: string;
   company?: string;
+  address?: string;
   role: string;
 }
 

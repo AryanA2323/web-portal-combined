@@ -53,6 +53,13 @@ const casesSlice = createSlice({
     clearSelectedCase: (state) => {
       state.selectedCase = null;
     },
+    clearAllCases: (state) => {
+      state.cases = [];
+      state.selectedCase = null;
+      state.totalCount = 0;
+      state.error = null;
+      state.isLoading = false;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -101,5 +108,5 @@ const casesSlice = createSlice({
   },
 });
 
-export const { clearError, clearSelectedCase } = casesSlice.actions;
+export const { clearError, clearSelectedCase, clearAllCases } = casesSlice.actions;
 export default casesSlice.reducer;
