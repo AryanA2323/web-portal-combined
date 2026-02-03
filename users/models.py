@@ -332,3 +332,363 @@ class AuthToken(models.Model):
     
     def __str__(self):
         return f"Token for {self.user.username} (expires: {self.expires_at})"
+
+
+class EmailIntake(models.Model):
+    """Model for storing incoming emails from Gmail OAuth."""
+    
+    # Email metadata
+    message_id = models.CharField(max_length=255, unique=True, db_index=True)
+    thread_id = models.CharField(max_length=255, blank=True)
+    subject = models.CharField(max_length=500)
+    sender_email = models.EmailField()
+    sender_name = models.CharField(max_length=255, blank=True)
+    recipient_email = models.EmailField()
+    cc_emails = models.TextField(blank=True, help_text='Comma-separated CC emails')
+    bcc_emails = models.TextField(blank=True, help_text='Comma-separated BCC emails')
+    
+    # Email content
+    body_text = models.TextField(blank=True)
+    body_html = models.TextField(blank=True)
+    
+    # Email received date
+    received_at = models.DateTimeField()
+    
+    # Processing status
+    class ProcessingStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        PROCESSING = 'PROCESSING', 'Processing'
+        COMPLETED = 'COMPLETED', 'Completed'
+        FAILED = 'FAILED', 'Failed'
+    
+    processing_status = models.CharField(
+        max_length=20,
+        choices=ProcessingStatus.choices,
+        default=ProcessingStatus.PENDING,
+        db_index=True,
+    )
+    processing_error = models.TextField(blank=True)
+    
+    # Has attachments flag
+    has_attachments = models.BooleanField(default=False)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['message_id']),
+            models.Index(fields=['processing_status', 'created_at']),
+            models.Index(fields=['received_at']),
+            models.Index(fields=['sender_email']),
+        ]
+        ordering = ['-received_at']
+    
+    def __str__(self):
+        return f"Email from {self.sender_email}: {self.subject[:50]}"
+
+
+class EmailAttachment(models.Model):
+    """Model for storing email attachments."""
+    
+    email = models.ForeignKey(
+        EmailIntake,
+        on_delete=models.CASCADE,
+        related_name='attachments'
+    )
+    
+    # Attachment metadata
+    filename = models.CharField(max_length=500)
+    content_type = models.CharField(max_length=100)
+    file_size = models.BigIntegerField(default=0, help_text='File size in bytes')
+    
+    # File storage
+    file_path = models.FileField(upload_to='email_attachments/%Y/%m/%d/')
+    
+    # PDF extraction
+    is_pdf = models.BooleanField(default=False)
+    extracted_text = models.TextField(blank=True, help_text='Text extracted from PDF')
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['email', 'filename']),
+            models.Index(fields=['content_type']),
+            models.Index(fields=['is_pdf']),
+        ]
+        ordering = ['filename']
+    
+    def __str__(self):
+        return f"{self.filename} ({self.content_type})"
+
+
+class GmailOAuthToken(models.Model):
+    """Model for storing Gmail OAuth tokens."""
+    
+    # OAuth credentials
+    access_token = models.TextField()
+    refresh_token = models.TextField()
+    token_uri = models.URLField(default='https://oauth2.googleapis.com/token')
+    client_id = models.CharField(max_length=500)
+    client_secret = models.CharField(max_length=500)
+    scopes = models.TextField(help_text='JSON array of scopes')
+    
+    # Token expiry
+    expires_at = models.DateTimeField()
+    
+    # Email account
+    email_address = models.EmailField(unique=True)
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['email_address']),
+            models.Index(fields=['is_active']),
+        ]
+    
+    def __str__(self):
+        return f"Gmail OAuth Token for {self.email_address}"
+
+
+# ============================================================================
+# Insurance Case Management Models (From Traditional Excel Database)
+# ============================================================================
+
+class Client(models.Model):
+    """Client/Insurance Company model."""
+    
+    client_code = models.CharField(max_length=20, unique=True, db_index=True)
+    client_name = models.CharField(max_length=500)
+    location = models.CharField(max_length=200, blank=True)
+    date_of_commencement = models.DateField(null=True, blank=True)
+    
+    # Pricing per investigation type
+    insured_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    notice_134_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    claimant_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    income_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    driver_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    dl_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    rc_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    permit_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    spot_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    court_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    notice_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    rti_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    hospital_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    # Metadata
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'insurance_client'
+        indexes = [
+            models.Index(fields=['client_code']),
+            models.Index(fields=['client_name']),
+        ]
+        ordering = ['client_name']
+    
+    def __str__(self):
+        return f"{self.client_code} - {self.client_name}"
+
+
+class InsuranceCase(models.Model):
+    """Main Insurance Case model - matches traditional Excel MIS sheet structure."""
+    
+    # Category choices
+    CATEGORY_CHOICES = [
+        ('MACT', 'MACT'),
+        ('CIVIL', 'Civil'),
+        ('CRIMINAL', 'Criminal'),
+        ('OTHER', 'Other'),
+    ]
+    
+    # Case Type choices
+    CASE_TYPE_CHOICES = [
+        ('Full Case', 'Full Case'),
+        ('Connected Case', 'Connected Case'),
+        ('Partial Investigation', 'Partial Investigation'),
+    ]
+    
+    # Status choices
+    STATUS_CHOICES = [
+        ('Open', 'Open'),
+        ('WIP', 'Work In Progress'),
+        ('Completed', 'Completed'),
+        ('Dispatch', 'Dispatch'),
+        ('Closed', 'Closed'),
+    ]
+    
+    # Investigation Report Status
+    REPORT_STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Draft', 'Draft'),
+        ('Completed', 'Completed'),
+        ('Dispatch', 'Dispatch'),
+    ]
+    
+    # Basic Information
+    serial_number = models.IntegerField(null=True, blank=True)
+    claim_number = models.CharField(max_length=100, unique=True, db_index=True)
+    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='cases', null=True, blank=True)
+    client_name = models.CharField(max_length=500)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='MACT')
+    crn = models.CharField(max_length=100, blank=True, help_text='Case Reference Number')
+    
+    # Dates and Timing
+    case_receipt_date = models.DateField()
+    receipt_month = models.CharField(max_length=20, blank=True)
+    completion_date = models.DateTimeField(null=True, blank=True)
+    completion_month = models.CharField(max_length=20, blank=True)
+    case_due_date = models.DateField(null=True, blank=True)
+    tat_days = models.IntegerField(null=True, blank=True, help_text='Turn Around Time in days')
+    sla_status = models.CharField(max_length=20, blank=True, help_text='Service Level Agreement status')
+    
+    # Case Details
+    case_type = models.CharField(max_length=50, choices=CASE_TYPE_CHOICES, blank=True)
+    investigation_report_status = models.CharField(max_length=20, choices=REPORT_STATUS_CHOICES, default='Pending')
+    full_case_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
+    scope_of_work = models.TextField(blank=True)
+    case_notes = models.TextField(blank=True)
+    
+    # Policy Information
+    policy_number = models.CharField(max_length=100, blank=True)
+    
+    # Claimant Details
+    claimant_name = models.CharField(max_length=500, blank=True)
+    claimant_address = models.TextField(blank=True)
+    claimant_district = models.CharField(max_length=200, blank=True)
+    claimant_status = models.CharField(max_length=50, blank=True)
+    
+    # Income Details
+    income_details = models.TextField(blank=True)
+    income_address = models.TextField(blank=True)
+    income_district = models.CharField(max_length=200, blank=True)
+    income_status = models.CharField(max_length=50, blank=True)
+    
+    # Insured Details
+    insured_name = models.CharField(max_length=500, blank=True)
+    insured_address = models.TextField(blank=True)
+    insured_district = models.CharField(max_length=200, blank=True)
+    notice_132 = models.CharField(max_length=50, blank=True)
+    insured_status = models.CharField(max_length=50, blank=True)
+    
+    # Driver Details
+    driver_name = models.CharField(max_length=500, blank=True)
+    driver_address = models.TextField(blank=True)
+    driver_district = models.CharField(max_length=200, blank=True)
+    driver_status = models.CharField(max_length=50, blank=True)
+    
+    # Document Verification
+    dl_status = models.CharField(max_length=50, blank=True)
+    rc_status = models.CharField(max_length=50, blank=True)
+    permit_status = models.CharField(max_length=50, blank=True)
+    fitness_status = models.CharField(max_length=50, blank=True)
+    
+    # Spot Investigation
+    spot_location = models.TextField(blank=True)
+    spot_district = models.CharField(max_length=200, blank=True)
+    spot_status = models.CharField(max_length=50, blank=True)
+    
+    # Police/Legal Details
+    fir_number = models.CharField(max_length=100, blank=True)
+    police_station = models.CharField(max_length=200, blank=True)
+    police_district = models.CharField(max_length=200, blank=True)
+    rti_status = models.CharField(max_length=50, blank=True)
+    chargesheet_status = models.CharField(max_length=50, blank=True)
+    
+    # Hospital Details
+    hospital_name = models.CharField(max_length=500, blank=True)
+    hospital_address = models.TextField(blank=True)
+    hospital_district = models.CharField(max_length=200, blank=True)
+    hospital_status = models.CharField(max_length=50, blank=True)
+    
+    # Dispatch Details
+    dispatch_date = models.DateField(null=True, blank=True)
+    dispatch_status = models.CharField(max_length=50, blank=True)
+    
+    # Link to Email
+    source_email = models.ForeignKey(
+        EmailIntake,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_cases'
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'insurance_case'
+        indexes = [
+            models.Index(fields=['claim_number']),
+            models.Index(fields=['case_receipt_date']),
+            models.Index(fields=['full_case_status']),
+            models.Index(fields=['category']),
+        ]
+        ordering = ['-case_receipt_date']
+    
+    def __str__(self):
+        return f"{self.claim_number} - {self.client_name}"
+
+
+class CaseDocument(models.Model):
+    """Documents extracted from emails and linked to cases."""
+    
+    DOCUMENT_TYPE_CHOICES = [
+        ('POLICY', 'Policy Document'),
+        ('PETITION', 'Petition Copy'),
+        ('FIR', 'FIR Copy'),
+        ('MEDICAL', 'Medical Report'),
+        ('SPOT_PHOTO', 'Spot Photograph'),
+        ('DL', 'Driving License'),
+        ('RC', 'Registration Certificate'),
+        ('PERMIT', 'Permit'),
+        ('OTHER', 'Other'),
+    ]
+    
+    case = models.ForeignKey(InsuranceCase, on_delete=models.CASCADE, related_name='documents')
+    email_attachment = models.ForeignKey(
+        EmailAttachment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='linked_case_documents'
+    )
+    
+    document_type = models.CharField(max_length=50, choices=DOCUMENT_TYPE_CHOICES)
+    document_name = models.CharField(max_length=500)
+    file_path = models.FileField(upload_to='case_documents/%Y/%m/%d/')
+    
+    # Extracted data
+    extracted_text = models.TextField(blank=True)
+    extracted_data = models.JSONField(default=dict, blank=True)
+    
+    # Metadata
+    uploaded_date = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'case_document'
+        indexes = [
+            models.Index(fields=['case', 'document_type']),
+            models.Index(fields=['uploaded_date']),
+        ]
+        ordering = ['-uploaded_date']
+    
+    def __str__(self):
+        return f"{self.case.claim_number} - {self.document_name}"
