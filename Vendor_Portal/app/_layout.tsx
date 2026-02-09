@@ -55,16 +55,23 @@ function RootNavigator() {
     if (isLoading || !appIsReady) return;
 
     const inAuthGroup = segments[0] === '(tabs)';
+    const isLoginRoute = segments[0] === undefined || segments.length === 0;
+    const isPublicRoute = segments[0] === 'login';
+    
+    // Routes that authenticated users can access
+    const allowedAuthRoutes = ['upload-evidence', 'incident', '(tabs)'];
+    const currentRoute = segments[0];
 
     // Use setTimeout to avoid navigation during render
     const timer = setTimeout(() => {
       if (!isAuthenticated && inAuthGroup) {
         // User is not authenticated but in protected route, redirect to login
         router.replace('/');
-      } else if (isAuthenticated && !inAuthGroup) {
+      } else if (isAuthenticated && (isLoginRoute || isPublicRoute)) {
         // User is authenticated but on login screen, redirect to tabs
         router.replace('/(tabs)');
       }
+      // Don't redirect authenticated users from allowed routes
     }, 0);
 
     return () => clearTimeout(timer);

@@ -223,6 +223,75 @@ class Vendor(models.Model):
         return self.company_name
 
 
+class EvidencePhoto(models.Model):
+    """
+    Evidence photos uploaded by vendors for cases.
+    REQUIRES GPS coordinates - photos without geotags cannot be uploaded.
+    """
+    
+    # Case reference - using case_id as integer since cases_case table exists
+    # but doesn't have a Django model in this app
+    case_id = models.IntegerField(
+        db_index=True,
+        help_text='Reference to cases_case table'
+    )
+    
+    # Vendor who uploaded the photo
+    vendor = models.ForeignKey(
+        Vendor,
+        on_delete=models.CASCADE,
+        related_name='evidence_photos',
+    )
+    
+    # Photo file
+    photo = models.ImageField(
+        upload_to='evidence_photos/%Y/%m/%d/',
+        help_text='Evidence photo with GPS metadata'
+    )
+    
+    # GPS coordinates (REQUIRED - not nullable)
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        help_text='GPS latitude from photo EXIF data (REQUIRED)'
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        help_text='GPS longitude from photo EXIF data (REQUIRED)'
+    )
+    
+    # Optional metadata
+    caption = models.CharField(max_length=500, blank=True)
+    file_name = models.CharField(max_length=255)
+    file_size = models.BigIntegerField(default=0, help_text='File size in bytes')
+    
+    # Timestamps
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'evidence_photo'
+        indexes = [
+            models.Index(fields=['case_id', 'uploaded_at']),
+            models.Index(fields=['vendor', 'uploaded_at']),
+            models.Index(fields=['case_id', 'vendor']),
+        ]
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        return f"Evidence photo for case {self.case_id} by {self.vendor.company_name}"
+    
+    def clean(self):
+        """Validate that GPS coordinates are present."""
+        from django.core.exceptions import ValidationError
+        if self.latitude is None or self.longitude is None:
+            raise ValidationError(
+                'GPS coordinates are required. Photos without geotag location cannot be uploaded.'
+            )
+
+
 class Admin(models.Model):
     """Admin model for administrative users."""
     

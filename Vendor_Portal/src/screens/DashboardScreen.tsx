@@ -13,9 +13,11 @@ import { AppDispatch, RootState } from '@/store';
 import { fetchCases, clearAllCases } from '@/store/casesSlice';
 import { logoutUser } from '@/store/authSlice';
 import { theme } from '@/config/theme';
+import { useRouter } from 'expo-router';
 
 export default function DashboardScreen() {
   const dispatch = useDispatch<AppDispatch>();
+  const router = useRouter();
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { cases, isLoading } = useSelector((state: RootState) => state.cases);
 
@@ -67,8 +69,19 @@ export default function DashboardScreen() {
       completed: '#2196F3',
     };
 
+    const handleCasePress = () => {
+      router.push({
+        pathname: '/upload-evidence',
+        params: { case: JSON.stringify(caseItem) }
+      });
+    };
+
     return (
-      <View style={styles.caseCard}>
+      <TouchableOpacity 
+        style={styles.caseCard}
+        onPress={handleCasePress}
+        activeOpacity={0.7}
+      >
         <View style={styles.caseHeader}>
           <Text style={styles.caseTitle} numberOfLines={2}>
             {caseItem.title || `Case #${caseItem.id}`}
@@ -106,7 +119,10 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
-      </View>
+        <View style={styles.viewDetailsContainer}>
+          <Text style={styles.viewDetailsText}>Tap to upload evidence →</Text>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -409,5 +425,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+  },
+  viewDetailsContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  viewDetailsText: {
+    fontSize: 13,
+    color: theme.colors.primary,
+    fontWeight: '600',
   },
 });

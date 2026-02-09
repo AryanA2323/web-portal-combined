@@ -221,6 +221,61 @@ class ApiService {
     }
   }
 
+  async uploadEvidence(
+    caseId: number, 
+    photos: Array<{ uri: string; name: string; lat?: string; long?: string }>
+  ): Promise<any> {
+    try {
+      const formData = new FormData();
+      
+      // Add each photo to form data with GPS validation
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        const fileUri = photo.uri;
+        const fileName = photo.name;
+        const fileType = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+        
+        // Create file object for upload
+        const file: any = {
+          uri: fileUri,
+          name: fileName,
+          type: `image/${fileType === 'jpg' ? 'jpeg' : fileType}`,
+        };
+        
+        formData.append('photos', file);
+      }
+      
+      const response = await this.api.post(`/cases/${caseId}/upload-evidence`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 60000, // 60 seconds for file upload
+      });
+      
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async getEvidencePhotos(caseId: number): Promise<any> {
+    try {
+      const response = await this.api.get(`/cases/${caseId}/evidence-photos`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async deleteEvidencePhoto(photoId: number): Promise<any> {
+    try {
+      const response = await this.api.delete(`/evidence-photos/${photoId}`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
   // Utility methods
   async setTokens(accessToken: string, refreshToken: string | null): Promise<void> {
     await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
