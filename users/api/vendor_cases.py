@@ -427,10 +427,11 @@ def upload_evidence(
         return 403, {"error": "Vendor profile not found"}
     
     # Verify case exists and is assigned to this vendor
+    case_location = None
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT id, case_number, title, assigned_vendor_id FROM cases_case WHERE id = %s",
+                "SELECT id, case_number, title, assigned_vendor_id, latitude, longitude FROM cases_case WHERE id = %s",
                 [case_id]
             )
             case_row = cursor.fetchone()
@@ -440,6 +441,14 @@ def upload_evidence(
             
             if case_row[3] != vendor.id:
                 return 403, {"error": "You are not assigned to this case"}
+            
+            # Get case location for validation
+            if case_row[4] is not None and case_row[5] is not None:
+                case_location = {
+                    'latitude': float(case_row[4]),
+                    'longitude': float(case_row[5])
+                }
+                logger.info(f"[Evidence Upload] Case location: {case_location}")
     except Exception as e:
         logger.error(f"Failed to verify case assignment: {e}")
         return 500, {"error": "Failed to verify case"}
@@ -463,6 +472,40 @@ def upload_evidence(
             if latitude is None or longitude is None:
                 errors.append(f"{file.name}: Missing GPS coordinates")
                 continue
+            
+            # Validate location match with case location (within 100 meters)
+            if case_location is not None:
+                from geopy.distance import geodesic
+                
+                photo_location = (latitude, longitude)
+                case_coords = (case_location['latitude'], case_location['longitude'])
+                
+                # Calculate distance in meters
+                distance_meters = geodesic(case_coords, photo_location).meters
+                
+                logger.info(
+                    f"[Evidence Upload] Location validation for {file.name}: "
+                    f"Distance = {distance_meters:.2f} meters"
+                )
+                
+                # Reject if distance > 100 meters
+                if distance_meters > 100:
+                    errors.append(
+                        f"{file.name}: Location mismatch. Photo taken {distance_meters:.0f}m away from case location. "
+                        f"Maximum allowed distance is 100m."
+                    )
+                    logger.warning(
+                        f"[Evidence Upload] Photo {file.name} rejected: "
+                        f"{distance_meters:.2f}m away from case location"
+                    )
+                    continue
+                else:
+                    logger.info(
+                        f"[Evidence Upload] Photo {file.name} location validated: "
+                        f"{distance_meters:.2f}m from case location (within 100m tolerance)"
+                    )
+            else:
+                logger.warning(f"[Evidence Upload] Case has no location set, skipping location validation")
             
             # Convert to Decimal with 6 decimal places precision
             from decimal import Decimal, ROUND_HALF_UP

@@ -29,7 +29,29 @@ export interface Case {
   created_at: string;
   updated_at: string;
   priority?: string;
+  category?: string;
+  claim_number?: string;
+  claimant_name?: string;
+  insured_name?: string;
+  client_code?: string;
   location?: string;
+  incident_address?: string;
+  incident_city?: string;
+  incident_state?: string;
+  incident_country?: string;
+  incident_postal_code?: string;
+  formatted_address?: string;
+  latitude?: number;
+  longitude?: number;
+  assigned_vendor_id?: number;
+  assigned_vendor?: string;
+  client_id?: number;
+  created_by_id?: number;
+  resolved_at?: string;
+  closed_at?: string;
+  source?: string;
+  workflow_type?: string;
+  investigation_progress?: number;
 }
 
 export interface CasesResponse {

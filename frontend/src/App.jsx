@@ -12,7 +12,6 @@ import {
   CasesPage, 
   EmailIntakePage,
   DocumentProcessPage,
-  VendorsPage, 
   UsersPage, 
   AIBriefPage, 
   LegalReviewPage, 
@@ -168,14 +167,6 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <DocumentProcessPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/vendors"
-              element={
-                <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
-                  <VendorsPage />
                 </ProtectedRoute>
               }
             />

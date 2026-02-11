@@ -37,7 +37,6 @@ const allMenuItems = [
   { id: 'cases', label: 'Cases', icon: FolderOpen, path: '/admin/cases' },
   { id: 'email-intake', label: 'Email Intake', icon: Email, path: '/admin/email-intake' },
   { id: 'process-document', label: 'Process Document', icon: UploadFile, path: '/admin/process-document' },
-  { id: 'vendors', label: 'Vendors', icon: Store, path: '/admin/vendors' },
   { id: 'users', label: 'Users', icon: People, path: '/admin/users' },
   { id: 'ai-brief', label: 'AI Brief Review', icon: AutoAwesome, path: '/admin/ai-brief' },
   { id: 'legal-review', label: 'Legal Review', icon: Gavel, path: '/admin/legal-review' },

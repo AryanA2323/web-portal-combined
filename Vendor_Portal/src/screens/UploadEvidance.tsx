@@ -217,7 +217,7 @@ export default function UploadEvidence({ caseItem }: UploadEvidenceProps) {
               
               Alert.alert('Success', 'Photo deleted successfully');
             } catch (error: any) {
-              console.error('[Evidence] Delete error:', error);
+              console.log('[Evidence] Delete error:', error);
               Alert.alert('Error', error.message || 'Failed to delete photo');
             }
           },
@@ -247,7 +247,7 @@ export default function UploadEvidence({ caseItem }: UploadEvidenceProps) {
     });
 
     if (photosWithoutGPS.length > 0) {
-      console.error('[Evidence] Photos missing GPS data:', { photosWithoutGPS });
+      console.log('[Evidence] Photos missing GPS data:', { photosWithoutGPS });
       Alert.alert(
         'GPS Data Required',
         `Cannot upload. The following photos don't have GPS coordinates:\n${photosWithoutGPS.join('\n')}\n\nPlease remove these photos and select only geotagged images.`,
@@ -284,9 +284,12 @@ export default function UploadEvidence({ caseItem }: UploadEvidenceProps) {
       console.log('[Evidence] Upload successful', { response });
 
       if (response && response.uploaded_files > 0) {
+        // Check if there were any rejections
+        const hasRejections = response.message.includes('rejected');
+        
         Alert.alert(
-          'Success',
-          `${response.uploaded_files} photo(s) uploaded successfully!`,
+          hasRejections ? 'Partial Upload' : 'Success',
+          response.message,
           [
             {
               text: 'OK',
@@ -300,12 +303,12 @@ export default function UploadEvidence({ caseItem }: UploadEvidenceProps) {
       } else {
         Alert.alert(
           'Upload Complete',
-          'Evidence uploaded but no files were processed.',
-          [{ text: 'OK', onPress: () => router.push('/incident') }]
+          response.message || 'Evidence uploaded but no files were processed.',
+          [{ text: 'OK', onPress: () => loadExistingPhotos() }]
         );
       }
     } catch (error: any) {
-      console.error('[Evidence] Upload error:', {
+      console.log('[Evidence] Upload error:', {
         message: error.message,
         status: error.status,
         validationError: error.validationError,
@@ -342,7 +345,7 @@ export default function UploadEvidence({ caseItem }: UploadEvidenceProps) {
         errorMessage = 'Cannot reach the server. Check your connection and try again.';
       }
 
-      console.error('[Evidence] Showing error:', { status: error.status, errorMessage });
+      console.log('[Evidence] Showing error:', { status: error.status, errorMessage });
       Alert.alert('Upload Error', errorMessage);
     } finally {
       setUploading(false);

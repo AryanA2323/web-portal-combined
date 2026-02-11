@@ -71,7 +71,7 @@ export default function DashboardScreen() {
 
     const handleCasePress = () => {
       router.push({
-        pathname: '/upload-evidence',
+        pathname: '/case-details',
         params: { case: JSON.stringify(caseItem) }
       });
     };
@@ -101,7 +101,11 @@ export default function DashboardScreen() {
           <View style={styles.caseDetailRow}>
             <Text style={styles.caseLabel}>📍 Location:</Text>
             <Text style={styles.caseValue} numberOfLines={1}>
-              {caseItem.location || 'N/A'}
+              {caseItem.formatted_address || 
+               [caseItem.incident_address, caseItem.incident_city, caseItem.incident_state]
+                 .filter(Boolean)
+                 .join(', ') || 
+               'N/A'}
             </Text>
           </View>
           <View style={styles.caseDetailRow}>
@@ -120,7 +124,7 @@ export default function DashboardScreen() {
           )}
         </View>
         <View style={styles.viewDetailsContainer}>
-          <Text style={styles.viewDetailsText}>Tap to upload evidence →</Text>
+          <Text style={styles.viewDetailsText}>Tap to view details →</Text>
         </View>
       </TouchableOpacity>
     );

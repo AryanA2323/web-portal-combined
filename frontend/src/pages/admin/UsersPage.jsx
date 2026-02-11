@@ -51,7 +51,6 @@ const ADMIN_PAGES = [
   { path: '/admin/dashboard', label: 'Dashboard' },
   { path: '/admin/cases', label: 'Cases' },
   { path: '/admin/email-intake', label: 'Email Intake' },
-  { path: '/admin/vendors', label: 'Vendors' },
   { path: '/admin/users', label: 'Users' },
   { path: '/admin/ai-brief', label: 'AI Brief Review' },
   { path: '/admin/legal-review', label: 'Legal Review' },
@@ -67,6 +66,7 @@ const UsersPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  const [roleFilter, setRoleFilter] = useState('ALL'); // New filter state
   
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -365,6 +365,27 @@ const UsersPage = () => {
     }
   };
 
+  // Filter users based on selected role
+  const filteredUsers = users.filter(user => {
+    if (roleFilter === 'ALL') return true;
+    
+    // For SUPER_ADMIN filter, check both role and sub_role
+    if (roleFilter === 'SUPER_ADMIN') {
+      return user.role?.toUpperCase() === 'SUPER_ADMIN' || 
+             user.sub_role?.toUpperCase() === 'SUPER_ADMIN';
+    }
+    
+    // For ADMIN filter, check role is ADMIN and sub_role is not SUPER_ADMIN
+    if (roleFilter === 'ADMIN') {
+      return user.role?.toUpperCase() === 'ADMIN' && 
+             user.sub_role?.toUpperCase() !== 'SUPER_ADMIN' &&
+             user.role?.toUpperCase() !== 'SUPER_ADMIN';
+    }
+    
+    // For other roles, match the role field
+    return user.role?.toUpperCase() === roleFilter;
+  });
+
   if (loading) {
     return (
       <AdminLayout>
@@ -409,6 +430,24 @@ const UsersPage = () => {
           </Alert>
         )}
 
+        {/* Role Filter */}
+        <Box sx={{ mb: 3 }}>
+          <FormControl sx={{ minWidth: 250 }}>
+            <InputLabel>Filter by Role</InputLabel>
+            <Select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              label="Filter by Role"
+            >
+              <MenuItem value="ALL">All Users</MenuItem>
+              <MenuItem value="SUPER_ADMIN">Super Admins</MenuItem>
+              <MenuItem value="ADMIN">Admins</MenuItem>
+              <MenuItem value="VENDOR">Vendors</MenuItem>
+              <MenuItem value="LAWYER">Lawyers</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+
         <TableContainer component={Paper}>
           <Table>
             <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
@@ -423,7 +462,7 @@ const UsersPage = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {users.map((user) => (
+              {filteredUsers.map((user) => (
                 <TableRow key={user.id} hover>
                   <TableCell>{user.username}</TableCell>
                   <TableCell>

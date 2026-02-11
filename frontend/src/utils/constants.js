@@ -53,7 +53,7 @@ export const ADMIN_SUB_ROLES = {
   SUPER_ADMIN: 'super_admin',
 };
 
-// Default permissions for regular admin (all pages except users and vendors)
+// Default permissions for regular admin (all pages except users)
 const DEFAULT_ADMIN_PERMISSIONS = [
   '/admin/dashboard',
   '/admin/cases',
@@ -66,11 +66,10 @@ const DEFAULT_ADMIN_PERMISSIONS = [
   '/admin/settings',
 ];
 
-// Super admin gets access to users and vendors pages
+// Super admin gets access to users page
 const SUPER_ADMIN_PERMISSIONS = [
   '/admin/dashboard',
   '/admin/users',
-  '/admin/vendors',
 ];
 
 // Sub-role configuration with permissions
@@ -95,7 +94,7 @@ export const SUB_ROLE_CONFIG = {
   },
   super_admin: {
     label: 'Super Admin',
-    description: 'Manage users and vendors',
+    description: 'Manage users and system settings',
     icon: 'SupervisorAccount',
     permissions: SUPER_ADMIN_PERMISSIONS
   }
@@ -130,7 +129,7 @@ export const getMenuItemsForUser = (user) => {
     return SUB_ROLE_CONFIG[subRole].permissions;
   }
   
-  // Default: regular admin gets all pages except users and vendors
+  // Default: regular admin gets all pages except users
   return DEFAULT_ADMIN_PERMISSIONS;
 };
 

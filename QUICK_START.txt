@@ -1,0 +1,44 @@
+╔══════════════════════════════════════════════════════════════╗
+║          INCIDENT MANAGEMENT PLATFORM - QUICK START          ║
+╚══════════════════════════════════════════════════════════════╝
+
+🚀 START DJANGO BACKEND SERVER (RECOMMENDED):
+   
+   .\start_server.ps1
+
+   This ensures the server uses .venv with all dependencies including geopy.
+
+📝 REQUIREMENTS:
+   
+   - Python virtual environment (.venv) must be activated
+   - All dependencies must be installed (pip install -r requirements.txt)
+   - PostgreSQL database must be running
+
+⚠️  IMPORTANT - AVOID GEOPY ERRORS:
+
+   ❌ DON'T USE: python manage.py runserver
+   ✅ USE:       .\start_server.ps1
+   ✅ OR:        .\.venv\Scripts\python.exe manage.py runserver 192.168.31.164:8000
+
+🔧 TROUBLESHOOTING:
+
+   Error: "No module named 'geopy'"
+   → Stop all Django processes and restart using .\start_server.ps1
+
+   Find running processes:
+   → netstat -ano | Select-String "8000"
+
+   Stop a process:
+   → Stop-Process -Id <PID> -Force
+
+📂 PROJECT COMPONENTS:
+
+   Backend:       http://192.168.31.164:8000 (Django + PostgreSQL)
+   Frontend:      http://localhost:3000 (Vite + React)
+   Vendor Portal: exp://192.168.31.164:8081 (React Native + Expo)
+
+📖 DETAILED DOCUMENTATION:
+
+   See SERVER_STARTUP.md for complete setup instructions.
+
+╚══════════════════════════════════════════════════════════════╝
