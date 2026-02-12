@@ -4,18 +4,46 @@
 
 ### Starting the Django Backend Server
 
-**Use the provided startup script (RECOMMENDED):**
+**⭐ RECOMMENDED METHODS (Use one of these):**
 
+**Option 1 - PowerShell Script:**
 ```powershell
 .\start_server.ps1
 ```
 
-This script automatically:
-- Stops any existing Django server processes
-- Starts the server using the virtual environment (`.venv`)
-- Ensures all dependencies (including geopy) are available
+**Option 2 - Batch File (Double-click):**
+```
+START_SERVER.bat
+```
 
-**Manual start (if needed):**
+These scripts automatically:
+- Verify virtual environment exists
+- Check and install geopy if needed
+- Stop any existing Django server processes
+- Start the server using the virtual environment (`.venv`)
+- Ensure all dependencies (including geopy) are available
+
+---
+
+### ⚠️ CRITICAL - Avoid Common Errors
+
+**❌ NEVER RUN THESE COMMANDS DIRECTLY:**
+```powershell
+python manage.py runserver          # ❌ Uses system Python (no geopy!)
+py manage.py runserver              # ❌ Uses system Python (no geopy!)
+python manage.py runserver 0.0.0.0:8000  # ❌ Wrong Python
+```
+
+**Why?** These commands use your system Python installation, which doesn't have `geopy` installed. This causes the **"No module named 'geopy'"** error when uploading photos.
+
+**✅ ALWAYS USE:**
+- `.\start_server.ps1` (PowerShell)
+- `START_SERVER.bat` (Windows)
+- These ensure the correct Python environment is used
+
+---
+
+**Manual start (ONLY if scripts fail):**
 
 ```powershell
 .\.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000

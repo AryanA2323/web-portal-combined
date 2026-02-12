@@ -2,11 +2,23 @@
 ║          INCIDENT MANAGEMENT PLATFORM - QUICK START          ║
 ╚══════════════════════════════════════════════════════════════╝
 
-🚀 START DJANGO BACKEND SERVER (RECOMMENDED):
+🚀 START DJANGO BACKEND SERVER (REQUIRED):
    
+   ★★★ ONLY USE ONE OF THESE METHODS ★★★
+   
+   Option 1 (Recommended):
    .\start_server.ps1
-
-   This ensures the server uses .venv with all dependencies including geopy.
+   
+   Option 2 (Alternative):
+   Double-click START_SERVER.bat
+   
+   ⚠️  CRITICAL WARNINGS:
+   ❌ NEVER USE: python manage.py runserver
+   ❌ NEVER USE: py manage.py runserver
+   ❌ These will use wrong Python without geopy!
+   
+   ✅ ALWAYS USE: start_server.ps1 or START_SERVER.bat
+   ✅ These ensure virtual environment with geopy is used
 
 📝 REQUIREMENTS:
    
