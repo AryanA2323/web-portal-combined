@@ -24,7 +24,8 @@ if ($existingProcesses) {
 }
 
 # Start Django server using virtual environment Python
-Write-Host "`nStarting server on http://192.168.31.164:8000" -ForegroundColor Green
+Write-Host "`nStarting server on http://0.0.0.0:8000" -ForegroundColor Green
+Write-Host "Server accessible from any device on same network" -ForegroundColor Cyan
 Write-Host "Press Ctrl+C to stop the server`n" -ForegroundColor Cyan
 
-& .\.venv\Scripts\python.exe manage.py runserver 192.168.31.164:8000
+& .\.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000

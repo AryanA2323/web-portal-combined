@@ -18,7 +18,7 @@
 
    ❌ DON'T USE: python manage.py runserver
    ✅ USE:       .\start_server.ps1
-   ✅ OR:        .\.venv\Scripts\python.exe manage.py runserver 192.168.31.164:8000
+   ✅ OR:        .\.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
 
 🔧 TROUBLESHOOTING:
 
@@ -33,9 +33,9 @@
 
 📂 PROJECT COMPONENTS:
 
-   Backend:       http://192.168.31.164:8000 (Django + PostgreSQL)
+   Backend:       http://0.0.0.0:8000 (Django + PostgreSQL)
    Frontend:      http://localhost:3000 (Vite + React)
-   Vendor Portal: exp://192.168.31.164:8081 (React Native + Expo)
+   Vendor Portal: Use your laptop's current IP:8081 (React Native + Expo)
 
 📖 DETAILED DOCUMENTATION:
 

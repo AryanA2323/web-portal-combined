@@ -18,7 +18,7 @@ This script automatically:
 **Manual start (if needed):**
 
 ```powershell
-.\.venv\Scripts\python.exe manage.py runserver 192.168.31.164:8000
+.\.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
 ```
 
 ⚠️ **IMPORTANT:** Always use `.venv\Scripts\python.exe` to ensure the server has access to all installed packages, especially `geopy` which is required for photo location validation.
@@ -50,7 +50,7 @@ This error occurs when the server is started with the wrong Python interpreter.
 ✅ **Solution:**
 1. Stop any running Django processes
 2. Use the startup script: `.\start_server.ps1`
-3. Or manually start with: `.\.venv\Scripts\python.exe manage.py runserver 192.168.31.164:8000`
+3. Or manually start with: `.\.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000`
 
 **Finding running Django processes:**
 
@@ -66,9 +66,29 @@ Stop-Process -Id <PID> -Force
 
 ### Server Ports
 
-- **Django Backend:** http://192.168.31.164:8000
+- **Django Backend:** http://0.0.0.0:8000 (accessible from any device on same network)
 - **Frontend (Vite):** http://localhost:3000
-- **Vendor Portal (Expo):** exp://192.168.31.164:8081
+- **Vendor Portal (Expo):** Access using your laptop's current IP (changes per network)
+
+### Finding Your Current IP Address
+
+**To access backend from mobile device (Expo app), you need your laptop's current IP:**
+
+**Windows (PowerShell):**
+```powershell
+ipconfig | Select-String -Pattern "IPv4"
+```
+
+**Linux/macOS:**
+```bash
+hostname -I
+```
+
+**Example:** If your laptop's IP is `192.168.1.105`, access:
+- Backend API from mobile: `http://192.168.1.105:8000`
+- Expo dev server: `exp://192.168.1.105:8081`
+
+⚠️ **Important:** IP changes when you switch WiFi networks. Re-check IP on new networks.
 
 ### Dependencies
 
