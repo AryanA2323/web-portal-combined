@@ -1,5 +1,21 @@
+import Constants from 'expo-constants';
+
+// Get the local IP address from Expo dev server
+const getApiBaseUrl = () => {
+  // In development, use the Expo dev server's host IP
+  const expoHost = Constants.expoConfig?.hostUri?.split(':')[0];
+  
+  if (expoHost) {
+    // Use the same IP as Expo dev server, but port 8000 for Django backend
+    return `http://${expoHost}:8000/api`;
+  }
+  
+  // Fallback to localhost (for web or if host detection fails)
+  return 'http://localhost:8000/api';
+};
+
 // Backend API configuration
-export const API_BASE_URL = 'http://192.168.31.164:8000/api';
+export const API_BASE_URL = getApiBaseUrl();
 export const API_TIMEOUT = 30000; // 30 seconds
 
 // API Endpoints
