@@ -9,7 +9,8 @@ import { LawyerDashboard } from './pages/dashboards';
 import { 
   AdminDashboard,
   SuperAdminDashboard,
-  CasesPage, 
+  CasesPage,
+  NewCasePage, 
   EmailIntakePage,
   DocumentProcessPage,
   UsersPage, 
@@ -17,7 +18,8 @@ import {
   LegalReviewPage, 
   ReportsPage as AdminReportsPage, 
   AuditLogsPage, 
-  SettingsPage 
+  SettingsPage,
+  CheckDetailPage,
 } from './pages/admin';
 import {
   DashboardPage as LawyerDashboardPage,
@@ -155,6 +157,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/cases/new"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <NewCasePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/email-intake"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
@@ -219,6 +229,15 @@ function App() {
               }
             />
             
+            <Route
+              path="/admin/cases/:caseId/check/:checkType"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <CheckDetailPage />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Default Redirect */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<Navigate to="/login" replace />} />

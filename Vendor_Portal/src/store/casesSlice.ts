@@ -22,8 +22,8 @@ export const fetchCases = createAsyncThunk(
   'cases/fetchCases',
   async (_arg: undefined, { rejectWithValue }) => {
     try {
-      // Always fetch vendor cases for authenticated vendor
-      const response = await apiService.getVendorCases();
+      // Fetch vendor assigned checks (sub-check level assignments)
+      const response = await apiService.getVendorAssignedChecks();
       return response;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to fetch cases');
@@ -69,12 +69,14 @@ const casesSlice = createSlice({
       })
       .addCase(fetchCases.fulfilled, (state, action: PayloadAction<any>) => {
         state.isLoading = false;
-        // Handle both array and paginated responses
-        if (Array.isArray(action.payload)) {
+        // Handle assigned checks response format
+        if (action.payload.checks) {
+          state.cases = action.payload.checks;
+          state.totalCount = action.payload.statistics?.total || action.payload.checks.length;
+        } else if (Array.isArray(action.payload)) {
           state.cases = action.payload;
           state.totalCount = action.payload.length;
         } else if (action.payload.cases) {
-          // Handle vendor cases response format
           state.cases = action.payload.cases;
           state.totalCount = action.payload.total || action.payload.cases.length;
         } else if (action.payload.results) {

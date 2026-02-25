@@ -4,10 +4,11 @@ Endpoints for vendors to manage their assigned cases.
 """
 
 import logging
+import json
 from typing import List, Optional
 from datetime import datetime
 from ninja import Router, Schema
-from django.db import connection
+from django.db import connection, connections
 from django.http import HttpRequest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import UploadedFile
@@ -189,6 +190,325 @@ def get_vendor_cases(
     except Exception as e:
         logger.error(f"Failed to fetch vendor cases: {e}")
         return 500, {"error": "Failed to fetch cases"}
+
+
+# =============================================================================
+# Vendor Assigned Checks Endpoints (sub-check level assignments)
+# =============================================================================
+
+_CHECK_TABLE_MAP = {
+    'claimant':    'claimant_checks',
+    'insured':     'insured_checks',
+    'driver':      'driver_checks',
+    'spot':        'spot_checks',
+    'chargesheet': 'chargesheets',
+}
+
+_CHECK_DETAIL_COLUMNS = {
+    'claimant_checks': {
+        'select': '''cc.id, cc.case_id, cc.check_status,
+                     cc.claimant_name, cc.claimant_contact, cc.claimant_address,
+                     cc.claimant_income, cc.statement, cc.observation, cc.evidence''',
+        'alias': 'cc',
+        'fields': ['id','case_id','check_status','claimant_name','claimant_contact',
+                    'claimant_address','claimant_income','statement','observation','evidence'],
+    },
+    'insured_checks': {
+        'select': '''ic.id, ic.case_id, ic.check_status,
+                     ic.insured_name, ic.insured_contact, ic.insured_address,
+                     ic.policy_number, ic.policy_period, ic.rc, ic.permit,
+                     ic.statement, ic.observation, ic.evidence''',
+        'alias': 'ic',
+        'fields': ['id','case_id','check_status','insured_name','insured_contact',
+                    'insured_address','policy_number','policy_period','rc','permit',
+                    'statement','observation','evidence'],
+    },
+    'driver_checks': {
+        'select': '''dc.id, dc.case_id, dc.check_status,
+                     dc.driver_name, dc.driver_contact, dc.driver_address,
+                     dc.dl, dc.permit, dc.occupation,
+                     dc.statement, dc.observation, dc.evidence''',
+        'alias': 'dc',
+        'fields': ['id','case_id','check_status','driver_name','driver_contact',
+                    'driver_address','dl','permit','occupation',
+                    'statement','observation','evidence'],
+    },
+    'spot_checks': {
+        'select': '''sc.id, sc.case_id, sc.check_status,
+                     sc.place_of_accident, sc.police_station, sc.district,
+                     sc.fir_number, sc.time_of_accident, sc.accident_brief,
+                     sc.observations, sc.evidence''',
+        'alias': 'sc',
+        'fields': ['id','case_id','check_status','place_of_accident','police_station',
+                    'district','fir_number','time_of_accident','accident_brief',
+                    'observations','evidence'],
+    },
+    'chargesheets': {
+        'select': '''cs.id, cs.case_id, cs.check_status,
+                     cs.court_name, cs.fir_number, cs.mv_act,
+                     cs.fir_delay_days, cs.bsn_section, cs.ipc,
+                     cs.statement, cs.observations, cs.evidence''',
+        'alias': 'cs',
+        'fields': ['id','case_id','check_status','court_name','fir_number','mv_act',
+                    'fir_delay_days','bsn_section','ipc',
+                    'statement','observations','evidence'],
+    },
+}
+
+_CHECK_TYPE_LABELS = {
+    'claimant_checks':  'Claimant Check',
+    'insured_checks':   'Insured Check',
+    'driver_checks':    'Driver Check',
+    'spot_checks':      'Spot Check',
+    'chargesheets':     'Chargesheet',
+}
+
+
+@router.get(
+    "/vendor-assigned-checks",
+    summary="Get Vendor's Assigned Checks",
+    description="Get all sub-checks assigned to the authenticated vendor across all cases.",
+)
+def get_vendor_assigned_checks(request: HttpRequest):
+    """Return all sub-check rows where assigned_vendor_id matches the logged-in vendor."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role != 'VENDOR':
+        return 403, {"error": "Vendor access required"}
+
+    vendor_id = get_vendor_id_from_user(request.user)
+    if not vendor_id:
+        return 403, {"error": "Vendor profile not found"}
+
+    try:
+        assigned_checks = []
+        with connections['default'].cursor() as cursor:
+            for table, label in _CHECK_TYPE_LABELS.items():
+                meta = _CHECK_DETAIL_COLUMNS[table]
+                alias = meta['alias']
+                cursor.execute(f"""
+                    SELECT {alias}.id, {alias}.case_id, {alias}.check_status,
+                           c.claim_number, c.client_name, c.category, c.full_case_status
+                    FROM {table} {alias}
+                    JOIN cases c ON c.id = {alias}.case_id
+                    WHERE {alias}.assigned_vendor_id = %s
+                    ORDER BY {alias}.updated_at DESC NULLS LAST
+                """, [vendor_id])
+                for r in cursor.fetchall():
+                    assigned_checks.append({
+                        "check_id": r[0],
+                        "case_id": r[1],
+                        "check_status": r[2] or "WIP",
+                        "check_type": label,
+                        "claim_number": r[3] or "",
+                        "client_name": r[4] or "",
+                        "category": r[5] or "",
+                        "case_status": r[6] or "",
+                    })
+
+        stats = {
+            "total": len(assigned_checks),
+            "wip": sum(1 for c in assigned_checks if c["check_status"] == "WIP"),
+            "completed": sum(1 for c in assigned_checks if c["check_status"] == "Completed"),
+            "not_initiated": sum(1 for c in assigned_checks if c["check_status"] == "Not Initiated"),
+        }
+        return {"checks": assigned_checks, "statistics": stats}
+
+    except Exception as e:
+        logger.error(f"Failed to fetch vendor assigned checks: {e}")
+        return 500, {"error": "Failed to fetch assigned checks"}
+
+
+@router.get(
+    "/vendor-check-detail/{case_id}/{check_type}",
+    summary="Get Vendor Check Detail",
+    description="Get case details + specific check details for a vendor-assigned check.",
+)
+def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str):
+    """Return case info + check row detail for a specific assigned check."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role != 'VENDOR':
+        return 403, {"error": "Vendor access required"}
+
+    vendor_id = get_vendor_id_from_user(request.user)
+    if not vendor_id:
+        return 403, {"error": "Vendor profile not found"}
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+
+    meta = _CHECK_DETAIL_COLUMNS[table]
+    alias = meta['alias']
+
+    try:
+        with connections['default'].cursor() as cursor:
+            # Get case info
+            cursor.execute("""
+                SELECT id, claim_number, client_name, category,
+                       case_receipt_date, case_due_date, tat_days, sla,
+                       case_type, full_case_status, scope_of_work,
+                       investigation_report_status
+                FROM cases WHERE id = %s
+            """, [case_id])
+            case_row = cursor.fetchone()
+            if not case_row:
+                return 404, {"error": "Case not found"}
+
+            case_info = {
+                "id": case_row[0],
+                "claim_number": case_row[1] or "",
+                "client_name": case_row[2] or "",
+                "category": case_row[3] or "",
+                "case_receipt_date": str(case_row[4]) if case_row[4] else "",
+                "case_due_date": str(case_row[5]) if case_row[5] else "",
+                "tat_days": case_row[6],
+                "sla": case_row[7] or "",
+                "case_type": case_row[8] or "",
+                "full_case_status": case_row[9] or "",
+                "scope_of_work": case_row[10] or "",
+                "investigation_report_status": case_row[11] or "",
+            }
+
+            # Get check detail
+            cursor.execute(f"""
+                SELECT {meta['select']}
+                FROM {table} {alias}
+                WHERE {alias}.case_id = %s AND {alias}.assigned_vendor_id = %s
+            """, [case_id, vendor_id])
+            check_row = cursor.fetchone()
+            if not check_row:
+                return 404, {"error": "Check not found or not assigned to you"}
+
+            check_detail = {}
+            for i, field in enumerate(meta['fields']):
+                val = check_row[i]
+                if hasattr(val, 'isoformat'):
+                    val = val.isoformat()
+                check_detail[field] = val
+
+            # Parse evidence JSON list
+            evidence_raw = check_detail.get('evidence')
+            evidence_list = []
+            if evidence_raw:
+                try:
+                    evidence_list = json.loads(evidence_raw)
+                except (json.JSONDecodeError, TypeError):
+                    evidence_list = []
+            check_detail['evidence_photos'] = evidence_list
+
+            return {
+                "case": case_info,
+                "check_type": check_type,
+                "check_type_label": _CHECK_TYPE_LABELS.get(table, check_type),
+                "check": check_detail,
+            }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch vendor check detail: {e}")
+        return 500, {"error": "Failed to fetch check detail"}
+
+
+@router.post(
+    "/vendor-check-upload/{case_id}/{check_type}",
+    summary="Upload Evidence to Check",
+    description="Upload evidence photo and store path in the check's evidence column.",
+)
+def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type: str):
+    """Upload evidence photo for a vendor-assigned check."""
+    import os
+    from django.conf import settings
+
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role != 'VENDOR':
+        return 403, {"error": "Vendor access required"}
+
+    vendor_id = get_vendor_id_from_user(request.user)
+    if not vendor_id:
+        return 403, {"error": "Vendor profile not found"}
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+
+    meta = _CHECK_DETAIL_COLUMNS[table]
+    alias = meta['alias']
+
+    # Verify the check is assigned to this vendor
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(f"""
+                SELECT id, evidence FROM {table}
+                WHERE case_id = %s AND assigned_vendor_id = %s
+            """, [case_id, vendor_id])
+            check_row = cursor.fetchone()
+            if not check_row:
+                return 404, {"error": "Check not found or not assigned to you"}
+            check_id = check_row[0]
+            existing_evidence = check_row[1]
+    except Exception as e:
+        logger.error(f"Failed to verify check assignment: {e}")
+        return 500, {"error": "Failed to verify check"}
+
+    # Get uploaded files
+    files = request.FILES.getlist('photos') if hasattr(request, 'FILES') else []
+    if not files:
+        return 400, {"error": "No photos provided"}
+
+    # Parse existing evidence list
+    evidence_list = []
+    if existing_evidence:
+        try:
+            evidence_list = json.loads(existing_evidence)
+        except (json.JSONDecodeError, TypeError):
+            evidence_list = []
+
+    upload_dir = os.path.join(
+        settings.MEDIA_ROOT, 'evidence_photos', f'case_{case_id}', check_type
+    )
+    os.makedirs(upload_dir, exist_ok=True)
+
+    uploaded = []
+    for f in files:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        safe_name = f.name.replace(' ', '_')
+        filename = f'{timestamp}_{safe_name}'
+        filepath = os.path.join(upload_dir, filename)
+
+        with open(filepath, 'wb') as dest:
+            for chunk in f.chunks():
+                dest.write(chunk)
+
+        relative_path = f'evidence_photos/case_{case_id}/{check_type}/{filename}'
+        photo_url = f'/media/{relative_path}'
+        evidence_entry = {
+            "filename": filename,
+            "url": photo_url,
+            "uploaded_at": datetime.now().isoformat(),
+        }
+        evidence_list.append(evidence_entry)
+        uploaded.append(evidence_entry)
+        logger.info(f"[Evidence] Saved {filename} for case={case_id} check={check_type}")
+
+    # Update the check table's evidence column
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(f"""
+                UPDATE {table} SET evidence = %s, updated_at = NOW()
+                WHERE id = %s
+            """, [json.dumps(evidence_list), check_id])
+    except Exception as e:
+        logger.error(f"Failed to update evidence column: {e}")
+        return 500, {"error": "Failed to save evidence metadata"}
+
+    return {
+        "success": True,
+        "message": f"Uploaded {len(uploaded)} photo(s)",
+        "uploaded": uploaded,
+        "total_evidence": len(evidence_list),
+    }
 
 
 # =============================================================================

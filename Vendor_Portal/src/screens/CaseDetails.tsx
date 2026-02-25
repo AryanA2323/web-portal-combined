@@ -1,140 +1,230 @@
-import React from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  ScrollView, 
-  SafeAreaView 
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  ActivityIndicator,
+  Image,
+  Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { theme } from '@/config/theme';
+import apiService from '@/services/api';
+import { API_BASE_URL } from '@/config/constants';
 
 const PRIMARY_BLUE = theme.colors.primary;
 
-interface Case {
-  id: number;
-  case_number: string;
-  title: string;
-  description: string;
-  status: string;
-  assigned_to: number;
-  created_at: string;
-  updated_at: string;
-  priority?: string;
-  category?: string;
-  claim_number?: string;
-  claimant_name?: string;
-  insured_name?: string;
-  client_code?: string;
-  location?: string;
-  incident_address?: string;
-  incident_city?: string;
-  incident_state?: string;
-  incident_country?: string;
-  incident_postal_code?: string;
-  formatted_address?: string;
-  latitude?: number;
-  longitude?: number;
-  assigned_vendor_id?: number;
-  assigned_vendor?: string;
-  client_id?: number;
-  created_by_id?: number;
-  resolved_at?: string;
-  closed_at?: string;
-  source?: string;
-  workflow_type?: string;
-  investigation_progress?: number;
-}
+const checkTypeLabels: Record<string, string> = {
+  claimant: 'Claimant Check',
+  insured: 'Insured Check',
+  driver: 'Driver Check',
+  spot: 'Spot Check',
+  chargesheet: 'Chargesheet',
+};
+
+// Fields to display per check type (human-readable labels)
+const checkFieldLabels: Record<string, Record<string, string>> = {
+  claimant: {
+    claimant_name: 'Claimant Name',
+    claimant_contact: 'Contact',
+    claimant_address: 'Address',
+    claimant_income: 'Income',
+    statement: 'Statement',
+    observation: 'Observation',
+  },
+  insured: {
+    insured_name: 'Insured Name',
+    insured_contact: 'Contact',
+    insured_address: 'Address',
+    policy_number: 'Policy Number',
+    policy_period: 'Policy Period',
+    rc: 'RC',
+    permit: 'Permit',
+    statement: 'Statement',
+    observation: 'Observation',
+  },
+  driver: {
+    driver_name: 'Driver Name',
+    driver_contact: 'Contact',
+    driver_address: 'Address',
+    dl: 'DL Number',
+    permit: 'Permit',
+    occupation: 'Occupation',
+    statement: 'Statement',
+    observation: 'Observation',
+  },
+  spot: {
+    place_of_accident: 'Place of Accident',
+    police_station: 'Police Station',
+    district: 'District',
+    fir_number: 'FIR Number',
+    time_of_accident: 'Time of Accident',
+    accident_brief: 'Accident Brief',
+    observations: 'Observations',
+  },
+  chargesheet: {
+    court_name: 'Court Name',
+    fir_number: 'FIR Number',
+    mv_act: 'MV Act',
+    fir_delay_days: 'FIR Delay Days',
+    bsn_section: 'BSN Section',
+    ipc: 'IPC',
+    statement: 'Statement',
+    observations: 'Observations',
+  },
+};
 
 interface CaseDetailsProps {
-  caseItem?: Case;
+  caseId: number;
+  checkType: string;
 }
 
-export default function CaseDetails({ caseItem }: CaseDetailsProps) {
+export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!caseItem) {
+  useEffect(() => {
+    loadData();
+  }, [caseId, checkType]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiService.getVendorCheckDetail(caseId, checkType);
+      setData(response);
+    } catch (err: any) {
+      console.error('Failed to load check detail:', err);
+      setError(err.message || 'Failed to load details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pickAndUpload = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need access to your photos to upload evidence.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images' as any,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+    const photos = result.assets.map((asset, i) => ({
+      uri: asset.uri,
+      name: asset.fileName || `evidence_${Date.now()}_${i}.jpg`,
+    }));
+
+    try {
+      setUploading(true);
+      const res = await apiService.uploadCheckEvidence(caseId, checkType, photos);
+      Alert.alert('Success', res.message || 'Evidence uploaded');
+      await loadData(); // Refresh to show new evidence
+    } catch (err: any) {
+      console.error('Upload failed:', err);
+      Alert.alert('Upload Failed', err.message || 'Failed to upload evidence');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need camera access to take photos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+    const photos = result.assets.map((asset, i) => ({
+      uri: asset.uri,
+      name: asset.fileName || `camera_${Date.now()}_${i}.jpg`,
+    }));
+
+    try {
+      setUploading(true);
+      const res = await apiService.uploadCheckEvidence(caseId, checkType, photos);
+      Alert.alert('Success', res.message || 'Evidence uploaded');
+      await loadData();
+    } catch (err: any) {
+      console.error('Upload failed:', err);
+      Alert.alert('Upload Failed', err.message || 'Failed to upload evidence');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const DetailRow = ({ label, value }: { label: string; value: any }) => {
+    if (value === null || value === undefined || value === '') return null;
+    return (
+      <View style={styles.detailRow}>
+        <Text style={styles.detailLabel}>{label}</Text>
+        <Text style={styles.detailValue}>{String(value)}</Text>
+      </View>
+    );
+  };
+
+  if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Case Details</Text>
+          <Text style={styles.headerTitle}>Check Details</Text>
         </View>
-        <View style={styles.content}>
-          <Text style={styles.errorText}>No case data available</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={PRIMARY_BLUE} />
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const handleUploadEvidence = () => {
-    router.push({
-      pathname: '/upload-evidence',
-      params: { case: JSON.stringify(caseItem) }
-    });
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const DetailRow = ({ label, value }: { label: string; value: string | number | undefined }) => {
-    if (!value && value !== 0) return null;
+  if (error || !data) {
     return (
-      <View style={styles.detailRow}>
-        <Text style={styles.detailLabel}>{label}</Text>
-        <Text style={styles.detailValue}>{value}</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Check Details</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>{error || 'No data available'}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadData}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
-  };
+  }
 
-  const getStatusColor = (status: string) => {
-    const statusColors: any = {
-      'OPEN': '#FF9800',
-      'IN_PROGRESS': '#2196F3',
-      'RESOLVED': '#4CAF50',
-      'CLOSED': '#9E9E9E',
-      'active': '#4CAF50',
-      'pending': '#FF9800',
-      'completed': '#2196F3',
-    };
-    return statusColors[status] || '#999';
-  };
+  const caseInfo = data.case || {};
+  const checkInfo = data.check || {};
+  const evidencePhotos = checkInfo.evidence_photos || [];
+  const fieldLabels = checkFieldLabels[checkType] || {};
 
-  const getPriorityColor = (priority?: string) => {
-    if (!priority) return '#9E9E9E';
-    const priorityColors: any = {
-      'HIGH': '#f44336',
-      'MEDIUM': '#FF9800',
-      'LOW': '#4CAF50',
-    };
-    return priorityColors[priority.toUpperCase()] || '#9E9E9E';
-  };
-
-  const getLocationText = () => {
-    if (caseItem.formatted_address) {
-      return caseItem.formatted_address;
-    }
-    const parts = [
-      caseItem.incident_address,
-      caseItem.incident_city,
-      caseItem.incident_state,
-      caseItem.incident_postal_code,
-      caseItem.incident_country
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : 'N/A';
-  };
+  // Build the base URL for media files
+  const apiHost = API_BASE_URL.replace('/api', '');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -144,91 +234,96 @@ export default function CaseDetails({ caseItem }: CaseDetailsProps) {
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 15 }}>
-          <Text style={styles.headerTitle}>Case Details</Text>
-          <Text style={styles.headerSubtitle}>{caseItem.case_number}</Text>
+          <Text style={styles.headerTitle}>{checkTypeLabels[checkType] || checkType}</Text>
+          <Text style={styles.headerSubtitle}>
+            Claim: {caseInfo.claim_number || 'N/A'}
+          </Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Case Title and Status */}
-        <View style={styles.titleSection}>
-          <Text style={styles.caseTitle}>{caseItem.title}</Text>
-          <View style={styles.badgesContainer}>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(caseItem.status) }]}>
-              <Text style={styles.badgeText}>{caseItem.status.toUpperCase()}</Text>
+        {/* Case Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>📋 Case Information</Text>
+          <DetailRow label="Claim Number" value={caseInfo.claim_number} />
+          <DetailRow label="Client Name" value={caseInfo.client_name} />
+          <DetailRow label="Category" value={caseInfo.category} />
+          <DetailRow label="Case Type" value={caseInfo.case_type} />
+          <DetailRow label="Case Status" value={caseInfo.full_case_status} />
+          <DetailRow label="SLA" value={caseInfo.sla} />
+          <DetailRow label="TAT Days" value={caseInfo.tat_days} />
+          <DetailRow label="Receipt Date" value={caseInfo.case_receipt_date} />
+          <DetailRow label="Due Date" value={caseInfo.case_due_date} />
+          <DetailRow label="Scope of Work" value={caseInfo.scope_of_work} />
+          <DetailRow label="IR Status" value={caseInfo.investigation_report_status} />
+        </View>
+
+        {/* Check Details */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            🔍 {checkTypeLabels[checkType] || 'Check'} Details
+          </Text>
+          <DetailRow label="Status" value={checkInfo.check_status} />
+          {Object.entries(fieldLabels).map(([field, label]) => (
+            <DetailRow key={field} label={label} value={checkInfo[field]} />
+          ))}
+        </View>
+
+        {/* Evidence Photos */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>📸 Evidence Photos ({evidencePhotos.length})</Text>
+
+          {evidencePhotos.length === 0 ? (
+            <Text style={styles.noEvidenceText}>No evidence uploaded yet</Text>
+          ) : (
+            <View style={styles.photosGrid}>
+              {evidencePhotos.map((photo: any, idx: number) => (
+                <View key={idx} style={styles.photoCard}>
+                  <Image
+                    source={{ uri: `${apiHost}${photo.url}` }}
+                    style={styles.photoImage}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.photoName} numberOfLines={1}>
+                    {photo.filename}
+                  </Text>
+                  <Text style={styles.photoDate}>
+                    {new Date(photo.uploaded_at).toLocaleDateString()}
+                  </Text>
+                </View>
+              ))}
             </View>
-            {caseItem.priority && (
-              <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(caseItem.priority) }]}>
-                <Text style={styles.badgeText}>{caseItem.priority.toUpperCase()}</Text>
-              </View>
+          )}
+        </View>
+
+        {/* Upload Buttons */}
+        <View style={styles.uploadSection}>
+          <TouchableOpacity
+            style={styles.uploadButton}
+            onPress={pickAndUpload}
+            disabled={uploading}
+            activeOpacity={0.8}
+          >
+            {uploading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.uploadButtonText}>📁 Upload from Gallery</Text>
             )}
-          </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.uploadButton, styles.cameraButton]}
+            onPress={takePhoto}
+            disabled={uploading}
+            activeOpacity={0.8}
+          >
+            {uploading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.uploadButtonText}>📷 Take Photo</Text>
+            )}
+          </TouchableOpacity>
         </View>
-
-        {/* Basic Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📋 Basic Information</Text>
-          <DetailRow label="Case Number" value={caseItem.case_number} />
-          <DetailRow label="Category" value={caseItem.category} />
-          <DetailRow label="Claim Number" value={caseItem.claim_number} />
-          <DetailRow label="Source" value={caseItem.source} />
-          <DetailRow label="Workflow Type" value={caseItem.workflow_type} />
-          {caseItem.investigation_progress !== undefined && (
-            <DetailRow label="Investigation Progress" value={`${caseItem.investigation_progress}%`} />
-          )}
-        </View>
-
-        {/* Description */}
-        {caseItem.description && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📝 Description</Text>
-            <Text style={styles.descriptionText}>{caseItem.description}</Text>
-          </View>
-        )}
-
-        {/* Parties Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>👥 Parties</Text>
-          <DetailRow label="Claimant Name" value={caseItem.claimant_name} />
-          <DetailRow label="Insured Name" value={caseItem.insured_name} />
-          <DetailRow label="Client Code" value={caseItem.client_code} />
-          <DetailRow label="Assigned Vendor" value={caseItem.assigned_vendor} />
-        </View>
-
-        {/* Location Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📍 Location Information</Text>
-          <Text style={styles.locationText}>{getLocationText()}</Text>
-          {caseItem.latitude && caseItem.longitude && (
-            <View style={styles.coordinatesContainer}>
-              <Text style={styles.coordinatesText}>
-                Coordinates: {caseItem.latitude.toFixed(6)}, {caseItem.longitude.toFixed(6)}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Dates */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📅 Timeline</Text>
-          <DetailRow label="Created At" value={formatDate(caseItem.created_at)} />
-          <DetailRow label="Updated At" value={formatDate(caseItem.updated_at)} />
-          {caseItem.resolved_at && (
-            <DetailRow label="Resolved At" value={formatDate(caseItem.resolved_at)} />
-          )}
-          {caseItem.closed_at && (
-            <DetailRow label="Closed At" value={formatDate(caseItem.closed_at)} />
-          )}
-        </View>
-
-        {/* Upload Evidence Button */}
-        <TouchableOpacity 
-          style={styles.uploadButton}
-          onPress={handleUploadEvidence}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.uploadButtonText}>📤 Upload Evidence</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -272,42 +367,32 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
-  titleSection: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#666',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#f44336',
+    textAlign: 'center',
     marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
-  caseTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 12,
+  retryButton: {
+    backgroundColor: PRIMARY_BLUE,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
-  badgesContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  priorityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  badgeText: {
+  retryText: {
     color: '#fff',
-    fontSize: 12,
     fontWeight: '600',
   },
   section: {
@@ -347,48 +432,63 @@ const styles = StyleSheet.create({
     flex: 2,
     textAlign: 'right',
   },
-  descriptionText: {
-    fontSize: 15,
-    color: '#333',
-    lineHeight: 22,
+  noEvidenceText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 20,
   },
-  locationText: {
-    fontSize: 15,
-    color: '#333',
-    lineHeight: 22,
+  photosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  coordinatesContainer: {
+  photoCard: {
+    width: '47%',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  photoImage: {
+    width: '100%',
+    height: 120,
+  },
+  photoName: {
+    fontSize: 11,
+    color: '#333',
+    paddingHorizontal: 8,
+    paddingTop: 6,
+  },
+  photoDate: {
+    fontSize: 10,
+    color: '#999',
+    paddingHorizontal: 8,
+    paddingBottom: 6,
+  },
+  uploadSection: {
+    gap: 12,
     marginTop: 8,
-    padding: 8,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 6,
-  },
-  coordinatesText: {
-    fontSize: 13,
-    color: '#666',
-    fontFamily: 'monospace',
   },
   uploadButton: {
     backgroundColor: PRIMARY_BLUE,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    marginTop: 8,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
   },
+  cameraButton: {
+    backgroundColor: '#4CAF50',
+  },
   uploadButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  errorText: {
     fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 40,
+    fontWeight: '700',
   },
 });

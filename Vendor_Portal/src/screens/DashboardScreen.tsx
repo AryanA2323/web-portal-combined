@@ -15,22 +15,36 @@ import { logoutUser } from '@/store/authSlice';
 import { theme } from '@/config/theme';
 import { useRouter } from 'expo-router';
 
+const checkStatusColors: Record<string, string> = {
+  'WIP': '#FF9800',
+  'Completed': '#4CAF50',
+  'Not Initiated': '#9E9E9E',
+  'Stop': '#f44336',
+};
+
+const checkTypeColors: Record<string, string> = {
+  'Claimant Check': '#667eea',
+  'Insured Check': '#9f7aea',
+  'Driver Check': '#4299e1',
+  'Spot Check': '#48bb78',
+  'Chargesheet': '#ed8936',
+};
+
 export default function DashboardScreen() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { cases, isLoading } = useSelector((state: RootState) => state.cases);
-
-  // If not authenticated, return null - navigation is handled by _layout.tsx
-  if (!isAuthenticated || !user) {
-    return null;
-  }
+  const { cases: checks, isLoading } = useSelector((state: RootState) => state.cases);
 
   useEffect(() => {
     if (isAuthenticated && user) {
       dispatch(fetchCases());
     }
   }, [dispatch, isAuthenticated, user]);
+
+  if (!isAuthenticated || !user) {
+    return null;
+  }
 
   const handleLogout = async () => {
     try {
@@ -47,10 +61,10 @@ export default function DashboardScreen() {
     }
   };
 
-  const totalCases = cases.length;
-  const activeCases = cases.filter((c) => c.status === 'active').length;
-  const completedCases = cases.filter((c) => c.status === 'completed').length;
-  const pendingCases = cases.filter((c) => c.status === 'pending').length;
+  const totalChecks = checks.length;
+  const wipChecks = checks.filter((c: any) => c.check_status === 'WIP').length;
+  const completedChecks = checks.filter((c: any) => c.check_status === 'Completed').length;
+  const notInitiated = checks.filter((c: any) => c.check_status === 'Not Initiated').length;
 
   const StatCard = ({ title, value, icon, color }: any) => (
     <View style={[styles.statCard, { borderLeftColor: color }]}>
@@ -62,67 +76,64 @@ export default function DashboardScreen() {
     </View>
   );
 
-  const CaseCard = ({ caseItem }: any) => {
-    const statusColors: any = {
-      active: '#4CAF50',
-      pending: '#FF9800',
-      completed: '#2196F3',
+  const CheckCard = ({ item }: { item: any }) => {
+    const statusColor = checkStatusColors[item.check_status] || '#999';
+    const typeColor = checkTypeColors[item.check_type] || '#667eea';
+
+    const typeToSlug: Record<string, string> = {
+      'Claimant Check': 'claimant',
+      'Insured Check': 'insured',
+      'Driver Check': 'driver',
+      'Spot Check': 'spot',
+      'Chargesheet': 'chargesheet',
     };
 
-    const handleCasePress = () => {
+    const handlePress = () => {
+      const slug = typeToSlug[item.check_type] || '';
       router.push({
         pathname: '/case-details',
-        params: { case: JSON.stringify(caseItem) }
+        params: { caseId: String(item.case_id), checkType: slug },
       });
     };
 
     return (
-      <TouchableOpacity 
-        style={styles.caseCard}
-        onPress={handleCasePress}
+      <TouchableOpacity
+        style={styles.checkCard}
+        onPress={handlePress}
         activeOpacity={0.7}
       >
-        <View style={styles.caseHeader}>
-          <Text style={styles.caseTitle} numberOfLines={2}>
-            {caseItem.title || `Case #${caseItem.id}`}
-          </Text>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: statusColors[caseItem.status] || '#999' },
-            ]}
-          >
-            <Text style={styles.statusText}>
-              {caseItem.status.toUpperCase()}
+        <View style={styles.checkHeader}>
+          <View style={[styles.typeBadge, { backgroundColor: `${typeColor}20` }]}>
+            <Text style={[styles.typeBadgeText, { color: typeColor }]}>
+              {item.check_type}
+            </Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+            <Text style={styles.statusText}>{item.check_status}</Text>
+          </View>
+        </View>
+
+        <View style={styles.checkDetails}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>📋 Claim:</Text>
+            <Text style={styles.detailValue} numberOfLines={1}>
+              {item.claim_number || 'N/A'}
+            </Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>👤 Client:</Text>
+            <Text style={styles.detailValue} numberOfLines={1}>
+              {item.client_name || 'N/A'}
+            </Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>📁 Category:</Text>
+            <Text style={styles.detailValue} numberOfLines={1}>
+              {item.category || 'N/A'}
             </Text>
           </View>
         </View>
-        <View style={styles.caseDetails}>
-          <View style={styles.caseDetailRow}>
-            <Text style={styles.caseLabel}>📍 Location:</Text>
-            <Text style={styles.caseValue} numberOfLines={1}>
-              {caseItem.formatted_address || 
-               [caseItem.incident_address, caseItem.incident_city, caseItem.incident_state]
-                 .filter(Boolean)
-                 .join(', ') || 
-               'N/A'}
-            </Text>
-          </View>
-          <View style={styles.caseDetailRow}>
-            <Text style={styles.caseLabel}>📅 Date:</Text>
-            <Text style={styles.caseValue}>
-              {new Date(caseItem.createdAt).toLocaleDateString()}
-            </Text>
-          </View>
-          {caseItem.description && (
-            <View style={styles.caseDetailRow}>
-              <Text style={styles.caseLabel}>📝 Description:</Text>
-              <Text style={styles.caseValue} numberOfLines={2}>
-                {caseItem.description}
-              </Text>
-            </View>
-          )}
-        </View>
+
         <View style={styles.viewDetailsContainer}>
           <Text style={styles.viewDetailsText}>Tap to view details →</Text>
         </View>
@@ -132,7 +143,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header with gradient background */}
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.userInfoContainer}>
@@ -158,55 +169,37 @@ export default function DashboardScreen() {
           <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} />
         }
       >
-        {/* Statistics Grid */}
+        {/* Statistics */}
         <View style={styles.statsContainer}>
-          <Text style={styles.sectionTitle}>Case Statistics</Text>
+          <Text style={styles.sectionTitle}>Assigned Checks</Text>
           <View style={styles.statsGrid}>
-            <StatCard
-              title="Total Cases"
-              value={totalCases}
-              icon="📊"
-              color="#2196F3"
-            />
-            <StatCard
-              title="Active"
-              value={activeCases}
-              icon="⚡"
-              color="#4CAF50"
-            />
-            <StatCard
-              title="Pending"
-              value={pendingCases}
-              icon="⏳"
-              color="#FF9800"
-            />
-            <StatCard
-              title="Completed"
-              value={completedCases}
-              icon="✅"
-              color="#9C27B0"
-            />
+            <StatCard title="Total" value={totalChecks} icon="📊" color="#2196F3" />
+            <StatCard title="WIP" value={wipChecks} icon="⚡" color="#FF9800" />
+            <StatCard title="Not Started" value={notInitiated} icon="⏳" color="#9E9E9E" />
+            <StatCard title="Completed" value={completedChecks} icon="✅" color="#4CAF50" />
           </View>
         </View>
 
-        {/* Cases List */}
-        <View style={styles.casesContainer}>
-          <Text style={styles.sectionTitle}>Your Cases</Text>
-          {isLoading && cases.length === 0 ? (
+        {/* Checks List */}
+        <View style={styles.checksContainer}>
+          <Text style={styles.sectionTitle}>Your Assigned Checks</Text>
+          {isLoading && checks.length === 0 ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.loadingText}>Loading cases...</Text>
+              <Text style={styles.loadingText}>Loading checks...</Text>
             </View>
-          ) : cases.length === 0 ? (
+          ) : checks.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📋</Text>
-              <Text style={styles.emptyText}>No cases assigned yet</Text>
+              <Text style={styles.emptyText}>No checks assigned yet</Text>
               <Text style={styles.emptySubtext}>
-                New cases will appear here when assigned
+                Checks will appear here when assigned by admin
               </Text>
             </View>
           ) : (
-            cases.map((caseItem) => <CaseCard key={caseItem.id} caseItem={caseItem} />)
+            checks.map((item: any) => (
+              <CheckCard key={`${item.case_id}-${item.check_type}`} item={item} />
+            ))
           )}
         </View>
       </ScrollView>
@@ -329,10 +322,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
   },
-  casesContainer: {
+  checksContainer: {
     marginBottom: 24,
   },
-  caseCard: {
+  checkCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
@@ -343,21 +336,23 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
-  caseHeader: {
+  checkHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  caseTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginRight: 12,
+  typeBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  typeBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -370,20 +365,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
-  caseDetails: {
+  checkDetails: {
     gap: 8,
   },
-  caseDetailRow: {
+  detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  caseLabel: {
+  detailLabel: {
     fontSize: 13,
     color: '#666',
     fontWeight: '500',
     minWidth: 100,
   },
-  caseValue: {
+  detailValue: {
     flex: 1,
     fontSize: 13,
     color: '#333',

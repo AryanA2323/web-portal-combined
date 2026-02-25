@@ -45,7 +45,6 @@ venv.bak/
 *.swp
 *.swo
 *~
-.DS_Store
 
 # Frontend
 node_modules/
@@ -56,28 +55,26 @@ yarn-error.log*
 dist/
 dist-ssr/
 *.local
+frontend/.vite/
 
 # Logs
 logs/
-*.log
 
 # OS
 .DS_Store
 Thumbs.db
 
-# React Native / Mobile
-VendorPortal/node_modules/
-VendorPortal/ios/Pods/
-VendorPortal/ios/build/
-VendorPortal/android/build/
-VendorPortal/android/.gradle/
-VendorPortal/android/app/build/
-VendorPortal/.expo/
-VendorPortal/.expo-shared/
+# Expo / React Native
+.expo/
+*.expo/
+Vendor_Portal/.expo/
+Vendor_Portal/ios/
+Vendor_Portal/android/
 
 # Misc
 *.pem
 .cache/
+*.bak
 
 # OAuth tokens and sensitive files
 gmail_token.pickle

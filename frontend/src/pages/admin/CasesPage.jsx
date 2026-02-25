@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -20,86 +21,107 @@ import {
   TablePagination,
   InputAdornment,
   CircularProgress,
-  Tooltip,
+  Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Search,
   Add,
-  MoreVert,
   FolderOpen,
   Schedule,
   CheckCircle,
   Warning,
-  PersonPin,
+  ExpandMore,
+  ChevronRight,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
-import CreateCaseDialog from './components/CreateCaseDialog';
 import api from '../../services/api';
 
-// Status color mapping
-const statusColors = {
-  'OPEN': '#4299e1',
-  'IN_PROGRESS': '#f6ad55',
-  'PENDING': '#9f7aea',
-  'RESOLVED': '#48bb78',
-  'CLOSED': '#48bb78',
-  'CANCELLED': '#a0aec0',
+// Full case status colors (incident_case_db values)
+const fullCaseStatusColors = {
+  'WIP':                    '#f6ad55',
+  'Pending CS':             '#ed8936',
+  'Completed':              '#48bb78',
+  'IR-Writing':             '#4299e1',
+  'NI':                     '#a0aec0',
+  'Withdraw':               '#f56565',
+  'QC-1':                   '#9f7aea',
+  'Pending Additional Docs':'#ed8936',
+  'Connected Pending':      '#b794f4',
+  'RCU Pending':            '#76e4f7',
+  'Portal Upload':          '#667eea',
 };
 
-const statusLabels = {
-  'OPEN': 'New',
-  'IN_PROGRESS': 'In Progress',
-  'PENDING': 'Pending',
-  'RESOLVED': 'Resolved',
-  'CLOSED': 'Completed',
-  'CANCELLED': 'Cancelled',
+// Investigation report status colors
+const irStatusColors = {
+  'Open':     '#4299e1',
+  'Approval': '#f6ad55',
+  'Stop':     '#f56565',
+  'QC':       '#9f7aea',
+  'Dispatch': '#48bb78',
 };
 
-// Priority color mapping
-const priorityColors = {
-  'low': '#48bb78',
-  'medium': '#ed8936',
-  'high': '#f56565',
-  'critical': '#e53e3e',
+// Verification check_status colors
+const checkStatusColors = {
+  'Not Initiated': '#a0aec0',
+  'WIP':           '#f6ad55',
+  'Completed':     '#48bb78',
+  'Stop':          '#f56565',
+};
+
+// Case type chip colors
+const caseTypeColors = {
+  'Full Case':       '#667eea',
+  'Partial Case':    '#9f7aea',
+  'Reassessment':    '#4299e1',
+  'Connected Case':  '#76e4f7',
 };
 
 const CasesPage = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [cases, setCases] = useState([]);
   const [stats, setStats] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [vendorFilter, setVendorFilter] = useState('all');
-  const [investigatorFilter, setInvestigatorFilter] = useState('all');
+  const [fullCaseStatusFilter, setFullCaseStatusFilter] = useState('all');
   const [caseTypeFilter, setCaseTypeFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalCases, setTotalCases] = useState(0);
   const [selected, setSelected] = useState([]);
   const [assigningVendor, setAssigningVendor] = useState(null);
-  const [openDialog, setOpenDialog] = useState(false);
+  const [expandedCases, setExpandedCases] = useState({});
+
+  // Vendor assignment modal state
+  const [vendorModalOpen, setVendorModalOpen] = useState(false);
+  const [vendorList, setVendorList] = useState([]);
+  const [selectedVendorId, setSelectedVendorId] = useState('');
+  const [vendorAssigning, setVendorAssigning] = useState(false);
+  const [vendorModalTarget, setVendorModalTarget] = useState(null); // { caseId, checkType }
 
   // Fetch data on mount
   useEffect(() => {
     fetchData();
-  }, [page, rowsPerPage, statusFilter, caseTypeFilter]);
+  }, [page, rowsPerPage, fullCaseStatusFilter, caseTypeFilter]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      
-      // Fetch stats and cases in parallel
+
       const [statsRes, casesRes] = await Promise.all([
         api.get('/dashboard/stats'),
-        api.get('/cases', {
+        api.get('/cases/incident-db', {
           params: {
             page: page + 1,
             page_size: rowsPerPage,
-            status: statusFilter !== 'all' ? statusFilter : undefined,
-            category: caseTypeFilter !== 'all' ? caseTypeFilter : undefined,
+            full_case_status: fullCaseStatusFilter !== 'all' ? fullCaseStatusFilter : undefined,
+            case_type: caseTypeFilter !== 'all' ? caseTypeFilter : undefined,
             search: searchTerm || undefined,
-          }
+          },
         }),
       ]);
 
@@ -199,17 +221,20 @@ const CasesPage = () => {
   const isSelected = (id) => selected.indexOf(id) !== -1;
 
   // Create case handler
-  const handleCreateCase = async (caseData) => {
-    try {
-      await api.post('/cases', caseData);
-      
-      // Refresh cases list
-      await fetchData();
-    } catch (error) {
-      console.error('Failed to create case:', error);
-      throw error;
-    }
+  const handleCreateCase = () => {
+    navigate('/admin/cases/new');
   };
+
+  // Toggle case expansion
+  const toggleCaseExpansion = (caseId) => {
+    setExpandedCases(prev => ({
+      ...prev,
+      [caseId]: !prev[caseId]
+    }));
+  };
+
+  // Sub-items come directly from API (incident_case_db verification tables)
+  const getSubCases = (caseData) => caseData.sub_items || [];
 
   // Auto-assign vendor function
   const handleAutoAssignVendor = async (caseId) => {
@@ -229,6 +254,48 @@ const CasesPage = () => {
       alert('Failed to assign vendor. Please try again.');
     } finally {
       setAssigningVendor(null);
+    }
+  };
+
+  // Open vendor assignment modal for a sub-check
+  const openVendorModal = async (caseId, checkType) => {
+    setVendorModalTarget({ caseId, checkType });
+    setSelectedVendorId('');
+    setVendorModalOpen(true);
+    try {
+      const res = await api.get('/check-vendors');
+      setVendorList(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch vendors:', err);
+      setVendorList([]);
+    }
+  };
+
+  // Assign vendor to sub-check
+  const handleAssignVendorToCheck = async () => {
+    if (!vendorModalTarget || !selectedVendorId) return;
+    const { caseId, checkType } = vendorModalTarget;
+    const typeToSlug = {
+      'Claimant Check': 'claimant',
+      'Insured Check': 'insured',
+      'Driver Check': 'driver',
+      'Spot Check': 'spot',
+      'Chargesheet': 'chargesheet',
+    };
+    const slug = typeToSlug[checkType] || checkType;
+    try {
+      setVendorAssigning(true);
+      await api.post(`/cases/incident-db/${caseId}/check/${slug}/assign-vendor`, {
+        vendor_id: parseInt(selectedVendorId, 10),
+      });
+      setVendorModalOpen(false);
+      setVendorModalTarget(null);
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to assign vendor:', err);
+      alert('Failed to assign vendor. Please try again.');
+    } finally {
+      setVendorAssigning(false);
     }
   };
 
@@ -309,57 +376,24 @@ const CasesPage = () => {
               }}
             />
 
-            {/* Status Filter */}
-            <FormControl size="small" sx={{ minWidth: 140 }}>
+            {/* Full Case Status Filter */}
+            <FormControl size="small" sx={{ minWidth: 150 }}>
               <Select
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
+                value={fullCaseStatusFilter}
+                onChange={(e) => { setFullCaseStatusFilter(e.target.value); setPage(0); }}
                 displayEmpty
-                sx={{
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
-                }}
+                sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' } }}
               >
                 <MenuItem value="all">All Statuses</MenuItem>
-                <MenuItem value="new">New</MenuItem>
-                <MenuItem value="in_progress">In Progress</MenuItem>
-                <MenuItem value="under_review">Under Review</MenuItem>
-                <MenuItem value="completed">Completed</MenuItem>
-                <MenuItem value="overdue">Overdue</MenuItem>
-              </Select>
-            </FormControl>
-
-            {/* Vendor Filter */}
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <Select
-                value={vendorFilter}
-                onChange={(e) => setVendorFilter(e.target.value)}
-                displayEmpty
-                sx={{
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
-                }}
-              >
-                <MenuItem value="all">All Vendors</MenuItem>
-                <MenuItem value="smith">Smith Investigation</MenuItem>
-                <MenuItem value="metro">Metro Detective Agency</MenuItem>
-              </Select>
-            </FormControl>
-
-            {/* Investigator Filter */}
-            <FormControl size="small" sx={{ minWidth: 160 }}>
-              <Select
-                value={investigatorFilter}
-                onChange={(e) => setInvestigatorFilter(e.target.value)}
-                displayEmpty
-                sx={{
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
-                }}
-              >
-                <MenuItem value="all">All Investigators</MenuItem>
-                <MenuItem value="diana">Diana Patel</MenuItem>
-                <MenuItem value="david">David Nguyen</MenuItem>
+                <MenuItem value="WIP">WIP</MenuItem>
+                <MenuItem value="Pending CS">Pending CS</MenuItem>
+                <MenuItem value="Completed">Completed</MenuItem>
+                <MenuItem value="IR-Writing">IR-Writing</MenuItem>
+                <MenuItem value="NI">NI</MenuItem>
+                <MenuItem value="Withdraw">Withdraw</MenuItem>
+                <MenuItem value="QC-1">QC-1</MenuItem>
+                <MenuItem value="Pending Additional Docs">Pending Docs</MenuItem>
+                <MenuItem value="Portal Upload">Portal Upload</MenuItem>
               </Select>
             </FormControl>
 
@@ -369,19 +403,13 @@ const CasesPage = () => {
                 value={caseTypeFilter}
                 onChange={(e) => { setCaseTypeFilter(e.target.value); setPage(0); }}
                 displayEmpty
-                sx={{
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
-                }}
+                sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' } }}
               >
-                <MenuItem value="all">All Categories</MenuItem>
-                <MenuItem value="Motor">Motor</MenuItem>
-                <MenuItem value="Health">Health</MenuItem>
-                <MenuItem value="Fire">Fire</MenuItem>
-                <MenuItem value="Marine">Marine</MenuItem>
-                <MenuItem value="Liability">Liability</MenuItem>
-                <MenuItem value="Engineering">Engineering</MenuItem>
-                <MenuItem value="Miscellaneous">Miscellaneous</MenuItem>
+                <MenuItem value="all">All Case Types</MenuItem>
+                <MenuItem value="Full Case">Full Case</MenuItem>
+                <MenuItem value="Partial Case">Partial Case</MenuItem>
+                <MenuItem value="Reassessment">Reassessment</MenuItem>
+                <MenuItem value="Connected Case">Connected Case</MenuItem>
               </Select>
             </FormControl>
 
@@ -391,9 +419,7 @@ const CasesPage = () => {
               size="small"
               onClick={() => {
                 setSearchTerm('');
-                setStatusFilter('all');
-                setVendorFilter('all');
-                setInvestigatorFilter('all');
+                setFullCaseStatusFilter('all');
                 setCaseTypeFilter('all');
                 setPage(0);
               }}
@@ -411,7 +437,7 @@ const CasesPage = () => {
             <Button
               variant="contained"
               startIcon={<Add />}
-              onClick={() => setOpenDialog(true)}
+              onClick={handleCreateCase}
               sx={{
                 ml: 'auto',
                 backgroundColor: '#667eea',
@@ -439,140 +465,299 @@ const CasesPage = () => {
                     onChange={handleSelectAll}
                   />
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Case ID</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Case Title</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Priority</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', width: 40 }}></TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', width: 50 }}>#</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Claim Number</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Client Name</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Case Type</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Category</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Insured Name</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Assigned Vendor</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Case Status</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>IR Status</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>SLA</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>TAT Days</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Last Updated</TableCell>
-                <TableCell></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {cases.map((row) => {
                 const isItemSelected = isSelected(row.id);
-                const status = row.status || 'new';
-                const statusColor = statusColors[status] || statusColors.new;
-                const statusLabel = statusLabels[status] || status;
-                const priority = row.priority || 'medium';
-                const priorityColor = priorityColors[priority] || priorityColors.medium;
-                
+                const subItems = getSubCases(row);
+                const isExpanded = expandedCases[row.id];
+                const fcColor = fullCaseStatusColors[row.full_case_status] || '#a0aec0';
+                const irColor = irStatusColors[row.investigation_report_status] || '#a0aec0';
+                const ctColor = caseTypeColors[row.case_type] || '#667eea';
+
                 return (
-                  <TableRow
-                    key={row.id}
-                    hover
-                    sx={{
-                      '&:last-child td': { border: 0 },
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={isItemSelected}
-                        onChange={() => handleSelect(row.id)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography
-                        sx={{
-                          color: '#667eea',
-                          fontWeight: 600,
-                          fontSize: '14px',
-                        }}
-                      >
-                        #{row.case_number || row.id}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px' }}>{row.title || 'Untitled Case'}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={statusLabel}
-                        size="small"
-                        sx={{
-                          backgroundColor: `${statusColor}15`,
-                          color: statusColor,
-                          fontWeight: 600,
-                          fontSize: '12px',
-                          height: '24px',
-                          borderRadius: '6px',
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box
+                  <>
+                    <TableRow
+                      key={row.id}
+                      hover
+                      sx={{ '&:last-child td': { border: 0 }, cursor: 'pointer' }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox checked={isItemSelected} onChange={() => handleSelect(row.id)} />
+                      </TableCell>
+
+                      {/* Expand toggle */}
+                      <TableCell sx={{ width: 40, p: 0 }}>
+                        {subItems.length > 0 && (
+                          <IconButton size="small" onClick={() => toggleCaseExpansion(row.id)}>
+                            {isExpanded ? <ExpandMore /> : <ChevronRight />}
+                          </IconButton>
+                        )}
+                      </TableCell>
+
+                      {/* Sequential # */}
+                      <TableCell>
+                        <Typography sx={{ color: '#667eea', fontWeight: 700, fontSize: '14px' }}>
+                          {row.seq_num}
+                        </Typography>
+                      </TableCell>
+
+                      {/* Claim Number */}
+                      <TableCell>
+                        <Typography sx={{ fontWeight: 600, fontSize: '14px' }}>
+                          {row.claim_number || '—'}
+                        </Typography>
+                      </TableCell>
+
+                      {/* Client Name */}
+                      <TableCell>
+                        <Typography sx={{ fontSize: '14px' }}>{row.client_name || '—'}</Typography>
+                      </TableCell>
+
+                      {/* Case Type */}
+                      <TableCell>
+                        <Chip
+                          label={row.case_type || '—'}
+                          size="small"
                           sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            backgroundColor: priorityColor,
+                            backgroundColor: `${ctColor}18`,
+                            color: ctColor,
+                            fontWeight: 600,
+                            fontSize: '11px',
+                            height: '22px',
+                            borderRadius: '6px',
                           }}
                         />
-                        <Typography sx={{ fontSize: '14px', textTransform: 'capitalize' }}>{priority}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px' }}>{row.category || 'N/A'}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px' }}>{row.insured_name || 'N/A'}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {row.assigned_vendor ? (
+                      </TableCell>
+
+                      {/* Category */}
+                      <TableCell>
+                        <Typography sx={{ fontSize: '14px' }}>{row.category || '—'}</Typography>
+                      </TableCell>
+
+                      {/* Full Case Status */}
+                      <TableCell>
+                        <Chip
+                          label={row.full_case_status || '—'}
+                          size="small"
+                          sx={{
+                            backgroundColor: `${fcColor}20`,
+                            color: fcColor,
+                            fontWeight: 600,
+                            fontSize: '11px',
+                            height: '22px',
+                            borderRadius: '6px',
+                          }}
+                        />
+                      </TableCell>
+
+                      {/* IR Status */}
+                      <TableCell>
+                        <Chip
+                          label={row.investigation_report_status || '—'}
+                          size="small"
+                          sx={{
+                            backgroundColor: `${irColor}20`,
+                            color: irColor,
+                            fontWeight: 600,
+                            fontSize: '11px',
+                            height: '22px',
+                            borderRadius: '6px',
+                          }}
+                        />
+                      </TableCell>
+
+                      {/* SLA */}
+                      <TableCell>
+                        {row.sla ? (
                           <Chip
-                            label={row.assigned_vendor}
+                            label={row.sla}
                             size="small"
                             sx={{
-                              backgroundColor: '#e8f5e9',
-                              color: '#2e7d32',
-                              fontWeight: 600,
-                              fontSize: '12px',
-                              height: '24px',
+                              backgroundColor: row.sla === 'AT' ? '#e8f5e920' : '#fff3e020',
+                              color: row.sla === 'AT' ? '#2e7d32' : '#e65100',
+                              fontWeight: 700,
+                              fontSize: '11px',
+                              height: '22px',
                               borderRadius: '6px',
                             }}
                           />
-                        ) : (
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            startIcon={assigningVendor === row.id ? <CircularProgress size={14} /> : <PersonPin />}
-                            onClick={() => handleAutoAssignVendor(row.id)}
-                            disabled={assigningVendor === row.id || !row.latitude || !row.longitude}
-                            sx={{
-                              textTransform: 'none',
-                              fontSize: '12px',
-                              borderRadius: '6px',
-                              borderColor: '#667eea',
-                              color: '#667eea',
-                              '&:hover': {
-                                borderColor: '#5568d3',
-                                backgroundColor: '#f0f4ff',
-                              },
-                            }}
-                          >
-                            {assigningVendor === row.id ? 'Assigning...' : 'Auto Assign'}
-                          </Button>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px', color: '#666' }}>
-                        {formatDate(row.updated_at)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <IconButton size="small">
-                        <MoreVert sx={{ fontSize: 20 }} />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
+                        ) : <Typography sx={{ fontSize: '13px', color: '#aaa' }}>—</Typography>}
+                      </TableCell>
+
+                      {/* TAT Days */}
+                      <TableCell>
+                        <Typography sx={{ fontSize: '14px', textAlign: 'center' }}>
+                          {row.tat_days ?? '—'}
+                        </Typography>
+                      </TableCell>
+
+                      {/* Last Updated */}
+                      <TableCell>
+                        <Typography sx={{ fontSize: '13px', color: '#666' }}>
+                          {formatDate(row.updated_at)}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+
+                    {/* ── Sub-items (verification checks) ── */}
+                    {subItems.length > 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={12}
+                          sx={{ py: 0, borderBottom: isExpanded ? '1px solid #e0e0e0' : 'none', p: 0 }}
+                        >
+                          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                            <Box sx={{ backgroundColor: '#f5f7ff', borderLeft: '4px solid #667eea' }}>
+                              {/* Sub-table header */}
+                              <Box
+                                sx={{
+                                  display: 'grid',
+                                  gridTemplateColumns: '70px 130px 1fr 1fr 1fr 100px 1.2fr 150px',
+                                  px: 2,
+                                  py: 0.75,
+                                  backgroundColor: '#eef0fb',
+                                  borderBottom: '1px solid #d0d5f5',
+                                }}
+                              >
+                                {['Sub ID', 'Type', 'Name / Subject', 'Contact', 'Location', 'Status', 'Statement / Brief', 'Assigned Vendor'].map((h) => (
+                                  <Typography key={h} sx={{ fontSize: '11px', fontWeight: 700, color: '#667eea', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                                    {h}
+                                  </Typography>
+                                ))}
+                              </Box>
+
+                              {/* Sub-table rows */}
+                              {subItems.map((sub, idx) => {
+                                const sc = checkStatusColors[sub.check_status] || '#a0aec0';
+                                const typeToSlug = {
+                                  'Claimant Check': 'claimant',
+                                  'Insured Check': 'insured',
+                                  'Driver Check': 'driver',
+                                  'Spot Check': 'spot',
+                                  'Chargesheet': 'chargesheet',
+                                };
+                                return (
+                                  <Box
+                                    key={sub.sub_id}
+                                    onClick={() => {
+                                      const slug = typeToSlug[sub.type];
+                                      if (slug) navigate(`/admin/cases/${row.id}/check/${slug}`);
+                                    }}
+                                    sx={{
+                                      display: 'grid',
+                                      gridTemplateColumns: '70px 130px 1fr 1fr 1fr 100px 1.2fr 150px',
+                                      px: 2,
+                                      py: 0.9,
+                                      alignItems: 'center',
+                                      cursor: 'pointer',
+                                      backgroundColor: idx % 2 === 0 ? '#fff' : '#f9faff',
+                                      borderBottom: idx < subItems.length - 1 ? '1px solid #eceef8' : 'none',
+                                      '&:hover': { backgroundColor: '#e8eaff' },
+                                    }}
+                                  >
+                                    <Typography sx={{ fontWeight: 700, fontSize: '13px', color: '#667eea' }}>
+                                      {sub.sub_id}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#444' }}>
+                                      {sub.type}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: '12px', color: '#333' }} noWrap title={sub.name}>
+                                      {sub.name}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: '12px', color: '#555' }} noWrap title={sub.contact}>
+                                      {sub.contact}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: '12px', color: '#555' }} noWrap title={sub.location}>
+                                      {sub.location}
+                                    </Typography>
+                                    <Box>
+                                      <Chip
+                                        label={sub.check_status}
+                                        size="small"
+                                        sx={{
+                                          backgroundColor: `${sc}22`,
+                                          color: sc,
+                                          fontWeight: 700,
+                                          fontSize: '11px',
+                                          height: '20px',
+                                          borderRadius: '5px',
+                                        }}
+                                      />
+                                    </Box>
+                                    <Typography sx={{ fontSize: '11px', color: '#777', fontStyle: sub.statement ? 'normal' : 'italic' }} noWrap title={sub.statement}>
+                                      {sub.statement || '—'}
+                                    </Typography>
+                                    <Box onClick={(e) => e.stopPropagation()}>
+                                      {sub.assigned_vendor_name ? (
+                                        <Chip
+                                          label={sub.assigned_vendor_name}
+                                          size="small"
+                                          sx={{
+                                            backgroundColor: '#e8f5e920',
+                                            color: '#2e7d32',
+                                            fontWeight: 600,
+                                            fontSize: '11px',
+                                            height: '22px',
+                                            borderRadius: '6px',
+                                            maxWidth: '140px',
+                                          }}
+                                          title={sub.assigned_vendor_name}
+                                        />
+                                      ) : (
+                                        <Button
+                                          size="small"
+                                          variant="outlined"
+                                          onClick={() => openVendorModal(row.id, sub.type)}
+                                          sx={{
+                                            textTransform: 'none',
+                                            fontSize: '11px',
+                                            fontWeight: 600,
+                                            borderColor: '#667eea',
+                                            color: '#667eea',
+                                            borderRadius: '6px',
+                                            py: 0,
+                                            px: 1.5,
+                                            minWidth: 'auto',
+                                            '&:hover': { backgroundColor: '#f0f4ff', borderColor: '#5568d3' },
+                                          }}
+                                        >
+                                          Assign
+                                        </Button>
+                                      )}
+                                    </Box>
+                                  </Box>
+                                );
+                              })}
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 );
               })}
+              {!loading && cases.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={12} sx={{ textAlign: 'center', py: 4 }}>
+                    <Typography variant="body1" color="text.secondary">
+                      No cases found. Try adjusting your filters or create a new case.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -608,11 +793,59 @@ const CasesPage = () => {
         </Box>
       </Paper>
 
-      <CreateCaseDialog
-        open={openDialog}
-        onClose={() => setOpenDialog(false)}
-        onSuccess={handleCreateCase}
-      />
+      {/* Vendor Assignment Modal */}
+      <Dialog
+        open={vendorModalOpen}
+        onClose={() => setVendorModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, fontSize: '18px', pb: 1 }}>
+          Assign Vendor
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: '13px', color: '#666', mb: 2 }}>
+            Select a vendor to assign to this check.
+          </Typography>
+          <FormControl fullWidth size="small">
+            <Select
+              value={selectedVendorId}
+              onChange={(e) => setSelectedVendorId(e.target.value)}
+              displayEmpty
+              sx={{ borderRadius: '8px' }}
+            >
+              <MenuItem value="" disabled>Select a vendor</MenuItem>
+              {vendorList.map((v) => (
+                <MenuItem key={v.id} value={v.id}>
+                  {v.company_name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setVendorModalOpen(false)}
+            sx={{ textTransform: 'none', color: '#666' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!selectedVendorId || vendorAssigning}
+            onClick={handleAssignVendorToCheck}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              backgroundColor: '#667eea',
+              borderRadius: '8px',
+              '&:hover': { backgroundColor: '#5568d3' },
+            }}
+          >
+            {vendorAssigning ? <CircularProgress size={20} color="inherit" /> : 'Assign'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </AdminLayout>
   );
 };

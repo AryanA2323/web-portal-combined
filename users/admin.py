@@ -3,7 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     CustomUser, Vendor, AuthToken, EmailVerificationCode, PasswordResetToken,
     EmailIntake, EmailAttachment, GmailOAuthToken,
-    Client, InsuranceCase, CaseDocument
+    Client, InsuranceCase, CaseDocument,
+    CaseVerification, VerificationDocument, VerificationComment, ClaimantDependent
 )
 
 
@@ -226,90 +227,183 @@ class CaseDocumentInline(admin.TabularInline):
 class InsuranceCaseAdmin(admin.ModelAdmin):
     """Admin for insurance cases."""
     
-    list_display = ('claim_number', 'client_name', 'category', 'case_receipt_date', 
-                   'full_case_status', 'investigation_report_status', 'tat_display')
-    list_filter = ('category', 'full_case_status', 'investigation_report_status', 
-                  'case_receipt_date', 'completion_date')
-    search_fields = ('claim_number', 'client_name', 'crn', 'policy_number', 
-                    'claimant_name', 'insured_name')
-    readonly_fields = ('created_at', 'updated_at')
-    ordering = ('-case_receipt_date',)
-    inlines = [CaseDocumentInline]
-    date_hierarchy = 'case_receipt_date'
+    list_display = ('case_number', 'title', 'claim_number', 'status', 'category', 
+                   'priority', 'created_at')
+    list_filter = ('status', 'category', 'priority', 'source', 'workflow_type', 'created_at')
+    search_fields = ('case_number', 'title', 'claim_number', 'client_code', 
+                    'claimant_name', 'insured_name', 'description')
+    readonly_fields = ('created_at', 'updated_at', 'resolved_at', 'closed_at')
+    ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
     
     fieldsets = (
-        ('Case Identification', {
-            'fields': ('claim_number', 'client', 'client_name', 'category', 'crn', 'policy_number')
+        ('Basic Information', {
+            'fields': ('case_number', 'title', 'description', 'category', 'priority', 'status')
         }),
-        ('Dates & TAT', {
-            'fields': ('case_receipt_date', 'receipt_month', 'completion_date', 
-                      'completion_month', 'case_due_date', 'tat', 'sla')
+        ('Claim Information', {
+            'fields': ('claim_number', 'client_code', 'client')
         }),
-        ('Case Details', {
-            'fields': ('case_type', 'investigation_report_status', 'full_case_status', 'scope_of_work')
+        ('People Information', {
+            'fields': ('insured_name', 'claimant_name')
         }),
-        ('Claimant Information', {
-            'fields': ('claimant_name', 'claimant_address', 'claimant_district', 'claimant_status')
+        ('Incident Location', {
+            'fields': ('incident_address', 'incident_city', 'incident_state', 
+                      'incident_postal_code', 'incident_country', 'latitude', 
+                      'longitude', 'formatted_address')
         }),
-        ('Income Details', {
-            'fields': ('income_details', 'income_address', 'income_district', 'income_status'),
+        ('Assignment', {
+            'fields': ('created_by', 'vendor')
+        }),
+        ('Workflow Information', {
+            'fields': ('source', 'workflow_type', 'investigation_progress')
+        }),
+        ('Verification Checklist', {
+            'fields': ('chk_spot', 'chk_hospital', 'chk_claimant', 'chk_insured',
+                      'chk_witness', 'chk_driver', 'chk_dl', 'chk_rc', 'chk_permit',
+                      'chk_court', 'chk_notice', 'chk_134_notice', 'chk_rti',
+                      'chk_medical_verification', 'chk_income'),
             'classes': ('collapse',)
         }),
-        ('Insured Information', {
-            'fields': ('insured_name', 'insured_address', 'insured_district', 
-                      'insured_132_notice', 'insured_status')
-        }),
-        ('Driver Information', {
-            'fields': ('driver_name', 'driver_address', 'driver_district', 'driver_status'),
+        ('Dates', {
+            'fields': ('created_at', 'updated_at', 'resolved_at', 'closed_at'),
             'classes': ('collapse',)
         }),
-        ('Document Status', {
-            'fields': ('dl_status', 'rc_status', 'permit_status', 'fitness_status'),
-            'classes': ('collapse',)
-        }),
-        ('Spot Details', {
-            'fields': ('spot_location', 'spot_district', 'spot_status'),
-            'classes': ('collapse',)
-        }),
-        ('Police Details', {
-            'fields': ('fir_number', 'police_station', 'police_district', 
-                      'rti_status', 'chargesheet_status', 'police_status'),
-            'classes': ('collapse',)
-        }),
-        ('Hospital Details', {
-            'fields': ('hospital_name', 'hospital_address', 'hospital_district', 'hospital_status'),
-            'classes': ('collapse',)
-        }),
-        ('Dispatch', {
-            'fields': ('dispatch_date', 'dispatch_status'),
-            'classes': ('collapse',)
-        }),
-        ('Notes & Source', {
-            'fields': ('case_notes', 'source_email')
-        }),
-        ('Metadata', {
-            'fields': ('created_at', 'updated_at'),
+        ('Legacy', {
+            'fields': ('source_email',),
             'classes': ('collapse',)
         }),
     )
     
-    def tat_display(self, obj):
-        """Display TAT in human readable format."""
-        return f"{obj.tat} days" if obj.tat else "N/A"
-    tat_display.short_description = 'TAT'
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('client', 'vendor', 'created_by', 'source_email')
 
 
 @admin.register(CaseDocument)
 class CaseDocumentAdmin(admin.ModelAdmin):
     """Admin for case documents."""
     
-    list_display = ('document_name', 'case_claim_number', 'document_type', 'uploaded_date')
+    list_display = ('document_name', 'case_number_display', 'document_type', 'uploaded_date')
     list_filter = ('document_type', 'uploaded_date')
-    search_fields = ('document_name', 'case__claim_number')
+    search_fields = ('document_name', 'case__case_number', 'case__claim_number')
     readonly_fields = ('uploaded_date',)
     ordering = ('-uploaded_date',)
     
-    def case_claim_number(self, obj):
-        """Show claim number of associated case."""
-        return obj.case.claim_number
-    case_claim_number.short_description = 'Claim Number'
+    def case_number_display(self, obj):
+        """Show case number of associated case."""
+        return obj.case.case_number if obj.case else 'N/A'
+    case_number_display.short_description = 'Case Number'
+
+
+@admin.register(CaseVerification)
+class CaseVerificationAdmin(admin.ModelAdmin):
+    """Admin for case verifications."""
+    
+    list_display = ('id', 'case_number_display', 'verification_type', 'status', 'priority', 'created_at')
+    list_filter = ('verification_type', 'status', 'priority', 'created_at')
+    search_fields = ('case__case_number', 'case__claim_number', 'claimant_name', 'insured_name', 'driver_name')
+    readonly_fields = ('created_at', 'updated_at', 'assigned_at', 'started_at', 'completed_at', 'verified_at')
+    ordering = ('-created_at',)
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('case', 'verification_type', 'status', 'priority')
+        }),
+        ('Assignment', {
+            'fields': ('assigned_to', 'verified_by', 'assigned_at', 'started_at', 'completed_at', 'verified_at')
+        }),
+        ('Claimant Details', {
+            'fields': ('claimant_name', 'claimant_contact', 'claimant_address', 'income', 'fir_number_claimant', 'court_name', 'mv_act'),
+            'classes': ('collapse',)
+        }),
+        ('Insured Details', {
+            'fields': ('insured_name', 'insured_contact', 'insured_address', 'policy_number', 'policy_period', 'rc_number', 'permit_insured'),
+            'classes': ('collapse',)
+        }),
+        ('Driver Details', {
+            'fields': ('driver_name', 'driver_contact', 'driver_address', 'dl_number', 'permit_driver', 'occupation', 'driver_and_insured_same'),
+            'classes': ('collapse',)
+        }),
+        ('Spot Details', {
+            'fields': ('time_of_accident', 'place_of_accident', 'district', 'fir_number_spot', 'police_station', 'accident_brief'),
+            'classes': ('collapse',)
+        }),
+        ('Chargesheet Details', {
+            'fields': ('fir_delay_in_days', 'bsn_sections', 'ipc_sections'),
+            'classes': ('collapse',)
+        }),
+        ('Additional Information', {
+            'fields': ('check_status', 'statement', 'observations', 'findings', 'notes'),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def case_number_display(self, obj):
+        """Show case number."""
+        return obj.case.case_number if obj.case else 'N/A'
+    case_number_display.short_description = 'Case Number'
+
+
+@admin.register(VerificationDocument)
+class VerificationDocumentAdmin(admin.ModelAdmin):
+    """Admin for verification documents."""
+    
+    list_display = ('file_name', 'verification_display', 'document_type', 'file_size_display', 'uploaded_at', 'is_verified')
+    list_filter = ('document_type', 'is_verified', 'is_primary', 'uploaded_at')
+    search_fields = ('file_name', 'title', 'verification__case__case_number')
+    readonly_fields = ('uploaded_at', 'file_size', 'mime_type')
+    ordering = ('-uploaded_at',)
+    
+    def verification_display(self, obj):
+        """Show verification info."""
+        return f"{obj.verification.case.case_number} - {obj.verification.get_verification_type_display()}"
+    verification_display.short_description = 'Verification'
+    
+    def file_size_display(self, obj):
+        """Show file size in human readable format."""
+        size_kb = obj.file_size / 1024
+        if size_kb > 1024:
+            return f"{size_kb/1024:.2f} MB"
+        return f"{size_kb:.2f} KB"
+    file_size_display.short_description = 'File Size'
+
+
+@admin.register(VerificationComment)
+class VerificationCommentAdmin(admin.ModelAdmin):
+    """Admin for verification comments."""
+    
+    list_display = ('verification_display', 'comment_preview', 'created_by', 'is_internal', 'created_at')
+    list_filter = ('is_internal', 'created_at')
+    search_fields = ('comment', 'verification__case__case_number')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('-created_at',)
+    
+    def verification_display(self, obj):
+        """Show verification info."""
+        return f"{obj.verification.case.case_number} - {obj.verification.get_verification_type_display()}"
+    verification_display.short_description = 'Verification'
+    
+    def comment_preview(self, obj):
+        """Show comment preview."""
+        return obj.comment[:50] + '...' if len(obj.comment) > 50 else obj.comment
+    comment_preview.short_description = 'Comment'
+
+
+@admin.register(ClaimantDependent)
+class ClaimantDependentAdmin(admin.ModelAdmin):
+    """Admin for claimant dependents."""
+    
+    list_display = ('dependent_name', 'case_number_display', 'relationship', 'age', 'created_at')
+    list_filter = ('relationship', 'created_at')
+    search_fields = ('dependent_name', 'case__case_number', 'case__claim_number')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('-created_at',)
+    
+    def case_number_display(self, obj):
+        """Show case number."""
+        return obj.case.case_number if obj.case else 'N/A'
+    case_number_display.short_description = 'Case Number'

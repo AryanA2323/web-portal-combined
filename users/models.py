@@ -574,145 +574,208 @@ class Client(models.Model):
 
 
 class InsuranceCase(models.Model):
-    """Main Insurance Case model - matches traditional Excel MIS sheet structure."""
+    """Insurance Case model for tracking investigation cases."""
     
     # Category choices
     CATEGORY_CHOICES = [
-        ('MACT', 'MACT'),
-        ('CIVIL', 'Civil'),
-        ('CRIMINAL', 'Criminal'),
+        ('MACT', 'Motor Accident Claims Tribunal'),
+        ('CIVIL', 'Civil Case'),
+        ('CRIMINAL', 'Criminal Case'),
+        ('CONSUMER', 'Consumer Forum'),
         ('OTHER', 'Other'),
+    ]
+    
+    # Priority choices
+    PRIORITY_CHOICES = [
+        ('LOW', 'Low'),
+        ('MEDIUM', 'Medium'),
+        ('HIGH', 'High'),
+        ('CRITICAL', 'Critical'),
+    ]
+    
+    # Status choices
+    STATUS_CHOICES = [
+        ('OPEN', 'Open'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('PENDING', 'Pending'),
+        ('RESOLVED', 'Resolved'),
+        ('CLOSED', 'Closed'),
     ]
     
     # Case Type choices
     CASE_TYPE_CHOICES = [
         ('Full Case', 'Full Case'),
+        ('Partial Case', 'Partial Case'),
+        ('Reassessment', 'Reassessment'),
         ('Connected Case', 'Connected Case'),
-        ('Partial Investigation', 'Partial Investigation'),
     ]
     
-    # Status choices
-    STATUS_CHOICES = [
+    # Investigation Report Status choices
+    INVESTIGATION_REPORT_CHOICES = [
         ('Open', 'Open'),
-        ('WIP', 'Work In Progress'),
-        ('Completed', 'Completed'),
-        ('Dispatch', 'Dispatch'),
-        ('Closed', 'Closed'),
-    ]
-    
-    # Investigation Report Status
-    REPORT_STATUS_CHOICES = [
-        ('Pending', 'Pending'),
-        ('Draft', 'Draft'),
-        ('Completed', 'Completed'),
+        ('Approval', 'Approval'),
+        ('Stop', 'Stop'),
+        ('QC', 'QC'),
         ('Dispatch', 'Dispatch'),
     ]
     
+    # Full Case Status choices
+    FULL_CASE_STATUS_CHOICES = [
+        ('WIP', 'WIP'),
+        ('Pending CS', 'Pending CS'),
+        ('Completed', 'Completed'),
+        ('IR-Writing', 'IR-Writing'),
+        ('NI', 'NI'),
+        ('Withdraw', 'Withdraw'),
+        ('QC-1', 'QC-1'),
+        ('Pending Additional Docs', 'Pending Additional Docs'),
+        ('Connected Pending', 'Connected Pending'),
+        ('RCU Pending', 'RCU Pending'),
+        ('Portal Upload', 'Portal Upload'),
+    ]
+    
+    # SLA Status choices
+    SLA_CHOICES = [
+        ('AT', 'AT (Achieved TAT)'),
+        ('WT', 'WT (Within TAT)'),
+    ]
+    
+    # Workflow Type choices
+    WORKFLOW_TYPE_CHOICES = [
+        ('STANDARD', 'Standard Investigation'),
+        ('EXPEDITED', 'Expedited'),
+        ('FULL', 'Full Investigation'),
+        ('PARTIAL', 'Partial Investigation'),
+    ]
+    
+    # Source choices
+    SOURCE_CHOICES = [
+        ('EMAIL', 'Email'),
+        ('MANUAL', 'Manual Entry'),
+        ('WEB_PORTAL', 'Web Portal'),
+        ('API', 'API'),
+    ]
+    
+    # =========================================================================
     # Basic Information
-    serial_number = models.IntegerField(null=True, blank=True)
-    claim_number = models.CharField(max_length=100, unique=True, db_index=True)
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='cases', null=True, blank=True)
-    client_name = models.CharField(max_length=500)
+    # =========================================================================
+    case_number = models.CharField(max_length=100, unique=True, db_index=True)
+    title = models.CharField(max_length=500)
+    description = models.TextField(blank=True)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='MACT')
-    crn = models.CharField(max_length=100, blank=True, help_text='Case Reference Number')
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='MEDIUM')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
     
+    # =========================================================================
+    # Claim Information
+    # =========================================================================
+    claim_number = models.CharField(max_length=100, blank=True, db_index=True)
+    client_code = models.CharField(max_length=100, blank=True)
+    client_name = models.CharField(max_length=500, blank=True, help_text='Client / Insurance company name')
+    
+    # =========================================================================
     # Dates and Timing
-    case_receipt_date = models.DateField()
-    receipt_month = models.CharField(max_length=20, blank=True)
-    completion_date = models.DateTimeField(null=True, blank=True)
-    completion_month = models.CharField(max_length=20, blank=True)
-    case_due_date = models.DateField(null=True, blank=True)
+    # =========================================================================
+    case_receipt_date = models.DateField(null=True, blank=True, help_text='Date case was received')
+    receipt_month = models.CharField(max_length=20, blank=True, help_text='Month of receipt')
+    completion_date = models.DateField(null=True, blank=True, help_text='Date case was completed')
+    completion_month = models.CharField(max_length=20, blank=True, help_text='Month of completion')
+    case_due_date = models.DateField(null=True, blank=True, help_text='Due date for the case')
     tat_days = models.IntegerField(null=True, blank=True, help_text='Turn Around Time in days')
-    sla_status = models.CharField(max_length=20, blank=True, help_text='Service Level Agreement status')
+    sla_status = models.CharField(max_length=10, choices=SLA_CHOICES, blank=True, help_text='SLA status - AT or WT')
     
-    # Case Details
-    case_type = models.CharField(max_length=50, choices=CASE_TYPE_CHOICES, blank=True)
-    investigation_report_status = models.CharField(max_length=20, choices=REPORT_STATUS_CHOICES, default='Pending')
-    full_case_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
-    scope_of_work = models.TextField(blank=True)
-    case_notes = models.TextField(blank=True)
+    # =========================================================================
+    # Case Classification
+    # =========================================================================
+    case_type = models.CharField(max_length=50, choices=CASE_TYPE_CHOICES, blank=True, help_text='Full Case / Partial / Reassessment / Connected')
+    investigation_report_status = models.CharField(max_length=20, choices=INVESTIGATION_REPORT_CHOICES, default='Open', help_text='Investigation report status')
+    full_case_status = models.CharField(max_length=30, choices=FULL_CASE_STATUS_CHOICES, default='WIP', help_text='Detailed case status')
+    scope_of_work = models.TextField(blank=True, help_text='Scope of work for this case')
     
-    # Policy Information
-    policy_number = models.CharField(max_length=100, blank=True)
-    
-    # Claimant Details
-    claimant_name = models.CharField(max_length=500, blank=True)
-    claimant_address = models.TextField(blank=True)
-    claimant_district = models.CharField(max_length=200, blank=True)
-    claimant_status = models.CharField(max_length=50, blank=True)
-    
-    # Income Details
-    income_details = models.TextField(blank=True)
-    income_address = models.TextField(blank=True)
-    income_district = models.CharField(max_length=200, blank=True)
-    income_status = models.CharField(max_length=50, blank=True)
-    
-    # Insured Details
+    # =========================================================================
+    # People Information
+    # =========================================================================
     insured_name = models.CharField(max_length=500, blank=True)
-    insured_address = models.TextField(blank=True)
-    insured_district = models.CharField(max_length=200, blank=True)
-    notice_132 = models.CharField(max_length=50, blank=True)
-    insured_status = models.CharField(max_length=50, blank=True)
+    claimant_name = models.CharField(max_length=500, blank=True)
     
-    # Driver Details
-    driver_name = models.CharField(max_length=500, blank=True)
-    driver_address = models.TextField(blank=True)
-    driver_district = models.CharField(max_length=200, blank=True)
-    driver_status = models.CharField(max_length=50, blank=True)
+    # =========================================================================
+    # Incident Location
+    # =========================================================================
+    incident_address = models.TextField(blank=True)
+    incident_city = models.CharField(max_length=200, blank=True)
+    incident_state = models.CharField(max_length=200, blank=True)
+    incident_postal_code = models.CharField(max_length=20, blank=True)
+    incident_country = models.CharField(max_length=100, default='India')
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    formatted_address = models.TextField(blank=True)
     
-    # Document Verification
-    dl_status = models.CharField(max_length=50, blank=True)
-    rc_status = models.CharField(max_length=50, blank=True)
-    permit_status = models.CharField(max_length=50, blank=True)
-    fitness_status = models.CharField(max_length=50, blank=True)
+    # =========================================================================
+    # Assignment
+    # =========================================================================
+    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='insurance_cases', null=True, blank=True)
+    created_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_insurance_cases')
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_insurance_cases')
     
-    # Spot Investigation
-    spot_location = models.TextField(blank=True)
-    spot_district = models.CharField(max_length=200, blank=True)
-    spot_status = models.CharField(max_length=50, blank=True)
+    # =========================================================================
+    # Workflow Information
+    # =========================================================================
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='MANUAL')
+    workflow_type = models.CharField(max_length=50, choices=WORKFLOW_TYPE_CHOICES, default='STANDARD')
+    investigation_progress = models.IntegerField(default=0, help_text='Investigation progress percentage (0-100)')
     
-    # Police/Legal Details
-    fir_number = models.CharField(max_length=100, blank=True)
-    police_station = models.CharField(max_length=200, blank=True)
-    police_district = models.CharField(max_length=200, blank=True)
-    rti_status = models.CharField(max_length=50, blank=True)
-    chargesheet_status = models.CharField(max_length=50, blank=True)
+    # =========================================================================
+    # Verification Checklist (Boolean fields for tracking investigation tasks)
+    # =========================================================================
+    chk_spot = models.BooleanField(default=False, help_text='Spot investigation completed')
+    chk_hospital = models.BooleanField(default=False, help_text='Hospital verification completed')
+    chk_claimant = models.BooleanField(default=False, help_text='Claimant verification completed')
+    chk_insured = models.BooleanField(default=False, help_text='Insured verification completed')
+    chk_witness = models.BooleanField(default=False, help_text='Witness statement recorded')
+    chk_driver = models.BooleanField(default=False, help_text='Driver verification completed')
+    chk_dl = models.BooleanField(default=False, help_text='Driving License verified')
+    chk_rc = models.BooleanField(default=False, help_text='RC verification completed')
+    chk_permit = models.BooleanField(default=False, help_text='Permit verification completed')
+    chk_court = models.BooleanField(default=False, help_text='Court records obtained')
+    chk_notice = models.BooleanField(default=False, help_text='Notice verification completed')
+    chk_134_notice = models.BooleanField(default=False, help_text='Section 134 notice verified')
+    chk_rti = models.BooleanField(default=False, help_text='RTI filed')
+    chk_medical_verification = models.BooleanField(default=False, help_text='Medical records verified')
+    chk_income = models.BooleanField(default=False, help_text='Income verification completed')
     
-    # Hospital Details
-    hospital_name = models.CharField(max_length=500, blank=True)
-    hospital_address = models.TextField(blank=True)
-    hospital_district = models.CharField(max_length=200, blank=True)
-    hospital_status = models.CharField(max_length=50, blank=True)
+    # =========================================================================
+    # Dates (System managed)
+    # =========================================================================
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
     
-    # Dispatch Details
-    dispatch_date = models.DateField(null=True, blank=True)
-    dispatch_status = models.CharField(max_length=50, blank=True)
-    
-    # Link to Email
+    # =========================================================================
+    # Legacy Email Link (for backward compatibility)
+    # =========================================================================
     source_email = models.ForeignKey(
         EmailIntake,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='created_cases'
+        related_name='created_insurance_cases'
     )
-    
-    # Metadata
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'insurance_case'
         indexes = [
+            models.Index(fields=['case_number']),
             models.Index(fields=['claim_number']),
-            models.Index(fields=['case_receipt_date']),
-            models.Index(fields=['full_case_status']),
+            models.Index(fields=['status']),
             models.Index(fields=['category']),
+            models.Index(fields=['priority']),
+            models.Index(fields=['created_at']),
         ]
-        ordering = ['-case_receipt_date']
+        ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.claim_number} - {self.client_name}"
+        return f"{self.case_number} - {self.title}"
 
 
 class CaseDocument(models.Model):
@@ -761,3 +824,7 @@ class CaseDocument(models.Model):
     
     def __str__(self):
         return f"{self.case.claim_number} - {self.document_name}"
+
+
+# Import verification models
+from .models_verification import CaseVerification, VerificationDocument, VerificationComment, ClaimantDependent
