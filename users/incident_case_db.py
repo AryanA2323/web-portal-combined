@@ -404,7 +404,7 @@ def insert_driver_check(case_id,
 def insert_spot_check(case_id,
                       time_of_accident='', place_of_accident='',
                       district='', fir_number='',
-                      police_station='', accident_brief='',
+                      city='', police_station='', accident_brief='',
                       documents=None,
                       check_status='PENDING',
                       observations=''):
@@ -420,7 +420,7 @@ def insert_spot_check(case_id,
                 INSERT INTO spot_checks
                     (case_id, time_of_accident, place_of_accident,
                      district, fir_number,
-                     police_station, accident_brief,
+                     city, police_station, accident_brief,
                      documents,
                      check_status, observations,
                      spot_lat, spot_lng,
@@ -428,7 +428,7 @@ def insert_spot_check(case_id,
                 VALUES
                     (%s, %s, %s,
                      %s, %s,
-                     %s, %s,
+                     %s, %s, %s,
                      %s,
                      %s, %s,
                      NULL, NULL,
@@ -437,7 +437,7 @@ def insert_spot_check(case_id,
             """, [
                 case_id, time_of_accident, place_of_accident,
                 district, fir_number,
-                police_station, accident_brief,
+                city, police_station, accident_brief,
                 json.dumps(documents or []),
                 check_status, observations,
             ])
@@ -457,7 +457,7 @@ def insert_spot_check(case_id,
 # =========================================================================
 
 def insert_chargesheet(case_id,
-                       fir_number='', court_name='',
+                       fir_number='', city='', court_name='',
                        mv_act='', fir_delay_days=None,
                        bsn_section='', ipc='',
                        documents=None,
@@ -470,21 +470,21 @@ def insert_chargesheet(case_id,
         with _get_cursor() as cursor:
             cursor.execute("""
                 INSERT INTO chargesheets
-                    (case_id, fir_number, court_name,
+                    (case_id, fir_number, city, court_name,
                      mv_act, fir_delay_days,
                      bsn_section, ipc,
                      documents,
                      check_status, statement, observations,
                      created_at, updated_at)
                 VALUES
-                    (%s, %s, %s,
+                    (%s, %s, %s, %s,
                      %s, %s,
                      %s, %s,
                      %s,
                      %s, %s, %s,
                      NOW(), NOW())
             """, [
-                case_id, fir_number, court_name,
+                case_id, fir_number, city, court_name,
                 mv_act, fir_delay_days,
                 bsn_section, ipc,
                 json.dumps(documents or []),

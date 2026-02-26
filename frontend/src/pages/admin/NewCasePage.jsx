@@ -156,14 +156,62 @@ const NewCasePage = () => {
     place_of_accident: '',
     district: '',
     fir_number_spot: '',
+    spot_city: '',
     police_station: '',
     accident_brief: '',
     
     // Chargesheet fields
+    chargesheet_city: '',
     fir_delay_in_days: '',
     bsn_sections: '',
     ipc_sections: '',
   });
+
+  // Court details dropdown options
+  const [courtCities, setCourtCities] = useState([]);
+  const [spotPoliceStations, setSpotPoliceStations] = useState([]);
+  const [chargesheetCourts, setChargesheetCourts] = useState([]);
+
+  // Fetch cities on mount
+  useEffect(() => {
+    const fetchCities = async () => {
+      try {
+        const res = await api.get('/court-details/cities');
+        setCourtCities(res.data.cities || []);
+      } catch (err) {
+        console.error('Failed to fetch cities:', err);
+      }
+    };
+    fetchCities();
+  }, []);
+
+  // Fetch police stations when spot city changes
+  useEffect(() => {
+    if (!verificationData.spot_city) { setSpotPoliceStations([]); return; }
+    const fetchStations = async () => {
+      try {
+        const res = await api.get(`/court-details/police-stations?city=${encodeURIComponent(verificationData.spot_city)}`);
+        setSpotPoliceStations(res.data.police_stations || []);
+      } catch (err) {
+        console.error('Failed to fetch police stations:', err);
+      }
+    };
+    fetchStations();
+  }, [verificationData.spot_city]);
+
+  // Fetch courts when chargesheet city changes
+  useEffect(() => {
+    if (!verificationData.chargesheet_city) { setChargesheetCourts([]); return; }
+    const fetchCourts = async () => {
+      try {
+        const res = await api.get(`/court-details/courts?city=${encodeURIComponent(verificationData.chargesheet_city)}`);
+        setChargesheetCourts(res.data.courts || []);
+      } catch (err) {
+        console.error('Failed to fetch courts:', err);
+      }
+    };
+    fetchCourts();
+  }, [verificationData.chargesheet_city]);
 
   // Dependents for Claimant Check
   const [dependents, setDependents] = useState([]);
@@ -339,6 +387,7 @@ const NewCasePage = () => {
           place_of_accident: verificationData.place_of_accident,
           district: verificationData.district,
           fir_number_spot: verificationData.fir_number_spot,
+          spot_city: verificationData.spot_city,
           police_station: verificationData.police_station,
           accident_brief: verificationData.accident_brief,
         });
@@ -353,6 +402,7 @@ const NewCasePage = () => {
           statement: verificationData.chargesheet_statement,
           observations: verificationData.chargesheet_observations,
           fir_number_claimant: verificationData.fir_number_claimant,
+          chargesheet_city: verificationData.chargesheet_city,
           court_name: verificationData.court_name,
           mv_act: verificationData.mv_act,
           fir_delay_in_days: verificationData.fir_delay_in_days ? parseInt(verificationData.fir_delay_in_days) : null,
@@ -639,7 +689,7 @@ const NewCasePage = () => {
                         value={commonFields.sla_status}
                         onChange={handleCommonFieldChange}
                         label="SLA Status"
-                        sx={{ borderRadius: '8px' }}
+                        sx={{ borderRadius: '8px', minWidth: 140 }}
                       >
                         <MenuItem value=""><em>Select</em></MenuItem>
                         <MenuItem value="AT">AT — Achieved TAT</MenuItem>
@@ -1336,17 +1386,40 @@ const NewCasePage = () => {
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>FIR &amp; Police</Typography>
                       </Box>
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
+                        <Grid item xs={12} sm={6}>
                           <TextField fullWidth size="small" label="FIR Number" name="fir_number_spot"
                             value={verificationData.fir_number_spot} onChange={handleVerificationChange}
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Police Station" name="police_station"
-                            value={verificationData.police_station} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth size="small">
+                            <Select name="spot_city" value={verificationData.spot_city}
+                              displayEmpty
+                              renderValue={(selected) => selected || <span style={{ color: '#aaa' }}>Select City</span>}
+                              onChange={(e) => {
+                                handleVerificationChange(e);
+                                setVerificationData(prev => ({ ...prev, police_station: '' }));
+                              }}
+                              sx={{ borderRadius: '8px' }}>
+                              <MenuItem value=""><em>Select City</em></MenuItem>
+                              {courtCities.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                            </Select>
+                          </FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth size="small">
+                            <Select name="police_station" value={verificationData.police_station}
+                              displayEmpty
+                              renderValue={(selected) => selected || <span style={{ color: '#aaa' }}>Select Police Station</span>}
+                              onChange={handleVerificationChange}
+                              sx={{ borderRadius: '8px' }}
+                              disabled={!verificationData.spot_city}>
+                              <MenuItem value=""><em>Select Police Station</em></MenuItem>
+                              {spotPoliceStations.map(ps => <MenuItem key={ps} value={ps}>{ps}</MenuItem>)}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
                           <TextField fullWidth size="small" label="Accident Brief" name="accident_brief"
                             value={verificationData.accident_brief} onChange={handleVerificationChange}
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
@@ -1427,17 +1500,40 @@ const NewCasePage = () => {
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#d32f2f', letterSpacing: '1px', lineHeight: 1 }}>Legal Reference</Typography>
                       </Box>
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
+                        <Grid item xs={12} sm={6}>
                           <TextField fullWidth size="small" label="FIR Number" name="fir_number_claimant"
                             value={verificationData.fir_number_claimant} onChange={handleVerificationChange}
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Court Name" name="court_name"
-                            value={verificationData.court_name} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth size="small">
+                            <Select name="chargesheet_city" value={verificationData.chargesheet_city}
+                              displayEmpty
+                              renderValue={(selected) => selected || <span style={{ color: '#aaa' }}>Select City</span>}
+                              onChange={(e) => {
+                                handleVerificationChange(e);
+                                setVerificationData(prev => ({ ...prev, court_name: '' }));
+                              }}
+                              sx={{ borderRadius: '8px' }}>
+                              <MenuItem value=""><em>Select City</em></MenuItem>
+                              {courtCities.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                            </Select>
+                          </FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth size="small">
+                            <Select name="court_name" value={verificationData.court_name}
+                              displayEmpty
+                              renderValue={(selected) => selected || <span style={{ color: '#aaa' }}>Select Court Name</span>}
+                              onChange={handleVerificationChange}
+                              sx={{ borderRadius: '8px' }}
+                              disabled={!verificationData.chargesheet_city}>
+                              <MenuItem value=""><em>Select Court</em></MenuItem>
+                              {chargesheetCourts.map(ct => <MenuItem key={ct} value={ct}>{ct}</MenuItem>)}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
                           <TextField fullWidth size="small" label="MV Act" name="mv_act"
                             value={verificationData.mv_act} onChange={handleVerificationChange}
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />

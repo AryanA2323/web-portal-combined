@@ -1500,3 +1500,70 @@ def list_vendors_for_cases(request):
         )
         for vendor in vendors
     ]
+
+
+# =============================================================================
+# Court Details lookup endpoints
+# =============================================================================
+
+@router.get(
+    "/court-details/cities",
+    summary="Get all cities from court_details",
+    description="Returns distinct city names for dropdowns.",
+)
+def get_court_cities(request: HttpRequest):
+    """Return distinct cities from court_details table."""
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                "SELECT DISTINCT city FROM court_details WHERE city IS NOT NULL ORDER BY city"
+            )
+            cities = [r[0] for r in cursor.fetchall()]
+        return {"cities": cities}
+    except Exception as e:
+        logger.error(f"Failed to fetch court cities: {e}")
+        return {"cities": []}
+
+
+@router.get(
+    "/court-details/police-stations",
+    summary="Get police stations by city",
+    description="Returns police stations filtered by city.",
+)
+def get_police_stations(request: HttpRequest, city: str):
+    """Return police stations for a given city."""
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                "SELECT DISTINCT jurisdiction_police_station FROM court_details "
+                "WHERE city = %s AND jurisdiction_police_station IS NOT NULL "
+                "ORDER BY jurisdiction_police_station",
+                [city],
+            )
+            stations = [r[0] for r in cursor.fetchall()]
+        return {"police_stations": stations}
+    except Exception as e:
+        logger.error(f"Failed to fetch police stations for city={city}: {e}")
+        return {"police_stations": []}
+
+
+@router.get(
+    "/court-details/courts",
+    summary="Get court names by city",
+    description="Returns taluka court names filtered by city.",
+)
+def get_court_names(request: HttpRequest, city: str):
+    """Return court names for a given city."""
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                "SELECT DISTINCT taluka_court FROM court_details "
+                "WHERE city = %s AND taluka_court IS NOT NULL "
+                "ORDER BY taluka_court",
+                [city],
+            )
+            courts = [r[0] for r in cursor.fetchall()]
+        return {"courts": courts}
+    except Exception as e:
+        logger.error(f"Failed to fetch courts for city={city}: {e}")
+        return {"courts": []}

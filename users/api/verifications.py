@@ -75,10 +75,12 @@ class CreateVerificationSchema(Schema):
     place_of_accident: Optional[str] = None
     district: Optional[str] = None
     fir_number_spot: Optional[str] = None
+    spot_city: Optional[str] = None
     police_station: Optional[str] = None
     accident_brief: Optional[str] = None
     
     # Chargesheet fields
+    chargesheet_city: Optional[str] = None
     fir_delay_in_days: Optional[int] = None
     bsn_sections: Optional[str] = None
     ipc_sections: Optional[str] = None
@@ -279,6 +281,7 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         place_of_accident=payload.place_of_accident or '',
                         district=payload.district or '',
                         fir_number=payload.fir_number_spot or '',
+                        city=payload.spot_city or '',
                         police_station=payload.police_station or '',
                         accident_brief=payload.accident_brief or '',
                         check_status=payload.check_status,
@@ -288,6 +291,7 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                     insert_chargesheet(
                         case_id=db2_case_id,
                         fir_number=payload.fir_number_claimant or '',
+                        city=payload.chargesheet_city or '',
                         court_name=payload.court_name or '',
                         mv_act=payload.mv_act or '',
                         fir_delay_days=payload.fir_delay_in_days,
