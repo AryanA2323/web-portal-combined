@@ -743,17 +743,12 @@ const NewCasePage = () => {
                         label="Full Case Status"
                         sx={{ borderRadius: '8px' }}
                       >
+                        <MenuItem value="Not Initiated">Not Initiated</MenuItem>
                         <MenuItem value="WIP">WIP</MenuItem>
                         <MenuItem value="Pending CS">Pending CS</MenuItem>
-                        <MenuItem value="Completed">Completed</MenuItem>
-                        <MenuItem value="IR-Writing">IR-Writing</MenuItem>
-                        <MenuItem value="NI">NI</MenuItem>
-                        <MenuItem value="Withdraw">Withdraw</MenuItem>
-                        <MenuItem value="QC-1">QC-1</MenuItem>
-                        <MenuItem value="Pending Additional Docs">Pending Additional Docs</MenuItem>
-                        <MenuItem value="Connected Pending">Connected Pending</MenuItem>
-                        <MenuItem value="RCU Pending">RCU Pending</MenuItem>
-                        <MenuItem value="Portal Upload">Portal Upload</MenuItem>
+                        <MenuItem value="STOP">STOP</MenuItem>
+                        <MenuItem value="Closed Without CS">Closed Without CS</MenuItem>
+                        <MenuItem value="Closed">Closed</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
