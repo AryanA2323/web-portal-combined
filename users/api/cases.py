@@ -574,6 +574,83 @@ def get_cases_incident_db(
                         "assigned_vendor_name": r[12],
                     })
 
+            # ─── rti_checks ───────────────────────────────────────────────
+            cursor.execute(f"""
+                SELECT rt.case_id, rt.check_status,
+                       rt.fir_number,
+                       rt.dl_number,
+                       rt.permit_number,
+                       rt.rc_number,
+                       rt.chargesheet_checked,
+                       rt.dl_checked,
+                       rt.permit_checked,
+                       rt.rc_checked,
+                       rt.remarks,
+                       rt.assigned_vendor_id,
+                       v.company_name AS assigned_vendor_name
+                FROM rti_checks rt
+                LEFT JOIN users_vendor v ON v.id = rt.assigned_vendor_id
+                WHERE rt.case_id IN ({ph})
+            """, case_ids)
+            for r in cursor.fetchall():
+                cid = r[0]
+                if cid in checks_by_case:
+                    items = []
+                    if r[6]: items.append("Chargesheet")
+                    if r[7]: items.append(f"DL:{r[3]}" if r[3] else "DL")
+                    if r[8]: items.append(f"Permit:{r[4]}" if r[4] else "Permit")
+                    if r[9]: items.append(f"RC:{r[5]}" if r[5] else "RC")
+                    key_info = " | ".join(items) or "—"
+                    checks_by_case[cid].append({
+                        "type": "RTI Check",
+                        "check_status": r[1] or "WIP",
+                        "name": f"FIR: {r[2]}" if r[2] else "RTI",
+                        "contact": "—",
+                        "location": "—",
+                        "key_info": key_info,
+                        "statement": (r[10] or "")[:120],
+                        "assigned_vendor_id": r[11],
+                        "assigned_vendor_name": r[12],
+                    })
+
+            # ─── rto_checks ───────────────────────────────────────────────
+            cursor.execute(f"""
+                SELECT ro.case_id, ro.check_status,
+                       ro.rto_name,
+                       ro.rto_address,
+                       ro.dl_number,
+                       ro.permit_number,
+                       ro.rc_number,
+                       ro.dl_checked,
+                       ro.permit_checked,
+                       ro.rc_checked,
+                       ro.remarks,
+                       ro.assigned_vendor_id,
+                       v.company_name AS assigned_vendor_name
+                FROM rto_checks ro
+                LEFT JOIN users_vendor v ON v.id = ro.assigned_vendor_id
+                WHERE ro.case_id IN ({ph})
+            """, case_ids)
+            for r in cursor.fetchall():
+                cid = r[0]
+                if cid in checks_by_case:
+                    items = []
+                    if r[7]: items.append(f"DL:{r[4]}" if r[4] else "DL")
+                    if r[8]: items.append(f"Permit:{r[5]}" if r[5] else "Permit")
+                    if r[9]: items.append(f"RC:{r[6]}" if r[6] else "RC")
+                    key_info = " | ".join(items) or "—"
+                    checks_by_case[cid].append({
+                        "type": "RTO Check",
+                        "check_status": r[1] or "WIP",
+                        "name": r[2] or "RTO",
+                        "contact": "—",
+                        "location": r[3] or "—",
+                        "key_info": key_info,
+                        "statement": (r[10] or "")[:120],
+                        "assigned_vendor_id": r[11],
+                        "assigned_vendor_name": r[12],
+                    })
+
             # ── Build final result ───────────────────────────────────────────
             result = []
             for row in rows:
@@ -617,6 +694,8 @@ _CHECK_TABLE_MAP = {
     'driver':      'driver_checks',
     'spot':        'spot_checks',
     'chargesheet': 'chargesheets',
+    'rti':         'rti_checks',
+    'rto':         'rto_checks',
 }
 
 
@@ -632,7 +711,7 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
 
     table = _CHECK_TABLE_MAP.get(check_type.lower())
     if not table:
-        raise HttpError(400, f"Unknown check type '{check_type}'. Valid: claimant, insured, driver, spot, chargesheet")
+        raise HttpError(400, f"Unknown check type '{check_type}'. Valid: claimant, insured, driver, spot, chargesheet, rti, rto")
 
     try:
         with connections['default'].cursor() as cursor:
@@ -698,27 +777,51 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
     CHECK_FIELDS = {
         'claimant_checks': {
             'claimant_name', 'claimant_contact', 'claimant_address',
-            'claimant_income', 'check_status', 'statement', 'observation',
+            'claimant_income', 'dependants',
+            'check_status', 'statement', 'observation',
+            'case_documents', 'vendor_documents',
         },
         'insured_checks': {
             'insured_name', 'insured_contact', 'insured_address',
             'policy_number', 'policy_period', 'rc', 'permit',
             'check_status', 'statement', 'observation',
+            'case_documents', 'vendor_documents',
         },
         'driver_checks': {
             'driver_name', 'driver_contact', 'driver_address',
             'dl', 'permit', 'occupation',
             'check_status', 'statement', 'observation',
+            'case_documents', 'vendor_documents',
         },
         'spot_checks': {
             'time_of_accident', 'place_of_accident', 'district',
-            'fir_number', 'police_station', 'accident_brief',
+            'fir_number', 'city', 'police_station', 'accident_brief',
             'check_status', 'observations',
+            'case_documents', 'vendor_documents',
         },
         'chargesheets': {
-            'fir_number', 'court_name', 'mv_act', 'fir_delay_days',
+            'fir_number', 'city', 'court_name', 'mv_act', 'fir_delay_days',
             'bsn_section', 'ipc',
             'check_status', 'statement', 'observations',
+            'case_documents', 'vendor_documents',
+        },
+        'rti_checks': {
+            'chargesheet_checked', 'fir_number',
+            'dl_checked', 'dl_number',
+            'permit_checked', 'permit_number',
+            'rc_checked', 'rc_number',
+            'remarks',
+            'check_status',
+            'case_documents', 'vendor_documents',
+        },
+        'rto_checks': {
+            'rto_name', 'rto_address',
+            'dl_checked', 'dl_number',
+            'permit_checked', 'permit_number',
+            'rc_checked', 'rc_number',
+            'remarks',
+            'check_status',
+            'case_documents', 'vendor_documents',
         },
     }
 
@@ -729,6 +832,9 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
 
     case_updates = payload.get('case', {})
     check_updates = payload.get('check', {})
+
+    # JSONB fields need json.dumps() before passing to psycopg2
+    _JSONB_FIELDS = {'case_documents', 'vendor_documents', 'dependants'}
 
     try:
         with connections['default'].cursor() as cursor:
@@ -750,6 +856,10 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
             # ── Update check table ────────────────────────────────────────
             allowed_check_fields = CHECK_FIELDS.get(table, set())
             safe_check = {k: v for k, v in check_updates.items() if k in allowed_check_fields}
+            # Serialize JSONB fields
+            for jf in _JSONB_FIELDS:
+                if jf in safe_check and not isinstance(safe_check[jf], str):
+                    safe_check[jf] = _json.dumps(safe_check[jf])
             if safe_check:
                 # Check if row exists
                 cursor.execute(f"SELECT id FROM {table} WHERE case_id = %s", [case_id])
@@ -771,13 +881,17 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
                     'insured_checks':  'insured_address',
                     'driver_checks':   'driver_address',
                     'spot_checks':     'place_of_accident',
+                    'chargesheets':    'court_name',
+                    'rto_checks':      'rto_address',
                 }.get(table)
-                lat_col = {'claimant_checks': 'claimant_lat', 'insured_checks': 'insured_lat', 'driver_checks': 'driver_lat', 'spot_checks': 'spot_lat'}.get(table)
-                lng_col = {'claimant_checks': 'claimant_lng', 'insured_checks': 'insured_lng', 'driver_checks': 'driver_lng', 'spot_checks': 'spot_lng'}.get(table)
+                lat_col = {'claimant_checks': 'claimant_lat', 'insured_checks': 'insured_lat', 'driver_checks': 'driver_lat', 'spot_checks': 'spot_lat', 'chargesheets': 'chargesheet_lat', 'rto_checks': 'rto_lat'}.get(table)
+                lng_col = {'claimant_checks': 'claimant_lng', 'insured_checks': 'insured_lng', 'driver_checks': 'driver_lng', 'spot_checks': 'spot_lng', 'chargesheets': 'chargesheet_lng', 'rto_checks': 'rto_lng'}.get(table)
                 if addr_col and lat_col and addr_col in safe_check:
                     new_addr = safe_check[addr_col]
                     if table == 'spot_checks' and 'district' in safe_check:
                         new_addr = f"{safe_check.get('place_of_accident','')}, {safe_check.get('district','')}"
+                    elif table == 'chargesheets':
+                        new_addr = ', '.join(filter(None, [safe_check.get('court_name',''), safe_check.get('city','')]))
                     if new_addr and new_addr.strip():
                         try:
                             from users.incident_case_db import _geocode_and_update
@@ -812,7 +926,7 @@ def assign_vendor_to_check(request: HttpRequest, case_id: int, check_type: str):
 
     table = _CHECK_TABLE_MAP.get(check_type.lower())
     if not table:
-        raise HttpError(400, f"Unknown check type '{check_type}'. Valid: claimant, insured, driver, spot, chargesheet")
+        raise HttpError(400, f"Unknown check type '{check_type}'. Valid: claimant, insured, driver, spot, chargesheet, rti, rto")
 
     try:
         payload = _json.loads(request.body or b'{}')

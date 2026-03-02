@@ -281,6 +281,8 @@ const CasesPage = () => {
       'Driver Check': 'driver',
       'Spot Check': 'spot',
       'Chargesheet': 'chargesheet',
+      'RTI Check': 'rti',
+      'RTO Check': 'rto',
     };
     const slug = typeToSlug[checkType] || checkType;
     try {
@@ -648,6 +650,8 @@ const CasesPage = () => {
                                   'Driver Check': 'driver',
                                   'Spot Check': 'spot',
                                   'Chargesheet': 'chargesheet',
+                                  'RTI Check': 'rti',
+                                  'RTO Check': 'rto',
                                 };
                                 return (
                                   <Box

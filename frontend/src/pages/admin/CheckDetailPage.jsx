@@ -53,6 +53,8 @@ const CHECK_META = {
   driver:      { label: 'Driver Check',    color: '#2e7d32', bg: '#e8f5e9', gradient: 'linear-gradient(135deg,#43e97b 0%,#2e7d32 100%)', icon: <DirectionsCar /> },
   spot:        { label: 'Spot Check',      color: '#e65100', bg: '#fff3e0', gradient: 'linear-gradient(135deg,#fa709a 0%,#e65100 100%)', icon: <LocationOn /> },
   chargesheet: { label: 'Chargesheet',     color: '#6a1b9a', bg: '#f3e5f5', gradient: 'linear-gradient(135deg,#a18cd1 0%,#6a1b9a 100%)', icon: <Gavel /> },
+  rti:          { label: 'RTI Check',      color: '#00695c', bg: '#e0f2f1', gradient: 'linear-gradient(135deg,#43e97b 0%,#00695c 100%)', icon: <ArticleOutlined /> },
+  rto:          { label: 'RTO Check',      color: '#4527a0', bg: '#ede7f6', gradient: 'linear-gradient(135deg,#a18cd1 0%,#4527a0 100%)', icon: <DirectionsCar /> },
 };
 
 const STATUS_CFG = {
@@ -90,7 +92,7 @@ const fmtDateDisplay = (v) => {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const LONG_FIELDS = new Set(['statement', 'observation', 'observations', 'accident_brief', 'scope_of_work']);
+const LONG_FIELDS = new Set(['statement', 'observation', 'observations', 'accident_brief', 'scope_of_work', 'remarks']);
 
 // ─── Field definitions ────────────────────────────────────────────────────────
 
@@ -163,6 +165,30 @@ const CHECK_FIELDS_DEF = {
     { name: 'statement',      label: 'Statement',      group: 'notes' },
     { name: 'observations',   label: 'Observations',   group: 'notes' },
   ],
+  rti: [
+    { name: 'chargesheet_checked', label: 'Chargesheet / FIR', group: 'checklist', type: 'boolean' },
+    { name: 'fir_number',          label: 'FIR Number',        group: 'checklist' },
+    { name: 'dl_checked',          label: 'Driving Licence',   group: 'checklist', type: 'boolean' },
+    { name: 'dl_number',           label: 'DL Number',         group: 'checklist' },
+    { name: 'permit_checked',      label: 'Permit',            group: 'checklist', type: 'boolean' },
+    { name: 'permit_number',       label: 'Permit Number',     group: 'checklist' },
+    { name: 'rc_checked',          label: 'RC',                group: 'checklist', type: 'boolean' },
+    { name: 'rc_number',           label: 'RC Number',         group: 'checklist' },
+    { name: 'check_status',        label: 'Check Status',      group: 'status', options: ['Pending','In Progress','Completed','Done','WIP'] },
+    { name: 'remarks',             label: 'Remarks',           group: 'notes' },
+  ],
+  rto: [
+    { name: 'rto_name',            label: 'RTO Name',          group: 'rto_info' },
+    { name: 'rto_address',         label: 'RTO Address',       group: 'rto_info' },
+    { name: 'dl_checked',          label: 'Driving Licence',   group: 'checklist', type: 'boolean' },
+    { name: 'dl_number',           label: 'DL Number',         group: 'checklist' },
+    { name: 'permit_checked',      label: 'Permit',            group: 'checklist', type: 'boolean' },
+    { name: 'permit_number',       label: 'Permit Number',     group: 'checklist' },
+    { name: 'rc_checked',          label: 'RC',                group: 'checklist', type: 'boolean' },
+    { name: 'rc_number',           label: 'RC Number',         group: 'checklist' },
+    { name: 'check_status',        label: 'Check Status',      group: 'status', options: ['Pending','In Progress','Completed','Done','WIP'] },
+    { name: 'remarks',             label: 'Remarks',           group: 'notes' },
+  ],
 };
 
 const GROUP_ICONS = {
@@ -171,10 +197,12 @@ const GROUP_ICONS = {
   licence:  <ArticleOutlined sx={{ fontSize: 14 }} />,
   accident: <LocationOn sx={{ fontSize: 14 }} />,
   fir:      <GavelOutlined sx={{ fontSize: 14 }} />,
-  legal:    <GavelOutlined sx={{ fontSize: 14 }} />,
-  dates:    <CalendarToday sx={{ fontSize: 14 }} />,
-  status:   <CheckCircleOutline sx={{ fontSize: 14 }} />,
-  notes:    <ArticleOutlined sx={{ fontSize: 14 }} />,
+  legal:     <GavelOutlined sx={{ fontSize: 14 }} />,
+  dates:     <CalendarToday sx={{ fontSize: 14 }} />,
+  status:    <CheckCircleOutline sx={{ fontSize: 14 }} />,
+  notes:     <ArticleOutlined sx={{ fontSize: 14 }} />,
+  checklist: <CheckCircleOutline sx={{ fontSize: 14 }} />,
+  rto_info:  <LocationOn sx={{ fontSize: 14 }} />,
 };
 
 const GROUP_LABELS = {
@@ -186,7 +214,9 @@ const GROUP_LABELS = {
   legal:    'Legal Information',
   dates:    'Timeline & Dates',
   status:   'Status',
-  notes:    'Notes & Findings',
+  notes:     'Notes & Findings',
+  checklist: 'Verification Checklist',
+  rto_info:  'RTO Information',
 };
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -241,6 +271,50 @@ const EditField = ({ label, name, value, onChange, type = 'text', options, multi
 const FieldBlock = ({ fd, value, editing, onChange }) => {
   const isLong   = LONG_FIELDS.has(fd.name);
   const isStatus = fd.name === 'check_status' || fd.name === 'full_case_status' || fd.name === 'investigation_report_status' || fd.name === 'sla';
+
+  // Boolean checklist fields
+  if (fd.type === 'boolean') {
+    const checked = value === true || value === 'true';
+    if (editing) {
+      return (
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box
+            onClick={() => onChange(fd.name, !checked)}
+            sx={{
+              width: 20, height: 20, borderRadius: '5px', cursor: 'pointer',
+              border: checked ? '2px solid #2e7d32' : '2px solid #bbb',
+              background: checked ? '#e8f5e9' : '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.15s',
+              '&:hover': { borderColor: checked ? '#1b5e20' : '#888' },
+            }}
+          >
+            {checked && <CheckCircleOutline sx={{ fontSize: 14, color: '#2e7d32' }} />}
+          </Box>
+          <Typography sx={{ fontSize: '13px', fontWeight: 600, color: checked ? '#1a1a2e' : '#999' }}>
+            {fd.label}
+          </Typography>
+        </Box>
+      );
+    }
+    return (
+      <Box sx={{ mb: 2.5 }}>
+        <Typography sx={{ fontSize: '10.5px', fontWeight: 700, color: '#9e9e9e', textTransform: 'uppercase', letterSpacing: '0.7px', mb: 0.6 }}>
+          {fd.label}
+        </Typography>
+        <Chip
+          label={checked ? 'Yes' : 'No'}
+          size="small"
+          sx={{
+            backgroundColor: checked ? '#e8f5e9' : '#ffebee',
+            color: checked ? '#2e7d32' : '#c62828',
+            fontWeight: 700, fontSize: '11px', height: '22px', borderRadius: '6px',
+          }}
+        />
+      </Box>
+    );
+  }
+
   if (editing) return <EditField label={fd.label} name={fd.name} value={value} onChange={onChange} type={fd.type} options={fd.options} multiline={isLong} />;
   return <ViewField label={fd.label} value={value} isStatus={isStatus} isDate={fd.type === 'date'} />;
 };
@@ -533,7 +607,7 @@ const CheckDetailPage = () => {
                   </Paper>
 
                   {/* Geocoordinates card */}
-                  {['claimant', 'insured', 'driver', 'spot'].includes(checkType) && (
+                  {['claimant', 'insured', 'driver', 'spot', 'rto'].includes(checkType) && (
                     <Paper elevation={0} sx={{ borderRadius: '14px', border: '1px solid #e8eaf6', overflow: 'hidden' }}>
                       <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid #f0f0f8', display: 'flex', alignItems: 'center', gap: 1 }}>
                         <PinDrop sx={{ fontSize: 18, color: '#06b6d4' }} />

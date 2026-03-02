@@ -85,6 +85,28 @@ class CreateVerificationSchema(Schema):
     bsn_sections: Optional[str] = None
     ipc_sections: Optional[str] = None
 
+    # RTI fields
+    rti_chargesheet_checked: bool = False
+    rti_fir_number: Optional[str] = None
+    rti_dl_checked: bool = False
+    rti_dl_number: Optional[str] = None
+    rti_permit_checked: bool = False
+    rti_permit_number: Optional[str] = None
+    rti_rc_checked: bool = False
+    rti_rc_number: Optional[str] = None
+    rti_remarks: Optional[str] = None
+
+    # RTO fields
+    rto_name: Optional[str] = None
+    rto_address: Optional[str] = None
+    rto_dl_checked: bool = False
+    rto_dl_number: Optional[str] = None
+    rto_permit_checked: bool = False
+    rto_permit_number: Optional[str] = None
+    rto_rc_checked: bool = False
+    rto_rc_number: Optional[str] = None
+    rto_remarks: Optional[str] = None
+
 
 class CreateDependentSchema(Schema):
     """Schema for creating a dependent."""
@@ -152,6 +174,8 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
             'DRIVER': 'DRIVER_CHECK',
             'SPOT': 'SPOT_CHECK',
             'CHARGESHEET': 'CHARGESHEET',
+            'RTI': 'RTI_CHECK',
+            'RTO': 'RTO_CHECK',
         }
         
         verification_type = type_mapping.get(payload.check_type, payload.check_type)
@@ -233,7 +257,7 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                 from users.incident_case_db import (
                     insert_claimant_check, insert_insured_check,
                     insert_driver_check, insert_spot_check,
-                    insert_chargesheet,
+                    insert_chargesheet, insert_rti_check, insert_rto_check,
                 )
                 
                 if verification_type == 'CLAIMANT_CHECK':
@@ -300,6 +324,34 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         check_status=payload.check_status,
                         statement=payload.statement or '',
                         observations=payload.observations or '',
+                    )
+                elif verification_type == 'RTI_CHECK':
+                    insert_rti_check(
+                        case_id=db2_case_id,
+                        chargesheet_checked=payload.rti_chargesheet_checked,
+                        fir_number=payload.rti_fir_number or '',
+                        dl_checked=payload.rti_dl_checked,
+                        dl_number=payload.rti_dl_number or '',
+                        permit_checked=payload.rti_permit_checked,
+                        permit_number=payload.rti_permit_number or '',
+                        rc_checked=payload.rti_rc_checked,
+                        rc_number=payload.rti_rc_number or '',
+                        remarks=payload.rti_remarks or '',
+                        check_status=payload.check_status,
+                    )
+                elif verification_type == 'RTO_CHECK':
+                    insert_rto_check(
+                        case_id=db2_case_id,
+                        rto_name=payload.rto_name or '',
+                        rto_address=payload.rto_address or '',
+                        dl_checked=payload.rto_dl_checked,
+                        dl_number=payload.rto_dl_number or '',
+                        permit_checked=payload.rto_permit_checked,
+                        permit_number=payload.rto_permit_number or '',
+                        rc_checked=payload.rto_rc_checked,
+                        rc_number=payload.rto_rc_number or '',
+                        remarks=payload.rto_remarks or '',
+                        check_status=payload.check_status,
                     )
             except Exception as db2_err:
                 logger.error(f"Failed to write verification to incident_case_db: {db2_err}")
@@ -448,13 +500,15 @@ def upload_verification_documents(
         
         logger.info(f"Uploaded {uploaded_count} documents for verification {verification_id}")
         
-        # ---- Also update the corresponding check table's documents JSONB ----
+        # ---- Also update the corresponding check table's case_documents JSONB ----
         _TYPE_TO_TABLE = {
             'CLAIMANT_CHECK': 'claimant_checks',
             'INSURED_CHECK': 'insured_checks',
             'DRIVER_CHECK': 'driver_checks',
             'SPOT_CHECK': 'spot_checks',
             'CHARGESHEET': 'chargesheets',
+            'RTI_CHECK': 'rti_checks',
+            'RTO_CHECK': 'rto_checks',
         }
         table = _TYPE_TO_TABLE.get(verification.verification_type)
         if table and uploaded_docs:
@@ -462,7 +516,7 @@ def upload_verification_documents(
                 claim_number = verification.case.claim_number
                 with connections['default'].cursor() as cursor:
                     cursor.execute(f"""
-                        SELECT ct.id, ct.documents
+                        SELECT ct.id, ct.case_documents
                         FROM {table} ct
                         JOIN cases c ON c.id = ct.case_id
                         WHERE c.claim_number = %s
@@ -480,12 +534,12 @@ def upload_verification_documents(
                         existing.extend(uploaded_docs)
                         cursor.execute(f"""
                             UPDATE {table}
-                            SET documents = %s::jsonb, updated_at = NOW()
+                            SET case_documents = %s::jsonb, updated_at = NOW()
                             WHERE id = %s
                         """, [json.dumps(existing), check_id])
-                        logger.info(f"[incident_case_db] Updated {table}.documents for check_id={check_id}, {len(uploaded_docs)} doc(s)")
+                        logger.info(f"[incident_case_db] Updated {table}.case_documents for check_id={check_id}, {len(uploaded_docs)} doc(s)")
             except Exception as db_err:
-                logger.error(f"Failed to sync documents to incident_case_db: {db_err}")
+                logger.error(f"Failed to sync case_documents to incident_case_db: {db_err}")
                 # Non-fatal: primary ORM records already saved
         
         return 200, {

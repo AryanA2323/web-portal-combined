@@ -245,11 +245,15 @@ def insert_case(claim_number, client_name, category,
 def insert_claimant_check(case_id,
                           claimant_name='', claimant_contact='',
                           claimant_address='', claimant_income=None,
-                          dependants=None, documents=None,
+                          dependants=None, case_documents=None,
+                          vendor_documents=None,
                           check_status='PENDING',
                           statement='', observation=''):
     """Insert into incident_case_db.claimant_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
+    dependants: list of dicts [{dependent_name, dependent_contact, dependent_address, relationship, age}, ...]
+    case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
+    vendor_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
     """
     if check_status not in VALID_CHECK_STATUS:
         check_status = 'WIP'
@@ -259,14 +263,14 @@ def insert_claimant_check(case_id,
                 INSERT INTO claimant_checks
                     (case_id, claimant_name, claimant_contact,
                      claimant_address, claimant_income,
-                     dependants, documents,
+                     dependants, case_documents, vendor_documents,
                      check_status, statement, observation,
                      claimant_lat, claimant_lng,
                      created_at, updated_at)
                 VALUES
                     (%s, %s, %s,
                      %s, %s,
-                     %s, %s,
+                     %s, %s, %s,
                      %s, %s, %s,
                      NULL, NULL,
                      NOW(), NOW())
@@ -274,7 +278,8 @@ def insert_claimant_check(case_id,
             """, [
                 case_id, claimant_name, claimant_contact,
                 claimant_address, claimant_income,
-                json.dumps(dependants or []), json.dumps(documents or []),
+                json.dumps(dependants or []), json.dumps(case_documents or []),
+                json.dumps(vendor_documents or []),
                 check_status, statement, observation,
             ])
             row_id = cursor.fetchone()[0]
@@ -296,11 +301,13 @@ def insert_insured_check(case_id,
                          insured_address='',
                          policy_number='', policy_period='',
                          rc='', permit='',
-                         documents=None,
+                         case_documents=None, vendor_documents=None,
                          check_status='PENDING',
                          statement='', observation=''):
     """Insert into incident_case_db.insured_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
+    case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
+    vendor_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
     """
     if check_status not in VALID_CHECK_STATUS:
         check_status = 'WIP'
@@ -312,7 +319,7 @@ def insert_insured_check(case_id,
                      insured_address,
                      policy_number, policy_period,
                      rc, permit,
-                     documents,
+                     case_documents, vendor_documents,
                      check_status, statement, observation,
                      insured_lat, insured_lng,
                      created_at, updated_at)
@@ -321,7 +328,7 @@ def insert_insured_check(case_id,
                      %s,
                      %s, %s,
                      %s, %s,
-                     %s,
+                     %s, %s,
                      %s, %s, %s,
                      NULL, NULL,
                      NOW(), NOW())
@@ -331,7 +338,7 @@ def insert_insured_check(case_id,
                 insured_address,
                 policy_number, policy_period,
                 rc, permit,
-                json.dumps(documents or []),
+                json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status, statement, observation,
             ])
             row_id = cursor.fetchone()[0]
@@ -352,11 +359,13 @@ def insert_driver_check(case_id,
                         driver_name='', driver_contact='',
                         driver_address='',
                         dl='', permit='', occupation='',
-                        documents=None,
+                        case_documents=None, vendor_documents=None,
                         check_status='PENDING',
                         statement='', observation=''):
     """Insert into incident_case_db.driver_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
+    case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
+    vendor_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
     """
     if check_status not in VALID_CHECK_STATUS:
         check_status = 'WIP'
@@ -367,7 +376,7 @@ def insert_driver_check(case_id,
                     (case_id, driver_name, driver_contact,
                      driver_address,
                      dl, permit, occupation,
-                     documents,
+                     case_documents, vendor_documents,
                      check_status, statement, observation,
                      driver_lat, driver_lng,
                      created_at, updated_at)
@@ -375,7 +384,7 @@ def insert_driver_check(case_id,
                     (%s, %s, %s,
                      %s,
                      %s, %s, %s,
-                     %s,
+                     %s, %s,
                      %s, %s, %s,
                      NULL, NULL,
                      NOW(), NOW())
@@ -384,7 +393,7 @@ def insert_driver_check(case_id,
                 case_id, driver_name, driver_contact,
                 driver_address,
                 dl, permit, occupation,
-                json.dumps(documents or []),
+                json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status, statement, observation,
             ])
             row_id = cursor.fetchone()[0]
@@ -405,12 +414,14 @@ def insert_spot_check(case_id,
                       time_of_accident='', place_of_accident='',
                       district='', fir_number='',
                       city='', police_station='', accident_brief='',
-                      documents=None,
+                      case_documents=None, vendor_documents=None,
                       check_status='PENDING',
                       observations=''):
     """Insert into incident_case_db.spot_checks.
     Note: spot_checks has 'observations' (plural) and no 'statement' column.
     Geocodes the accident location using place_of_accident + district in background thread.
+    case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
+    vendor_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
     """
     if check_status not in VALID_CHECK_STATUS:
         check_status = 'WIP'
@@ -421,7 +432,7 @@ def insert_spot_check(case_id,
                     (case_id, time_of_accident, place_of_accident,
                      district, fir_number,
                      city, police_station, accident_brief,
-                     documents,
+                     case_documents, vendor_documents,
                      check_status, observations,
                      spot_lat, spot_lng,
                      created_at, updated_at)
@@ -429,7 +440,7 @@ def insert_spot_check(case_id,
                     (%s, %s, %s,
                      %s, %s,
                      %s, %s, %s,
-                     %s,
+                     %s, %s,
                      %s, %s,
                      NULL, NULL,
                      NOW(), NOW())
@@ -438,7 +449,7 @@ def insert_spot_check(case_id,
                 case_id, time_of_accident, place_of_accident,
                 district, fir_number,
                 city, police_station, accident_brief,
-                json.dumps(documents or []),
+                json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status, observations,
             ])
             row_id = cursor.fetchone()[0]
@@ -460,10 +471,14 @@ def insert_chargesheet(case_id,
                        fir_number='', city='', court_name='',
                        mv_act='', fir_delay_days=None,
                        bsn_section='', ipc='',
-                       documents=None,
+                       case_documents=None, vendor_documents=None,
                        check_status='PENDING',
                        statement='', observations=''):
-    """Insert into incident_case_db.chargesheets."""
+    """Insert into incident_case_db.chargesheets.
+    Geocodes the city/court location using OpenStreetMap Nominatim.
+    case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
+    vendor_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
+    """
     if check_status not in VALID_CHECK_STATUS:
         check_status = 'WIP'
     try:
@@ -473,24 +488,154 @@ def insert_chargesheet(case_id,
                     (case_id, fir_number, city, court_name,
                      mv_act, fir_delay_days,
                      bsn_section, ipc,
-                     documents,
+                     case_documents, vendor_documents,
                      check_status, statement, observations,
+                     chargesheet_lat, chargesheet_lng,
                      created_at, updated_at)
                 VALUES
                     (%s, %s, %s, %s,
                      %s, %s,
                      %s, %s,
-                     %s,
+                     %s, %s,
                      %s, %s, %s,
+                     NULL, NULL,
                      NOW(), NOW())
+                RETURNING id
             """, [
                 case_id, fir_number, city, court_name,
                 mv_act, fir_delay_days,
                 bsn_section, ipc,
-                json.dumps(documents or []),
+                json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status, statement, observations,
             ])
-        logger.info(f"[incident_case_db] Inserted chargesheet for case={case_id}")
+            row_id = cursor.fetchone()[0]
+        logger.info(f"[incident_case_db] Inserted chargesheet id={row_id} for case={case_id}")
+        # Geocode court/city location in background
+        location_query = ', '.join(filter(None, [court_name, city]))
+        if location_query.strip():
+            _geocode_and_update('chargesheets', row_id, 'chargesheet_lat', 'chargesheet_lng', location_query)
     except Exception as e:
         logger.error(f"[incident_case_db] Failed to insert chargesheet: {e}")
+        raise
+
+
+# =========================================================================
+# RTI CHECKS  (Right to Information)
+# =========================================================================
+
+def insert_rti_check(case_id,
+                     chargesheet_checked=False, fir_number='',
+                     dl_checked=False, dl_number='',
+                     permit_checked=False, permit_number='',
+                     rc_checked=False, rc_number='',
+                     remarks='',
+                     case_documents=None, vendor_documents=None,
+                     check_status='PENDING'):
+    """Insert into incident_case_db.rti_checks.
+    Each field has a boolean toggle and an associated number/text value.
+    """
+    if check_status not in VALID_CHECK_STATUS:
+        check_status = 'WIP'
+    try:
+        with _get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO rti_checks
+                    (case_id,
+                     chargesheet_checked, fir_number,
+                     dl_checked, dl_number,
+                     permit_checked, permit_number,
+                     rc_checked, rc_number,
+                     remarks,
+                     case_documents, vendor_documents,
+                     check_status,
+                     created_at, updated_at)
+                VALUES
+                    (%s,
+                     %s, %s,
+                     %s, %s,
+                     %s, %s,
+                     %s, %s,
+                     %s,
+                     %s, %s,
+                     %s,
+                     NOW(), NOW())
+                RETURNING id
+            """, [
+                case_id,
+                chargesheet_checked, fir_number,
+                dl_checked, dl_number,
+                permit_checked, permit_number,
+                rc_checked, rc_number,
+                remarks,
+                json.dumps(case_documents or []), json.dumps(vendor_documents or []),
+                check_status,
+            ])
+            row_id = cursor.fetchone()[0]
+        logger.info(f"[incident_case_db] Inserted rti_check id={row_id} for case={case_id}")
+    except Exception as e:
+        logger.error(f"[incident_case_db] Failed to insert rti_check: {e}")
+        raise
+
+
+# =========================================================================
+# RTO CHECKS  (Regional Transport Office)
+# =========================================================================
+
+def insert_rto_check(case_id,
+                     rto_name='', rto_address='',
+                     dl_checked=False, dl_number='',
+                     permit_checked=False, permit_number='',
+                     rc_checked=False, rc_number='',
+                     remarks='',
+                     case_documents=None, vendor_documents=None,
+                     check_status='PENDING'):
+    """Insert into incident_case_db.rto_checks.
+    Geocodes the RTO office address in background thread.
+    """
+    if check_status not in VALID_CHECK_STATUS:
+        check_status = 'WIP'
+    try:
+        with _get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO rto_checks
+                    (case_id,
+                     rto_name, rto_address,
+                     dl_checked, dl_number,
+                     permit_checked, permit_number,
+                     rc_checked, rc_number,
+                     remarks,
+                     case_documents, vendor_documents,
+                     check_status,
+                     rto_lat, rto_lng,
+                     created_at, updated_at)
+                VALUES
+                    (%s,
+                     %s, %s,
+                     %s, %s,
+                     %s, %s,
+                     %s, %s,
+                     %s,
+                     %s, %s,
+                     %s,
+                     NULL, NULL,
+                     NOW(), NOW())
+                RETURNING id
+            """, [
+                case_id,
+                rto_name, rto_address,
+                dl_checked, dl_number,
+                permit_checked, permit_number,
+                rc_checked, rc_number,
+                remarks,
+                json.dumps(case_documents or []), json.dumps(vendor_documents or []),
+                check_status,
+            ])
+            row_id = cursor.fetchone()[0]
+        logger.info(f"[incident_case_db] Inserted rto_check id={row_id} for case={case_id}")
+        # Geocode RTO office address in background
+        location_query = ', '.join(filter(None, [rto_name, rto_address]))
+        if location_query.strip():
+            _geocode_and_update('rto_checks', row_id, 'rto_lat', 'rto_lng', location_query)
+    except Exception as e:
+        logger.error(f"[incident_case_db] Failed to insert rto_check: {e}")
         raise

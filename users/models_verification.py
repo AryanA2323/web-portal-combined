@@ -17,6 +17,8 @@ class CaseVerification(models.Model):
         ('DRIVER_CHECK', 'Driver Verification'),
         ('SPOT_CHECK', 'Spot Investigation'),
         ('CHARGESHEET', 'Chargesheet Verification'),
+        ('RTI_CHECK', 'RTI Verification'),
+        ('RTO_CHECK', 'RTO Verification'),
     ]
     
     STATUS_CHOICES = [

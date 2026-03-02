@@ -94,6 +94,8 @@ const NewCasePage = () => {
     driver: false,
     spot: false,
     chargesheet: false,
+    rti: false,
+    rto: false,
   });
 
   // File uploads for each verification type
@@ -103,6 +105,8 @@ const NewCasePage = () => {
     driver: [],
     spot: [],
     chargesheet: [],
+    rti: [],
+    rto: [],
   });
 
   // Verification-specific data
@@ -165,6 +169,30 @@ const NewCasePage = () => {
     fir_delay_in_days: '',
     bsn_sections: '',
     ipc_sections: '',
+
+    // RTI fields
+    rti_check_status: 'WIP',
+    rti_remarks: '',
+    rti_chargesheet_checked: false,
+    rti_fir_number: '',
+    rti_dl_checked: false,
+    rti_dl_number: '',
+    rti_permit_checked: false,
+    rti_permit_number: '',
+    rti_rc_checked: false,
+    rti_rc_number: '',
+
+    // RTO fields
+    rto_check_status: 'WIP',
+    rto_remarks: '',
+    rto_name: '',
+    rto_address: '',
+    rto_dl_checked: false,
+    rto_dl_number: '',
+    rto_permit_checked: false,
+    rto_permit_number: '',
+    rto_rc_checked: false,
+    rto_rc_number: '',
   });
 
   // Court details dropdown options
@@ -408,6 +436,42 @@ const NewCasePage = () => {
           fir_delay_in_days: verificationData.fir_delay_in_days ? parseInt(verificationData.fir_delay_in_days) : null,
           bsn_sections: verificationData.bsn_sections,
           ipc_sections: verificationData.ipc_sections,
+        });
+      }
+
+      if (selectedVerifications.rti) {
+        verificationsToCreate.push({
+          case_id: caseId,
+          incident_case_db_id: incidentCaseDbId,
+          check_type: 'RTI',
+          check_status: verificationData.rti_check_status || 'WIP',
+          rti_chargesheet_checked: verificationData.rti_chargesheet_checked,
+          rti_fir_number: verificationData.rti_fir_number,
+          rti_dl_checked: verificationData.rti_dl_checked,
+          rti_dl_number: verificationData.rti_dl_number,
+          rti_permit_checked: verificationData.rti_permit_checked,
+          rti_permit_number: verificationData.rti_permit_number,
+          rti_rc_checked: verificationData.rti_rc_checked,
+          rti_rc_number: verificationData.rti_rc_number,
+          rti_remarks: verificationData.rti_remarks,
+        });
+      }
+
+      if (selectedVerifications.rto) {
+        verificationsToCreate.push({
+          case_id: caseId,
+          incident_case_db_id: incidentCaseDbId,
+          check_type: 'RTO',
+          check_status: verificationData.rto_check_status || 'WIP',
+          rto_name: verificationData.rto_name,
+          rto_address: verificationData.rto_address,
+          rto_dl_checked: verificationData.rto_dl_checked,
+          rto_dl_number: verificationData.rto_dl_number,
+          rto_permit_checked: verificationData.rto_permit_checked,
+          rto_permit_number: verificationData.rto_permit_number,
+          rto_rc_checked: verificationData.rto_rc_checked,
+          rto_rc_number: verificationData.rto_rc_number,
+          rto_remarks: verificationData.rto_remarks,
         });
       }
 
@@ -951,12 +1015,77 @@ const NewCasePage = () => {
                   />
                 </Card>
               </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Card 
+                  elevation={selectedVerifications.rti ? 4 : 1}
+                  sx={{ 
+                    p: 2, 
+                    cursor: 'pointer',
+                    border: selectedVerifications.rti ? '2px solid #00695c' : '2px solid transparent',
+                    transition: 'all 0.3s',
+                    '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
+                  }}
+                  onClick={() => handleVerificationSelect({ target: { name: 'rti' } })}
+                >
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        name="rti"
+                        checked={selectedVerifications.rti}
+                        onChange={handleVerificationSelect}
+                        sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body1" fontWeight="bold">RTI Check</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Right to Information verification
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Card 
+                  elevation={selectedVerifications.rto ? 4 : 1}
+                  sx={{ 
+                    p: 2, 
+                    cursor: 'pointer',
+                    border: selectedVerifications.rto ? '2px solid #4527a0' : '2px solid transparent',
+                    transition: 'all 0.3s',
+                    '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
+                  }}
+                  onClick={() => handleVerificationSelect({ target: { name: 'rto' } })}
+                >
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        name="rto"
+                        checked={selectedVerifications.rto}
+                        onChange={handleVerificationSelect}
+                        sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body1" fontWeight="bold">RTO Check</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Regional Transport Office verification
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Card>
+              </Grid>
             </Grid>
 
             {/* Show verification fields only if at least one verification is selected */}
             {(selectedVerifications.claimant || selectedVerifications.insured || 
               selectedVerifications.driver || selectedVerifications.spot || 
-              selectedVerifications.chargesheet) && (
+              selectedVerifications.chargesheet || selectedVerifications.rti ||
+              selectedVerifications.rto) && (
               <>
                 <Divider sx={{ my: 4 }} />
 
@@ -1610,6 +1739,269 @@ const NewCasePage = () => {
                               <AttachFileIcon fontSize="small" color="action" />
                               <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
                               <IconButton size="small" color="error" onClick={() => handleRemoveFile('chargesheet', index)}><DeleteIcon fontSize="small" /></IconButton>
+                            </Box>
+                          ))}
+                        </Box>
+                      )}
+
+                    </Box>
+                  </Card>
+                )}
+
+                {/* RTI Check Fields */}
+                {selectedVerifications.rti && (
+                  <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+                    <Box sx={{ bgcolor: '#00695c', color: 'white', p: 2 }}>
+                      <Typography variant="h6" fontWeight="600">RTI Check</Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.85 }}>Right to Information — select items to verify</Typography>
+                    </Box>
+                    <Box sx={{ p: 3 }}>
+
+                      {/* ── Checklist Items ─────────────────────────────── */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#00695c' }} />
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#00695c', letterSpacing: '1px', lineHeight: 1 }}>Checklist</Typography>
+                      </Box>
+
+                      {/* Chargesheet */}
+                      <Box sx={{ mb: 2 }}>
+                        <FormControlLabel
+                          control={<Checkbox name="rti_chargesheet_checked" checked={verificationData.rti_chargesheet_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
+                          label={<Typography fontWeight="bold">Chargesheet</Typography>}
+                        />
+                        {verificationData.rti_chargesheet_checked && (
+                          <Box sx={{ ml: 4, mt: 0.5 }}>
+                            <TextField fullWidth size="small" label="FIR Number" name="rti_fir_number"
+                              value={verificationData.rti_fir_number} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* DL */}
+                      <Box sx={{ mb: 2 }}>
+                        <FormControlLabel
+                          control={<Checkbox name="rti_dl_checked" checked={verificationData.rti_dl_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
+                          label={<Typography fontWeight="bold">DL</Typography>}
+                        />
+                        {verificationData.rti_dl_checked && (
+                          <Box sx={{ ml: 4, mt: 0.5 }}>
+                            <TextField fullWidth size="small" label="DL Number" name="rti_dl_number"
+                              value={verificationData.rti_dl_number} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* Permit */}
+                      <Box sx={{ mb: 2 }}>
+                        <FormControlLabel
+                          control={<Checkbox name="rti_permit_checked" checked={verificationData.rti_permit_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
+                          label={<Typography fontWeight="bold">Permit</Typography>}
+                        />
+                        {verificationData.rti_permit_checked && (
+                          <Box sx={{ ml: 4, mt: 0.5 }}>
+                            <TextField fullWidth size="small" label="Permit Number" name="rti_permit_number"
+                              value={verificationData.rti_permit_number} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* RC */}
+                      <Box sx={{ mb: 2 }}>
+                        <FormControlLabel
+                          control={<Checkbox name="rti_rc_checked" checked={verificationData.rti_rc_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
+                          label={<Typography fontWeight="bold">RC</Typography>}
+                        />
+                        {verificationData.rti_rc_checked && (
+                          <Box sx={{ ml: 4, mt: 0.5 }}>
+                            <TextField fullWidth size="small" label="RC Number" name="rti_rc_number"
+                              value={verificationData.rti_rc_number} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        )}
+                      </Box>
+
+                      <Divider sx={{ mb: 2.5 }} />
+
+                      {/* ── Remarks ──────────────────────────────────────── */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
+                      </Box>
+                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                        <Grid item xs={12} sm={4}>
+                          <FormControl fullWidth size="small">
+                            <InputLabel>Check Status</InputLabel>
+                            <Select name="rti_check_status" value={verificationData.rti_check_status}
+                              onChange={handleVerificationChange} label="Check Status" sx={{ borderRadius: '8px' }}>
+                              <MenuItem value="Not Initiated">Not Initiated</MenuItem>
+                              <MenuItem value="WIP">WIP</MenuItem>
+                              <MenuItem value="Completed">Completed</MenuItem>
+                              <MenuItem value="Stop">Stop</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <TextField fullWidth size="small" label="Remarks" name="rti_remarks"
+                            value={verificationData.rti_remarks} onChange={handleVerificationChange}
+                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                        </Grid>
+                      </Grid>
+
+                      <Divider sx={{ mb: 2.5 }} />
+
+                      {/* ── Documents ────────────────────────────────────── */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
+                      </Box>
+                      <Button variant="outlined" component="label" size="small" sx={{ borderRadius: '8px' }}>
+                        Upload Documents
+                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileSelect('rti', e)} />
+                      </Button>
+                      {verificationFiles.rti.length > 0 && (
+                        <Box sx={{ mt: 1.5 }}>
+                          {verificationFiles.rti.map((file, index) => (
+                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: '8px' }}>
+                              <AttachFileIcon fontSize="small" color="action" />
+                              <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
+                              <IconButton size="small" color="error" onClick={() => handleRemoveFile('rti', index)}><DeleteIcon fontSize="small" /></IconButton>
+                            </Box>
+                          ))}
+                        </Box>
+                      )}
+
+                    </Box>
+                  </Card>
+                )}
+
+                {/* RTO Check Fields */}
+                {selectedVerifications.rto && (
+                  <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+                    <Box sx={{ bgcolor: '#4527a0', color: 'white', p: 2 }}>
+                      <Typography variant="h6" fontWeight="600">RTO Check</Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.85 }}>Regional Transport Office — verify documents at RTO</Typography>
+                    </Box>
+                    <Box sx={{ p: 3 }}>
+
+                      {/* ── RTO Office Info ─────────────────────────────── */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#4527a0' }} />
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#4527a0', letterSpacing: '1px', lineHeight: 1 }}>RTO Office</Typography>
+                      </Box>
+                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                        <Grid item xs={12} sm={6}>
+                          <TextField fullWidth size="small" label="RTO Name / Address" name="rto_name"
+                            value={verificationData.rto_name} onChange={handleVerificationChange}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField fullWidth size="small" label="RTO Address" name="rto_address"
+                            value={verificationData.rto_address} onChange={handleVerificationChange}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                        </Grid>
+                      </Grid>
+
+                      <Divider sx={{ mb: 2.5 }} />
+
+                      {/* ── Checklist Items ─────────────────────────────── */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#4527a0' }} />
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#4527a0', letterSpacing: '1px', lineHeight: 1 }}>Checklist</Typography>
+                      </Box>
+
+                      {/* DL */}
+                      <Box sx={{ mb: 2 }}>
+                        <FormControlLabel
+                          control={<Checkbox name="rto_dl_checked" checked={verificationData.rto_dl_checked} onChange={handleVerificationChange} sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }} />}
+                          label={<Typography fontWeight="bold">DL</Typography>}
+                        />
+                        {verificationData.rto_dl_checked && (
+                          <Box sx={{ ml: 4, mt: 0.5 }}>
+                            <TextField fullWidth size="small" label="DL Number" name="rto_dl_number"
+                              value={verificationData.rto_dl_number} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* Permit */}
+                      <Box sx={{ mb: 2 }}>
+                        <FormControlLabel
+                          control={<Checkbox name="rto_permit_checked" checked={verificationData.rto_permit_checked} onChange={handleVerificationChange} sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }} />}
+                          label={<Typography fontWeight="bold">Permit</Typography>}
+                        />
+                        {verificationData.rto_permit_checked && (
+                          <Box sx={{ ml: 4, mt: 0.5 }}>
+                            <TextField fullWidth size="small" label="Permit Number" name="rto_permit_number"
+                              value={verificationData.rto_permit_number} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* RC */}
+                      <Box sx={{ mb: 2 }}>
+                        <FormControlLabel
+                          control={<Checkbox name="rto_rc_checked" checked={verificationData.rto_rc_checked} onChange={handleVerificationChange} sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }} />}
+                          label={<Typography fontWeight="bold">RC</Typography>}
+                        />
+                        {verificationData.rto_rc_checked && (
+                          <Box sx={{ ml: 4, mt: 0.5 }}>
+                            <TextField fullWidth size="small" label="RC Number" name="rto_rc_number"
+                              value={verificationData.rto_rc_number} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        )}
+                      </Box>
+
+                      <Divider sx={{ mb: 2.5 }} />
+
+                      {/* ── Remarks ──────────────────────────────────────── */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
+                      </Box>
+                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                        <Grid item xs={12} sm={4}>
+                          <FormControl fullWidth size="small">
+                            <InputLabel>Check Status</InputLabel>
+                            <Select name="rto_check_status" value={verificationData.rto_check_status}
+                              onChange={handleVerificationChange} label="Check Status" sx={{ borderRadius: '8px' }}>
+                              <MenuItem value="Not Initiated">Not Initiated</MenuItem>
+                              <MenuItem value="WIP">WIP</MenuItem>
+                              <MenuItem value="Completed">Completed</MenuItem>
+                              <MenuItem value="Stop">Stop</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <TextField fullWidth size="small" label="Remarks" name="rto_remarks"
+                            value={verificationData.rto_remarks} onChange={handleVerificationChange}
+                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                        </Grid>
+                      </Grid>
+
+                      <Divider sx={{ mb: 2.5 }} />
+
+                      {/* ── Documents ────────────────────────────────────── */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
+                      </Box>
+                      <Button variant="outlined" component="label" size="small" sx={{ borderRadius: '8px' }}>
+                        Upload Documents
+                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileSelect('rto', e)} />
+                      </Button>
+                      {verificationFiles.rto.length > 0 && (
+                        <Box sx={{ mt: 1.5 }}>
+                          {verificationFiles.rto.map((file, index) => (
+                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: '8px' }}>
+                              <AttachFileIcon fontSize="small" color="action" />
+                              <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
+                              <IconButton size="small" color="error" onClick={() => handleRemoveFile('rto', index)}><DeleteIcon fontSize="small" /></IconButton>
                             </Box>
                           ))}
                         </Box>
