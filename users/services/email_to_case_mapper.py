@@ -122,8 +122,8 @@ class EmailToCaseMapper:
         data['location_info'] = self.extract_location_info(search_text)
         
         # Set dates
-        data['case_receipt_date'] = email.received_at.date()
-        data['receipt_month'] = email.received_at.strftime('%b-%y')
+        data['case_receive_date'] = email.received_at.date()
+        data['receive_month'] = email.received_at.strftime('%b-%y')
         
         # Determine category
         if 'MACT' in email.subject.upper() or data.get('mact_number'):
@@ -257,7 +257,7 @@ class EmailToCaseMapper:
             ).first()
         
         # Set due date (30 days from receipt)
-        due_date = data['case_receipt_date'] + timedelta(days=30)
+        due_date = data['case_receive_date'] + timedelta(days=30)
         
         # Create case
         case = InsuranceCase.objects.create(
@@ -269,8 +269,8 @@ class EmailToCaseMapper:
             policy_number=data.get('policy_number', ''),
             
             # Dates
-            case_receipt_date=data['case_receipt_date'],
-            receipt_month=data['receipt_month'],
+            case_receive_date=data['case_receive_date'],
+            receive_month=data['receive_month'],
             case_due_date=due_date,
             
             # Case details

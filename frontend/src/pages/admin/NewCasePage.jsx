@@ -41,8 +41,8 @@ const NewCasePage = () => {
     claim_number: '',
     client_name: '',
     category: 'MACT',
-    case_receipt_date: '',
-    receipt_month: '',
+    case_receive_date: '',
+    receive_month: '',
     completion_date: '',
     completion_month: '',
     case_due_date: '',
@@ -54,14 +54,35 @@ const NewCasePage = () => {
     scope_of_work: '',
   });
 
-  // Auto-compute receipt_month when case_receipt_date changes
+  // Auto-compute receive_month when case_receive_date changes
   useEffect(() => {
-    if (commonFields.case_receipt_date) {
-      const d = new Date(commonFields.case_receipt_date);
+    if (commonFields.case_receive_date) {
+      const d = new Date(commonFields.case_receive_date);
       const month = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-      setCommonFields(prev => ({ ...prev, receipt_month: month }));
+      setCommonFields(prev => ({ ...prev, receive_month: month }));
     }
-  }, [commonFields.case_receipt_date]);
+  }, [commonFields.case_receive_date]);
+
+  // Auto-compute case_due_date = receive_date + 30 days
+  useEffect(() => {
+    if (commonFields.case_receive_date) {
+      const d = new Date(commonFields.case_receive_date);
+      d.setDate(d.getDate() + 30);
+      const due = d.toISOString().split('T')[0];
+      setCommonFields(prev => ({ ...prev, case_due_date: due }));
+    }
+  }, [commonFields.case_receive_date]);
+
+  // Auto-compute SLA: AT (Above TAT) if past due date, else WT (Within TAT)
+  useEffect(() => {
+    if (commonFields.case_due_date) {
+      const due = new Date(commonFields.case_due_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      due.setHours(0, 0, 0, 0);
+      setCommonFields(prev => ({ ...prev, sla_status: today > due ? 'AT' : 'WT' }));
+    }
+  }, [commonFields.case_due_date]);
 
   // Auto-compute completion_month when completion_date changes
   useEffect(() => {
@@ -74,13 +95,13 @@ const NewCasePage = () => {
 
   // Auto-compute TAT when both receipt and completion dates exist
   useEffect(() => {
-    if (commonFields.case_receipt_date && commonFields.completion_date) {
-      const start = new Date(commonFields.case_receipt_date);
+    if (commonFields.case_receive_date && commonFields.completion_date) {
+      const start = new Date(commonFields.case_receive_date);
       const end = new Date(commonFields.completion_date);
       const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
       setCommonFields(prev => ({ ...prev, tat_days: diff >= 0 ? diff.toString() : '' }));
     }
-  }, [commonFields.case_receipt_date, commonFields.completion_date]);
+  }, [commonFields.case_receive_date, commonFields.completion_date]);
 
   const handleCommonFieldChange = (e) => {
     const { name, value } = e.target;
@@ -316,8 +337,8 @@ const NewCasePage = () => {
         claim_number: commonFields.claim_number,
         client_name: commonFields.client_name,
         category: commonFields.category,
-        case_receipt_date: commonFields.case_receipt_date || null,
-        receipt_month: commonFields.receipt_month,
+        case_receive_date: commonFields.case_receive_date || null,
+        receive_month: commonFields.receive_month,
         completion_date: commonFields.completion_date || null,
         completion_month: commonFields.completion_month,
         case_due_date: commonFields.case_due_date || null,
@@ -658,10 +679,10 @@ const NewCasePage = () => {
                     <TextField
                       fullWidth
                       size="small"
-                      label="Receipt Date"
-                      name="case_receipt_date"
+                      label="Receive Date"
+                      name="case_receive_date"
                       type="date"
-                      value={commonFields.case_receipt_date}
+                      value={commonFields.case_receive_date}
                       onChange={handleCommonFieldChange}
                       InputLabelProps={{ shrink: true }}
                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
@@ -671,13 +692,13 @@ const NewCasePage = () => {
                     <TextField
                       fullWidth
                       size="small"
-                      label="Receipt Month"
-                      name="receipt_month"
-                      value={commonFields.receipt_month}
+                      label="Receive Month"
+                      name="receive_month"
+                      value={commonFields.receive_month}
                       onChange={handleCommonFieldChange}
-                      helperText="Auto-filled from receipt date"
-                      InputProps={{ readOnly: !!commonFields.case_receipt_date }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: commonFields.case_receipt_date ? '#f5f5f5' : undefined } }}
+                      helperText="Auto-filled from receive date"
+                      InputProps={{ readOnly: !!commonFields.case_receive_date }}
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: commonFields.case_receive_date ? '#f5f5f5' : undefined } }}
                     />
                   </Grid>
                   <Grid item xs={12} sm={4} md={2}>
@@ -715,8 +736,10 @@ const NewCasePage = () => {
                       type="date"
                       value={commonFields.case_due_date}
                       onChange={handleCommonFieldChange}
+                      helperText="Auto: receive date + 30 days"
                       InputLabelProps={{ shrink: true }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                      InputProps={{ readOnly: !!commonFields.case_receive_date }}
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: commonFields.case_receive_date ? '#f5f5f5' : undefined } }}
                     />
                   </Grid>
                   <Grid item xs={12} sm={4} md={2}>
@@ -729,8 +752,8 @@ const NewCasePage = () => {
                       value={commonFields.tat_days}
                       onChange={handleCommonFieldChange}
                       helperText="Auto-calculated from dates"
-                      InputProps={{ readOnly: !!(commonFields.case_receipt_date && commonFields.completion_date) }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: (commonFields.case_receipt_date && commonFields.completion_date) ? '#f5f5f5' : undefined } }}
+                      InputProps={{ readOnly: !!(commonFields.case_receive_date && commonFields.completion_date) }}
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: (commonFields.case_receive_date && commonFields.completion_date) ? '#f5f5f5' : undefined } }}
                     />
                   </Grid>
                 </Grid>
@@ -746,20 +769,15 @@ const NewCasePage = () => {
                 </Box>
                 <Grid container spacing={2.5} sx={{ mb: 3 }}>
                   <Grid item xs={6} sm={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>SLA Status</InputLabel>
-                      <Select
-                        name="sla_status"
-                        value={commonFields.sla_status}
-                        onChange={handleCommonFieldChange}
-                        label="SLA Status"
-                        sx={{ borderRadius: '8px', minWidth: 140 }}
-                      >
-                        <MenuItem value=""><em>Select</em></MenuItem>
-                        <MenuItem value="AT">AT — Achieved TAT</MenuItem>
-                        <MenuItem value="WT">WT — Within TAT</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="SLA Status"
+                      value={commonFields.sla_status ? (commonFields.sla_status === 'AT' ? 'AT — Above TAT' : 'WT — Within TAT') : ''}
+                      helperText="Auto: based on due date"
+                      InputProps={{ readOnly: true }}
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f5f5f5' } }}
+                    />
                   </Grid>
                   <Grid item xs={6} sm={3}>
                     <FormControl fullWidth size="small">

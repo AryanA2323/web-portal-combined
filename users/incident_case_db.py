@@ -182,7 +182,7 @@ def _geocode_and_update(table: str, row_id: int, lat_col: str, lng_col: str, add
 # =========================================================================
 
 def insert_case(claim_number, client_name, category,
-                case_receipt_date=None, receipt_month='',
+                case_receive_date=None, receive_month='',
                 completion_date=None, completion_month='',
                 case_due_date=None, tat_days=None,
                 sla='', case_type='',
@@ -209,7 +209,7 @@ def insert_case(claim_number, client_name, category,
             cursor.execute("""
                 INSERT INTO cases
                     (claim_number, client_name, category,
-                     case_receipt_date, receipt_month,
+                     case_receive_date, receive_month,
                      completion_date, completion_month,
                      case_due_date, tat_days, sla, case_type,
                      investigation_report_status, full_case_status,
@@ -224,7 +224,7 @@ def insert_case(claim_number, client_name, category,
                 RETURNING id
             """, [
                 claim_number, client_name or '', category or '',
-                case_receipt_date, receipt_month or '',
+                case_receive_date, receive_month or '',
                 completion_date, completion_month or '',
                 case_due_date, tat_days, sla_val, case_type,
                 investigation_report_status, full_case_status,

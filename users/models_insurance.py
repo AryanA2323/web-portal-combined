@@ -92,8 +92,8 @@ class InsuranceCase(models.Model):
     crn = models.CharField(max_length=100, blank=True, help_text='Case Reference Number')
     
     # Dates and Timing
-    case_receipt_date = models.DateField()
-    receipt_month = models.CharField(max_length=20, blank=True)
+    case_receive_date = models.DateField()
+    receive_month = models.CharField(max_length=20, blank=True)
     completion_date = models.DateTimeField(null=True, blank=True)
     completion_month = models.CharField(max_length=20, blank=True)
     case_due_date = models.DateField(null=True, blank=True)
@@ -178,24 +178,24 @@ class InsuranceCase(models.Model):
         indexes = [
             models.Index(fields=['claim_number']),
             models.Index(fields=['client', 'full_case_status']),
-            models.Index(fields=['case_receipt_date']),
+            models.Index(fields=['case_receive_date']),
             models.Index(fields=['completion_date']),
             models.Index(fields=['full_case_status']),
             models.Index(fields=['category']),
         ]
-        ordering = ['-case_receipt_date']
+        ordering = ['-case_receive_date']
     
     def __str__(self):
         return f"{self.claim_number} - {self.client_name}"
     
     def calculate_tat(self):
         """Calculate Turn Around Time."""
-        if self.completion_date and self.case_receipt_date:
-            delta = self.completion_date.date() - self.case_receipt_date
+        if self.completion_date and self.case_receive_date:
+            delta = self.completion_date.date() - self.case_receive_date
             self.tat_days = delta.days
             return self.tat_days
-        elif self.case_receipt_date:
-            delta = timezone.now().date() - self.case_receipt_date
+        elif self.case_receive_date:
+            delta = timezone.now().date() - self.case_receive_date
             self.tat_days = delta.days
             return self.tat_days
         return None

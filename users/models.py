@@ -636,7 +636,7 @@ class InsuranceCase(models.Model):
     
     # SLA Status choices
     SLA_CHOICES = [
-        ('AT', 'AT (Achieved TAT)'),
+        ('AT', 'AT (Above TAT)'),
         ('WT', 'WT (Within TAT)'),
     ]
     
@@ -676,8 +676,8 @@ class InsuranceCase(models.Model):
     # =========================================================================
     # Dates and Timing
     # =========================================================================
-    case_receipt_date = models.DateField(null=True, blank=True, help_text='Date case was received')
-    receipt_month = models.CharField(max_length=20, blank=True, help_text='Month of receipt')
+    case_receive_date = models.DateField(null=True, blank=True, help_text='Date case was received')
+    receive_month = models.CharField(max_length=20, blank=True, help_text='Month of receive')
     completion_date = models.DateField(null=True, blank=True, help_text='Date case was completed')
     completion_month = models.CharField(max_length=20, blank=True, help_text='Month of completion')
     case_due_date = models.DateField(null=True, blank=True, help_text='Due date for the case')

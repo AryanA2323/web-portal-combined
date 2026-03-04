@@ -52,8 +52,8 @@ class CaseSchema(Schema):
     insured_name: Optional[str] = None
     client_code: Optional[str] = None
     # Date and timing fields
-    case_receipt_date: Optional[str] = None
-    receipt_month: Optional[str] = None
+    case_receive_date: Optional[str] = None
+    receive_month: Optional[str] = None
     completion_date: Optional[str] = None
     completion_month: Optional[str] = None
     case_due_date: Optional[str] = None
@@ -151,8 +151,8 @@ class CreateCaseSchema(Schema):
     claim_number: str
     client_name: str = ''
     category: str = 'MACT'
-    case_receipt_date: Optional[str] = None  # ISO date string YYYY-MM-DD
-    receipt_month: str = ''
+    case_receive_date: Optional[str] = None  # ISO date string YYYY-MM-DD
+    receive_month: str = ''
     completion_date: Optional[str] = None
     completion_month: str = ''
     case_due_date: Optional[str] = None
@@ -766,7 +766,7 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
     # CASE fields that are safe to update
     CASE_FIELDS = {
         'claim_number', 'client_name', 'category',
-        'case_receipt_date', 'receipt_month',
+        'case_receive_date', 'receive_month',
         'completion_date', 'completion_month',
         'case_due_date', 'tat_days', 'sla',
         'case_type', 'investigation_report_status',
@@ -845,6 +845,31 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
 
             # ── Update cases table ────────────────────────────────────────
             safe_case = {k: v for k, v in case_updates.items() if k in CASE_FIELDS}
+
+            # Auto-compute case_due_date and SLA when receive date changes
+            if safe_case:
+                from datetime import date as _date, timedelta as _td
+                receive_dt = safe_case.get('case_receive_date')
+                if receive_dt:
+                    if isinstance(receive_dt, str) and receive_dt:
+                        try:
+                            receive_dt = _date.fromisoformat(receive_dt)
+                        except ValueError:
+                            receive_dt = None
+                    if receive_dt:
+                        safe_case['case_due_date'] = receive_dt + _td(days=30)
+                        safe_case['sla'] = 'AT' if _date.today() > safe_case['case_due_date'] else 'WT'
+                # Also recompute SLA if only due_date is being written
+                due_dt = safe_case.get('case_due_date')
+                if due_dt and 'sla' not in safe_case:
+                    if isinstance(due_dt, str) and due_dt:
+                        try:
+                            due_dt = _date.fromisoformat(due_dt)
+                        except ValueError:
+                            due_dt = None
+                    if due_dt:
+                        safe_case['sla'] = 'AT' if _date.today() > due_dt else 'WT'
+
             if safe_case:
                 set_clause = ', '.join(f'{k} = %s' for k in safe_case)
                 vals = list(safe_case.values()) + [case_id]
@@ -1054,9 +1079,9 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
         formatted_address = ", ".join(addr_parts) if addr_parts else ''
         
         # Parse date fields (ISO string -> date object)
-        case_receipt_date = None
-        if payload.case_receipt_date:
-            case_receipt_date = dt.strptime(payload.case_receipt_date, '%Y-%m-%d').date()
+        case_receive_date = None
+        if payload.case_receive_date:
+            case_receive_date = dt.strptime(payload.case_receive_date, '%Y-%m-%d').date()
         
         completion_date_val = None
         if payload.completion_date:
@@ -1066,10 +1091,10 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
         if payload.case_due_date:
             case_due_date_val = dt.strptime(payload.case_due_date, '%Y-%m-%d').date()
         
-        # Auto-compute receipt_month from case_receipt_date
-        receipt_month = payload.receipt_month
-        if not receipt_month and case_receipt_date:
-            receipt_month = case_receipt_date.strftime('%B %Y')
+        # Auto-compute receive_month from case_receive_date
+        receive_month = payload.receive_month
+        if not receive_month and case_receive_date:
+            receive_month = case_receive_date.strftime('%B %Y')
         
         # Auto-compute completion_month from completion_date
         completion_month = payload.completion_month
@@ -1078,8 +1103,19 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
         
         # Auto-compute TAT if dates available and not manually set
         tat_days = payload.tat_days
-        if tat_days is None and case_receipt_date and completion_date_val:
-            tat_days = (completion_date_val - case_receipt_date).days
+        if tat_days is None and case_receive_date and completion_date_val:
+            tat_days = (completion_date_val - case_receive_date).days
+
+        # Auto-compute case_due_date = receive_date + 30 days
+        if not case_due_date_val and case_receive_date:
+            from datetime import timedelta
+            case_due_date_val = case_receive_date + timedelta(days=30)
+
+        # Auto-compute SLA: AT (Above TAT) if past due date, else WT (Within TAT)
+        from datetime import date as _date
+        sla_status = payload.sla_status
+        if case_due_date_val:
+            sla_status = 'AT' if _date.today() > case_due_date_val else 'WT'
 
         # ── PRIMARY write: incident_case_db.cases ────────────────────────────
         # This is the table the Cases page reads from. Write here first so the
@@ -1088,13 +1124,13 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
             claim_number=payload.claim_number,
             client_name=payload.client_name,
             category=payload.category,
-            case_receipt_date=case_receipt_date,
-            receipt_month=receipt_month or '',
+            case_receive_date=case_receive_date,
+            receive_month=receive_month or '',
             completion_date=completion_date_val,
             completion_month=completion_month or '',
             case_due_date=case_due_date_val,
             tat_days=tat_days,
-            sla=payload.sla_status,           # maps to `sla` column
+            sla=sla_status,           # maps to `sla` column
             case_type=payload.case_type,
             investigation_report_status=payload.investigation_report_status,
             full_case_status=payload.full_case_status,
@@ -1117,13 +1153,13 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
                 claim_number=payload.claim_number,
                 client_name=payload.client_name,
                 client_code=payload.client_code,
-                case_receipt_date=case_receipt_date,
-                receipt_month=receipt_month,
+                case_receive_date=case_receive_date,
+                receive_month=receive_month,
                 completion_date=completion_date_val,
                 completion_month=completion_month,
                 case_due_date=case_due_date_val,
                 tat_days=tat_days,
-                sla_status=payload.sla_status,
+                sla_status=sla_status,
                 case_type=payload.case_type,
                 investigation_report_status=payload.investigation_report_status,
                 full_case_status=payload.full_case_status,

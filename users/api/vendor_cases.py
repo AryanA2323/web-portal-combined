@@ -347,7 +347,7 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
             # Get case info
             cursor.execute("""
                 SELECT id, claim_number, client_name, category,
-                       case_receipt_date, case_due_date, tat_days, sla,
+                       case_receive_date, case_due_date, tat_days, sla,
                        case_type, full_case_status, scope_of_work,
                        investigation_report_status
                 FROM cases WHERE id = %s
@@ -361,7 +361,7 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                 "claim_number": case_row[1] or "",
                 "client_name": case_row[2] or "",
                 "category": case_row[3] or "",
-                "case_receipt_date": str(case_row[4]) if case_row[4] else "",
+                "case_receive_date": str(case_row[4]) if case_row[4] else "",
                 "case_due_date": str(case_row[5]) if case_row[5] else "",
                 "tat_days": case_row[6],
                 "sla": case_row[7] or "",

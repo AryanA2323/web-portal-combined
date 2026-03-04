@@ -194,9 +194,9 @@ class EnhancedEmailToCaseMapper:
             data['category'] = 'OTHER'
         
         # Set dates
-        data['case_receipt_date'] = email.received_at.date()
-        data['receipt_month'] = email.received_at.strftime('%b-%y')
-        data['case_due_date'] = data['case_receipt_date'] + timedelta(days=30)
+        data['case_receive_date'] = email.received_at.date()
+        data['receive_month'] = email.received_at.strftime('%b-%y')
+        data['case_due_date'] = data['case_receive_date'] + timedelta(days=30)
         
         # Determine case type and scope
         if 'intimation' in subject_text.lower() or 'Full Case' in all_text:
@@ -474,8 +474,8 @@ class EnhancedEmailToCaseMapper:
             policy_number=data.get('policy_number', ''),
             
             # Dates
-            case_receipt_date=data['case_receipt_date'],
-            receipt_month=data['receipt_month'],
+            case_receive_date=data['case_receive_date'],
+            receive_month=data['receive_month'],
             case_due_date=data['case_due_date'],
             
             # Case details

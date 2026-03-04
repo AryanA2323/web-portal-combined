@@ -252,7 +252,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           <DetailRow label="Case Status" value={caseInfo.full_case_status} />
           <DetailRow label="SLA" value={caseInfo.sla} />
           <DetailRow label="TAT Days" value={caseInfo.tat_days} />
-          <DetailRow label="Receipt Date" value={caseInfo.case_receipt_date} />
+          <DetailRow label="Receive Date" value={caseInfo.case_receive_date} />
           <DetailRow label="Due Date" value={caseInfo.case_due_date} />
           <DetailRow label="Scope of Work" value={caseInfo.scope_of_work} />
           <DetailRow label="IR Status" value={caseInfo.investigation_report_status} />

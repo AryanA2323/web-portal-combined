@@ -588,8 +588,8 @@ const CasesPage = () => {
                             label={row.sla}
                             size="small"
                             sx={{
-                              backgroundColor: row.sla === 'AT' ? '#e8f5e920' : '#fff3e020',
-                              color: row.sla === 'AT' ? '#2e7d32' : '#e65100',
+                              backgroundColor: row.sla === 'WT' ? '#e8f5e920' : '#fff3e020',
+                              color: row.sla === 'WT' ? '#2e7d32' : '#e65100',
                               fontWeight: 700,
                               fontSize: '11px',
                               height: '22px',

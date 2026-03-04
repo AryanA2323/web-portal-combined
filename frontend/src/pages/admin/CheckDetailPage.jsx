@@ -101,11 +101,11 @@ const CASE_FIELDS_DEF = [
   { name: 'client_name',                label: 'Client Name',     group: 'identity' },
   { name: 'category',                   label: 'Category',        group: 'identity', options: ['MACT','GPA','PA','Health','Fire','Marine','Misc'] },
   { name: 'case_type',                  label: 'Case Type',       group: 'identity', options: ['Full Case','Partial','Reinvestigation'] },
-  { name: 'case_receipt_date',          label: 'Receipt Date',    group: 'dates',    type: 'date' },
+  { name: 'case_receive_date',          label: 'Receive Date',    group: 'dates',    type: 'date' },
   { name: 'case_due_date',              label: 'Due Date',        group: 'dates',    type: 'date' },
   { name: 'completion_date',            label: 'Completion Date', group: 'dates',    type: 'date' },
   { name: 'tat_days',                   label: 'TAT Days',        group: 'dates',    type: 'number' },
-  { name: 'sla',                        label: 'SLA',             group: 'status',   options: ['AT','OT','BT','NT'] },
+  { name: 'sla',                        label: 'SLA',             group: 'status',   options: ['AT','WT'] },
   { name: 'investigation_report_status',label: 'IR Status',       group: 'status',   options: ['Open','Submitted','Approved','Rejected','Under Review','Closed'] },
   { name: 'full_case_status',           label: 'Case Status',     group: 'status',   options: ['WIP','Completed','Pending','On Hold','Cancelled'] },
   { name: 'scope_of_work',              label: 'Scope of Work',   group: 'notes' },
@@ -545,7 +545,7 @@ const CheckDetailPage = () => {
               gap: 1.5,
             }}>
               <StatBadge icon={<FolderOpen sx={{ fontSize: 18 }} />}         label="Claim Number"  value={caseData.claim_number}                         color="#667eea" />
-              <StatBadge icon={<CalendarToday sx={{ fontSize: 18 }} />}      label="Receipt Date"  value={fmtDateDisplay(caseData.case_receipt_date)}     color="#06b6d4" />
+              <StatBadge icon={<CalendarToday sx={{ fontSize: 18 }} />}      label="Receive Date"  value={fmtDateDisplay(caseData.case_receive_date)}     color="#06b6d4" />
               <StatBadge icon={<Speed sx={{ fontSize: 18 }} />}              label="TAT Days"      value={caseData.tat_days != null ? `${caseData.tat_days} days` : null} color="#f59e0b" />
               <StatBadge icon={<CheckCircleOutline sx={{ fontSize: 18 }} />} label="IR Status"     value={caseData.investigation_report_status}           color={irCfg.color} />
               <StatBadge icon={<VerifiedUser sx={{ fontSize: 18 }} />}       label="Case Status"   value={caseData.full_case_status}                      color={staCfg.color} />
