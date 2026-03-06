@@ -38,6 +38,7 @@ const allMenuItems = [
   { id: 'email-intake', label: 'Email Intake', icon: Email, path: '/admin/email-intake' },
   { id: 'process-document', label: 'Process Document', icon: UploadFile, path: '/admin/process-document' },
   { id: 'users', label: 'Users', icon: People, path: '/admin/users' },
+  { id: 'clients', label: 'Clients', icon: Store, path: '/admin/clients' },
   { id: 'ai-brief', label: 'AI Brief Review', icon: AutoAwesome, path: '/admin/ai-brief' },
   { id: 'legal-review', label: 'Legal Review', icon: Gavel, path: '/admin/legal-review' },
   { id: 'reports', label: 'Reports', icon: Assessment, path: '/admin/reports' },

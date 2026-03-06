@@ -315,6 +315,12 @@ const CasesPage = () => {
     return date.toLocaleDateString();
   };
 
+  // Show only the company name in the list (strip trailing "- CODE" or "– CODE").
+  const displayClientName = (rawName) => {
+    if (!rawName) return '—';
+    return String(rawName).replace(/\s*[\u2013\-]\s*[A-Za-z0-9]+\s*$/, '').trim() || rawName;
+  };
+
   if (loading && cases.length === 0) {
     return (
       <AdminLayout>
@@ -469,6 +475,7 @@ const CasesPage = () => {
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', width: 40 }}></TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', width: 50 }}>#</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Case Number</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Claim Number</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Client Name</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Case Type</TableCell>
@@ -516,6 +523,13 @@ const CasesPage = () => {
                         </Typography>
                       </TableCell>
 
+                      {/* Case Number */}
+                      <TableCell>
+                        <Typography sx={{ fontWeight: 600, fontSize: '13px', color: '#764ba2' }}>
+                          {row.case_number || '—'}
+                        </Typography>
+                      </TableCell>
+
                       {/* Claim Number */}
                       <TableCell>
                         <Typography sx={{ fontWeight: 600, fontSize: '14px' }}>
@@ -525,7 +539,7 @@ const CasesPage = () => {
 
                       {/* Client Name */}
                       <TableCell>
-                        <Typography sx={{ fontSize: '14px' }}>{row.client_name || '—'}</Typography>
+                        <Typography sx={{ fontSize: '14px' }}>{displayClientName(row.client_name)}</Typography>
                       </TableCell>
 
                       {/* Case Type */}
@@ -618,7 +632,7 @@ const CasesPage = () => {
                     {subItems.length > 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={12}
+                          colSpan={13}
                           sx={{ py: 0, borderBottom: isExpanded ? '1px solid #e0e0e0' : 'none', p: 0 }}
                         >
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
@@ -755,7 +769,7 @@ const CasesPage = () => {
               })}
               {!loading && cases.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={12} sx={{ textAlign: 'center', py: 4 }}>
+                  <TableCell colSpan={13} sx={{ textAlign: 'center', py: 4 }}>
                     <Typography variant="body1" color="text.secondary">
                       No cases found. Try adjusting your filters or create a new case.
                     </Typography>

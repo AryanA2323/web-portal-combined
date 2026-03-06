@@ -70,6 +70,7 @@ const DEFAULT_ADMIN_PERMISSIONS = [
 const SUPER_ADMIN_PERMISSIONS = [
   '/admin/dashboard',
   '/admin/users',
+  '/admin/clients',
 ];
 
 // Sub-role configuration with permissions

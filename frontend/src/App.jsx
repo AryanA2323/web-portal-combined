@@ -20,6 +20,7 @@ import {
   AuditLogsPage, 
   SettingsPage,
   CheckDetailPage,
+  ClientsPage,
 } from './pages/admin';
 import {
   DashboardPage as LawyerDashboardPage,
@@ -185,6 +186,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
                   <UsersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/clients"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
+                  <ClientsPage />
                 </ProtectedRoute>
               }
             />

@@ -28,6 +28,53 @@ class ClientSchema(Schema):
     location: str
 
 
+class ClientDetailSchema(Schema):
+    """Full client response schema."""
+    id: int
+    client_code: str
+    client_name: str
+    location: str
+    date_of_commencement: Optional[str] = None
+    insured_rate: Optional[float] = None
+    notice_134_rate: Optional[float] = None
+    claimant_rate: Optional[float] = None
+    income_rate: Optional[float] = None
+    driver_rate: Optional[float] = None
+    dl_rate: Optional[float] = None
+    rc_rate: Optional[float] = None
+    permit_rate: Optional[float] = None
+    spot_rate: Optional[float] = None
+    court_rate: Optional[float] = None
+    notice_rate: Optional[float] = None
+    rti_rate: Optional[float] = None
+    hospital_rate: Optional[float] = None
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class CreateClientSchema(Schema):
+    """Schema for creating/updating a client."""
+    client_code: str
+    client_name: str
+    location: str = ''
+    date_of_commencement: Optional[str] = None
+    insured_rate: Optional[float] = None
+    notice_134_rate: Optional[float] = None
+    claimant_rate: Optional[float] = None
+    income_rate: Optional[float] = None
+    driver_rate: Optional[float] = None
+    dl_rate: Optional[float] = None
+    rc_rate: Optional[float] = None
+    permit_rate: Optional[float] = None
+    spot_rate: Optional[float] = None
+    court_rate: Optional[float] = None
+    notice_rate: Optional[float] = None
+    rti_rate: Optional[float] = None
+    hospital_rate: Optional[float] = None
+    is_active: bool = True
+
+
 class VendorSchema(Schema):
     """Vendor response schema for dropdown."""
     id: int
@@ -362,10 +409,10 @@ def get_cases_incident_db(
 
             if search:
                 conditions.append(
-                    "(c.claim_number ILIKE %s OR c.client_name ILIKE %s OR c.category ILIKE %s)"
+                    "(c.claim_number ILIKE %s OR c.client_name ILIKE %s OR c.category ILIKE %s OR c.case_number ILIKE %s)"
                 )
                 sp = f"%{search}%"
-                params.extend([sp, sp, sp])
+                params.extend([sp, sp, sp, sp])
 
             where = " AND ".join(conditions) if conditions else "1=1"
 
@@ -1048,6 +1095,7 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
         from users.models import InsuranceCase
         from users.incident_case_db import insert_case
         import uuid
+        import re
         from datetime import datetime as dt
 
         # ── Duplicate claim_number guard ─────────────────────────────────────
@@ -1068,8 +1116,40 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
                     "detail": "duplicate_claim_number",
                 }
         
-        # Generate case number
-        case_number = f"CASE-{uuid.uuid4().hex[:8].upper()}"
+        # ── Generate case number: <client-code>-<serial>-SS-<year> ───────────
+        # Extract client_code from client_name (format: "Name – Code")
+        client_code = payload.client_code or ''
+        if not client_code and payload.client_name:
+            # client_name may be "Company Name – CODE" (en dash) or "Company Name - CODE"
+            match = re.search(r'[\u2013\-]\s*([A-Za-z0-9]+)\s*$', payload.client_name)
+            if match:
+                client_code = match.group(1).upper()
+
+        # Determine year from case_receive_date or current year
+        case_year = dt.now().year
+        if payload.case_receive_date:
+            try:
+                case_year = dt.strptime(payload.case_receive_date, '%Y-%m-%d').year
+            except ValueError:
+                pass
+
+        # Get next serial number for this client_code + year combination
+        prefix = f"{client_code}-" if client_code else "GEN-"
+        suffix = f"-SS-{case_year}"
+        with connections['default'].cursor() as _seq:
+            _seq.execute(
+                "SELECT case_number FROM cases WHERE case_number LIKE %s ORDER BY case_number DESC LIMIT 1",
+                [f"{prefix}%{suffix}"],
+            )
+            last_row = _seq.fetchone()
+        serial = 1
+        if last_row and last_row[0]:
+            # Extract serial from e.g. "R001-5-SS-2026"
+            m = re.search(r'^' + re.escape(prefix) + r'(\d+)' + re.escape(suffix) + r'$', last_row[0])
+            if m:
+                serial = int(m.group(1)) + 1
+
+        case_number = f"{prefix}{serial:04d}{suffix}"
         
         # Auto-generate title from claim_number + client_name if not provided
         title = payload.title or f"Case {payload.claim_number} - {payload.client_name or 'New Case'}"
@@ -1135,6 +1215,7 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
             investigation_report_status=payload.investigation_report_status,
             full_case_status=payload.full_case_status,
             scope_of_work=payload.scope_of_work,
+            case_number=case_number,
         )
         logger.info(f"[incident_case_db] case inserted id={incident_case_db_id} claim={payload.claim_number}")
 
@@ -1625,6 +1706,168 @@ def list_clients(request):
         )
         for client in clients
     ]
+
+
+@router.get(
+    "/clients/all",
+    response=List[ClientDetailSchema],
+    summary="Get All Clients (Admin)",
+    description="Get list of all clients with full details for admin management."
+)
+def list_all_clients(request):
+    """Get all clients for admin management."""
+    if not is_admin_or_super_admin(request.user):
+        raise HttpError(403, "Admin access required")
+
+    from users.models import Client
+
+    clients = Client.objects.all().order_by('client_name')
+    result = []
+    for c in clients:
+        result.append(ClientDetailSchema(
+            id=c.id,
+            client_code=c.client_code,
+            client_name=c.client_name,
+            location=c.location or '',
+            date_of_commencement=c.date_of_commencement.isoformat() if c.date_of_commencement else None,
+            insured_rate=float(c.insured_rate) if c.insured_rate else None,
+            notice_134_rate=float(c.notice_134_rate) if c.notice_134_rate else None,
+            claimant_rate=float(c.claimant_rate) if c.claimant_rate else None,
+            income_rate=float(c.income_rate) if c.income_rate else None,
+            driver_rate=float(c.driver_rate) if c.driver_rate else None,
+            dl_rate=float(c.dl_rate) if c.dl_rate else None,
+            rc_rate=float(c.rc_rate) if c.rc_rate else None,
+            permit_rate=float(c.permit_rate) if c.permit_rate else None,
+            spot_rate=float(c.spot_rate) if c.spot_rate else None,
+            court_rate=float(c.court_rate) if c.court_rate else None,
+            notice_rate=float(c.notice_rate) if c.notice_rate else None,
+            rti_rate=float(c.rti_rate) if c.rti_rate else None,
+            hospital_rate=float(c.hospital_rate) if c.hospital_rate else None,
+            is_active=c.is_active,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+        ))
+    return result
+
+
+@router.post(
+    "/clients",
+    summary="Create Client",
+    description="Create a new client. Admin access required."
+)
+def create_client(request: HttpRequest, payload: CreateClientSchema):
+    """Create a new client."""
+    if not is_admin_or_super_admin(request.user):
+        raise HttpError(403, "Admin access required")
+
+    from users.models import Client
+    from datetime import datetime as _dt
+
+    # Check for duplicate client_code
+    if Client.objects.filter(client_code=payload.client_code).exists():
+        raise HttpError(400, f"Client with code '{payload.client_code}' already exists.")
+
+    date_val = None
+    if payload.date_of_commencement:
+        try:
+            date_val = _dt.strptime(payload.date_of_commencement, '%Y-%m-%d').date()
+        except ValueError:
+            raise HttpError(400, "Invalid date format. Use YYYY-MM-DD.")
+
+    client = Client.objects.create(
+        client_code=payload.client_code,
+        client_name=payload.client_name,
+        location=payload.location,
+        date_of_commencement=date_val,
+        insured_rate=payload.insured_rate,
+        notice_134_rate=payload.notice_134_rate,
+        claimant_rate=payload.claimant_rate,
+        income_rate=payload.income_rate,
+        driver_rate=payload.driver_rate,
+        dl_rate=payload.dl_rate,
+        rc_rate=payload.rc_rate,
+        permit_rate=payload.permit_rate,
+        spot_rate=payload.spot_rate,
+        court_rate=payload.court_rate,
+        notice_rate=payload.notice_rate,
+        rti_rate=payload.rti_rate,
+        hospital_rate=payload.hospital_rate,
+        is_active=payload.is_active,
+    )
+    return {"success": True, "message": "Client created successfully", "id": client.id}
+
+
+@router.put(
+    "/clients/{client_id}",
+    summary="Update Client",
+    description="Update an existing client. Admin access required."
+)
+def update_client(request: HttpRequest, client_id: int, payload: CreateClientSchema):
+    """Update a client."""
+    if not is_admin_or_super_admin(request.user):
+        raise HttpError(403, "Admin access required")
+
+    from users.models import Client
+    from datetime import datetime as _dt
+
+    try:
+        client = Client.objects.get(id=client_id)
+    except Client.DoesNotExist:
+        raise HttpError(404, "Client not found")
+
+    # Check for duplicate client_code (excluding current client)
+    if Client.objects.filter(client_code=payload.client_code).exclude(id=client_id).exists():
+        raise HttpError(400, f"Client with code '{payload.client_code}' already exists.")
+
+    date_val = None
+    if payload.date_of_commencement:
+        try:
+            date_val = _dt.strptime(payload.date_of_commencement, '%Y-%m-%d').date()
+        except ValueError:
+            raise HttpError(400, "Invalid date format. Use YYYY-MM-DD.")
+
+    client.client_code = payload.client_code
+    client.client_name = payload.client_name
+    client.location = payload.location
+    client.date_of_commencement = date_val
+    client.insured_rate = payload.insured_rate
+    client.notice_134_rate = payload.notice_134_rate
+    client.claimant_rate = payload.claimant_rate
+    client.income_rate = payload.income_rate
+    client.driver_rate = payload.driver_rate
+    client.dl_rate = payload.dl_rate
+    client.rc_rate = payload.rc_rate
+    client.permit_rate = payload.permit_rate
+    client.spot_rate = payload.spot_rate
+    client.court_rate = payload.court_rate
+    client.notice_rate = payload.notice_rate
+    client.rti_rate = payload.rti_rate
+    client.hospital_rate = payload.hospital_rate
+    client.is_active = payload.is_active
+    client.save()
+
+    return {"success": True, "message": "Client updated successfully"}
+
+
+@router.delete(
+    "/clients/{client_id}",
+    summary="Delete Client",
+    description="Delete a client. Admin access required."
+)
+def delete_client(request: HttpRequest, client_id: int):
+    """Delete a client."""
+    if not is_admin_or_super_admin(request.user):
+        raise HttpError(403, "Admin access required")
+
+    from users.models import Client
+
+    try:
+        client = Client.objects.get(id=client_id)
+    except Client.DoesNotExist:
+        raise HttpError(404, "Client not found")
+
+    client.delete()
+    return {"success": True, "message": "Client deleted successfully"}
 
 
 @router.get(

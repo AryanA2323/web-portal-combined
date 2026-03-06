@@ -64,6 +64,11 @@ class VendorCasesListResponse(Schema):
     statistics: dict
 
 
+class ApiErrorSchema(Schema):
+    """Generic API error response."""
+    error: str
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -208,7 +213,7 @@ _CHECK_DETAIL_COLUMNS = {
     'claimant_checks': {
         'select': '''cc.id, cc.case_id, cc.check_status,
                      cc.claimant_name, cc.claimant_contact, cc.claimant_address,
-                     cc.claimant_income, cc.statement, cc.observation, cc.evidence''',
+                     cc.claimant_income, cc.statement, cc.observation, cc.vendor_evidence AS evidence''',
         'alias': 'cc',
         'fields': ['id','case_id','check_status','claimant_name','claimant_contact',
                     'claimant_address','claimant_income','statement','observation','evidence'],
@@ -217,7 +222,7 @@ _CHECK_DETAIL_COLUMNS = {
         'select': '''ic.id, ic.case_id, ic.check_status,
                      ic.insured_name, ic.insured_contact, ic.insured_address,
                      ic.policy_number, ic.policy_period, ic.rc, ic.permit,
-                     ic.statement, ic.observation, ic.evidence''',
+                     ic.statement, ic.observation, ic.vendor_evidence AS evidence''',
         'alias': 'ic',
         'fields': ['id','case_id','check_status','insured_name','insured_contact',
                     'insured_address','policy_number','policy_period','rc','permit',
@@ -227,7 +232,7 @@ _CHECK_DETAIL_COLUMNS = {
         'select': '''dc.id, dc.case_id, dc.check_status,
                      dc.driver_name, dc.driver_contact, dc.driver_address,
                      dc.dl, dc.permit, dc.occupation,
-                     dc.statement, dc.observation, dc.evidence''',
+                     dc.statement, dc.observation, dc.vendor_evidence AS evidence''',
         'alias': 'dc',
         'fields': ['id','case_id','check_status','driver_name','driver_contact',
                     'driver_address','dl','permit','occupation',
@@ -237,7 +242,7 @@ _CHECK_DETAIL_COLUMNS = {
         'select': '''sc.id, sc.case_id, sc.check_status,
                      sc.place_of_accident, sc.police_station, sc.district,
                      sc.fir_number, sc.time_of_accident, sc.accident_brief,
-                     sc.observations, sc.evidence''',
+                     sc.observations, sc.vendor_evidence AS evidence''',
         'alias': 'sc',
         'fields': ['id','case_id','check_status','place_of_accident','police_station',
                     'district','fir_number','time_of_accident','accident_brief',
@@ -247,7 +252,7 @@ _CHECK_DETAIL_COLUMNS = {
         'select': '''cs.id, cs.case_id, cs.check_status,
                      cs.court_name, cs.fir_number, cs.mv_act,
                      cs.fir_delay_days, cs.bsn_section, cs.ipc,
-                     cs.statement, cs.observations, cs.evidence''',
+                     cs.statement, cs.observations, cs.vendor_evidence AS evidence''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
@@ -321,6 +326,7 @@ def get_vendor_assigned_checks(request: HttpRequest):
 
 @router.get(
     "/vendor-check-detail/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
     summary="Get Vendor Check Detail",
     description="Get case details + specific check details for a vendor-assigned check.",
 )
@@ -393,8 +399,13 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
             evidence_list = []
             if evidence_raw:
                 try:
-                    evidence_list = json.loads(evidence_raw)
-                except (json.JSONDecodeError, TypeError):
+                    if isinstance(evidence_raw, list):
+                        evidence_list = evidence_raw
+                    elif isinstance(evidence_raw, str):
+                        evidence_list = json.loads(evidence_raw)
+                    else:
+                        evidence_list = []
+                except (json.JSONDecodeError, TypeError, ValueError):
                     evidence_list = []
             check_detail['evidence_photos'] = evidence_list
 
@@ -412,8 +423,9 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
 
 @router.post(
     "/vendor-check-upload/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
     summary="Upload Evidence to Check",
-    description="Upload evidence photo and store path in the check's evidence column.",
+    description="Upload evidence photo and store path in the check's vendor_evidence column.",
 )
 def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type: str):
     """Upload evidence photo for a vendor-assigned check."""
@@ -433,14 +445,11 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
     if not table:
         return 400, {"error": f"Unknown check type '{check_type}'"}
 
-    meta = _CHECK_DETAIL_COLUMNS[table]
-    alias = meta['alias']
-
     # Verify the check is assigned to this vendor
     try:
         with connections['default'].cursor() as cursor:
             cursor.execute(f"""
-                SELECT id, evidence FROM {table}
+                SELECT id, vendor_evidence FROM {table}
                 WHERE case_id = %s AND assigned_vendor_id = %s
             """, [case_id, vendor_id])
             check_row = cursor.fetchone()
@@ -461,8 +470,11 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
     evidence_list = []
     if existing_evidence:
         try:
-            evidence_list = json.loads(existing_evidence)
-        except (json.JSONDecodeError, TypeError):
+            if isinstance(existing_evidence, list):
+                evidence_list = existing_evidence
+            elif isinstance(existing_evidence, str):
+                evidence_list = json.loads(existing_evidence)
+        except (json.JSONDecodeError, TypeError, ValueError):
             evidence_list = []
 
     upload_dir = os.path.join(
@@ -492,11 +504,11 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
         uploaded.append(evidence_entry)
         logger.info(f"[Evidence] Saved {filename} for case={case_id} check={check_type}")
 
-    # Update the check table's evidence column
+    # Update the check table's vendor_evidence column
     try:
         with connections['default'].cursor() as cursor:
             cursor.execute(f"""
-                UPDATE {table} SET evidence = %s, updated_at = NOW()
+                UPDATE {table} SET vendor_evidence = %s, updated_at = NOW()
                 WHERE id = %s
             """, [json.dumps(evidence_list), check_id])
     except Exception as e:

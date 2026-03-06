@@ -52,6 +52,7 @@ const ADMIN_PAGES = [
   { path: '/admin/cases', label: 'Cases' },
   { path: '/admin/email-intake', label: 'Email Intake' },
   { path: '/admin/users', label: 'Users' },
+  { path: '/admin/clients', label: 'Clients' },
   { path: '/admin/ai-brief', label: 'AI Brief Review' },
   { path: '/admin/legal-review', label: 'Legal Review' },
   { path: '/admin/process-document', label: 'Process Document' },

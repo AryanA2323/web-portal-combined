@@ -216,10 +216,26 @@ const NewCasePage = () => {
     rto_rc_number: '',
   });
 
+  // Client list for dropdown
+  const [clientsList, setClientsList] = useState([]);
+
   // Court details dropdown options
   const [courtCities, setCourtCities] = useState([]);
   const [spotPoliceStations, setSpotPoliceStations] = useState([]);
   const [chargesheetCourts, setChargesheetCourts] = useState([]);
+
+  // Fetch clients on mount
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const res = await api.get('/clients');
+        setClientsList(res.data || []);
+      } catch (err) {
+        console.error('Failed to fetch clients:', err);
+      }
+    };
+    fetchClients();
+  }, []);
 
   // Fetch cities on mount
   useEffect(() => {
@@ -635,15 +651,22 @@ const NewCasePage = () => {
                     />
                   </Grid>
                   <Grid item xs={12} sm={5}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Client Name"
-                      name="client_name"
-                      value={commonFields.client_name}
-                      onChange={handleCommonFieldChange}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                    />
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Client Name</InputLabel>
+                      <Select
+                        name="client_name"
+                        value={commonFields.client_name}
+                        onChange={handleCommonFieldChange}
+                        label="Client Name"
+                        sx={{ borderRadius: '8px' }}
+                      >
+                        {clientsList.map((client) => (
+                          <MenuItem key={client.id} value={`${client.client_name} – ${client.client_code}`}>
+                            {client.client_name} – {client.client_code}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid item xs={12} sm={2}>
                     <FormControl fullWidth size="small">

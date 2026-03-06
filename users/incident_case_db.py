@@ -188,7 +188,8 @@ def insert_case(claim_number, client_name, category,
                 sla='', case_type='',
                 investigation_report_status='Open',
                 full_case_status='WIP',
-                scope_of_work=''):
+                scope_of_work='',
+                case_number=''):
     """
     Insert a row into incident_case_db.cases.
     Lets Postgres auto-generate the id.
@@ -213,14 +214,14 @@ def insert_case(claim_number, client_name, category,
                      completion_date, completion_month,
                      case_due_date, tat_days, sla, case_type,
                      investigation_report_status, full_case_status,
-                     scope_of_work, created_at, updated_at)
+                     scope_of_work, case_number, created_at, updated_at)
                 VALUES
                     (%s, %s, %s,
                      %s, %s,
                      %s, %s,
                      %s, %s, %s, %s,
                      %s, %s,
-                     %s, NOW(), NOW())
+                     %s, %s, NOW(), NOW())
                 RETURNING id
             """, [
                 claim_number, client_name or '', category or '',
@@ -228,7 +229,7 @@ def insert_case(claim_number, client_name, category,
                 completion_date, completion_month or '',
                 case_due_date, tat_days, sla_val, case_type,
                 investigation_report_status, full_case_status,
-                scope_of_work or '',
+                scope_of_work or '', case_number or '',
             ])
             new_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted case id={new_id} claim={claim_number}")

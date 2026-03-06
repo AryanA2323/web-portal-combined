@@ -11,4 +11,5 @@ export { default as ReportsPage } from './ReportsPage';
 export { default as AuditLogsPage } from './AuditLogsPage';
 export { default as SettingsPage } from './SettingsPage';
 export { default as CheckDetailPage } from './CheckDetailPage';
+export { default as ClientsPage } from './ClientsPage';
 
