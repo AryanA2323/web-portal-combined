@@ -760,7 +760,15 @@ def get_cases_incident_db(
 
 
 def _fetch_ai_brief_case_context(case_id: int) -> dict:
-    """Fetch concise case context for AI brief generation."""
+    """Fetch comprehensive case context for AI report generation.
+
+    Includes all key fields needed for a complete investigation report:
+    - Case number and claim number
+    - Incident location and date
+    - Client details
+    - Vendor details
+    - Investigation summary
+    """
     with connections['default'].cursor() as cursor:
         cursor.execute(
             """
@@ -771,8 +779,51 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
                 c.client_name,
                 c.case_type,
                 c.investigation_report_status,
+                c.full_case_status,
+                c.scope_of_work,
+                c.case_receive_date,
+                c.category,
+                -- Incident brief from spot check
                 COALESCE(sc.accident_brief, '') AS incident_brief,
-                CONCAT_WS(', ', NULLIF(sc.place_of_accident, ''), NULLIF(sc.district, ''), NULLIF(sc.police_station, '')) AS incident_location,
+                -- Incident date/time from spot check
+                COALESCE(sc.time_of_accident, '') AS incident_date,
+                -- Full incident location details
+                CONCAT_WS(', ',
+                    NULLIF(sc.place_of_accident, ''),
+                    NULLIF(sc.city, ''),
+                    NULLIF(sc.district, ''),
+                    NULLIF(sc.police_station, '')
+                ) AS incident_location,
+                -- FIR details
+                COALESCE(sc.fir_number, '') AS fir_number,
+                -- Claimant details
+                COALESCE(
+                    (SELECT claimant_name FROM claimant_checks WHERE case_id = c.id LIMIT 1),
+                    ''
+                ) AS claimant_name,
+                COALESCE(
+                    (SELECT claimant_address FROM claimant_checks WHERE case_id = c.id LIMIT 1),
+                    ''
+                ) AS claimant_address,
+                -- Insured details
+                COALESCE(
+                    (SELECT insured_name FROM insured_checks WHERE case_id = c.id LIMIT 1),
+                    ''
+                ) AS insured_name,
+                COALESCE(
+                    (SELECT insured_address FROM insured_checks WHERE case_id = c.id LIMIT 1),
+                    ''
+                ) AS insured_address,
+                COALESCE(
+                    (SELECT policy_number FROM insured_checks WHERE case_id = c.id LIMIT 1),
+                    ''
+                ) AS policy_number,
+                -- Driver details
+                COALESCE(
+                    (SELECT driver_name FROM driver_checks WHERE case_id = c.id LIMIT 1),
+                    ''
+                ) AS driver_name,
+                -- Assigned vendor name (from any check type)
                 COALESCE(
                     (SELECT uv.company_name FROM claimant_checks cc LEFT JOIN users_vendor uv ON uv.id = cc.assigned_vendor_id WHERE cc.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
                     (SELECT uv.company_name FROM insured_checks ic LEFT JOIN users_vendor uv ON uv.id = ic.assigned_vendor_id WHERE ic.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
@@ -794,6 +845,11 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
     if not row:
         raise HttpError(404, f"Case id={case_id} not found")
 
+    # Format case_receive_date if present
+    case_receive_date = row[8]
+    if case_receive_date:
+        case_receive_date = case_receive_date.strftime('%Y-%m-%d') if hasattr(case_receive_date, 'strftime') else str(case_receive_date)
+
     return {
         "case_id": row[0],
         "case_number": row[1],
@@ -801,9 +857,21 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
         "client_name": row[3],
         "case_type": row[4],
         "investigation_report_status": row[5],
-        "incident_brief": row[6],
-        "incident_location": row[7],
-        "assigned_vendor_name": row[8],
+        "full_case_status": row[6],
+        "scope_of_work": row[7],
+        "case_receive_date": case_receive_date or "",
+        "category": row[9],
+        "incident_brief": row[10],
+        "incident_date": row[11],
+        "incident_location": row[12],
+        "fir_number": row[13],
+        "claimant_name": row[14],
+        "claimant_address": row[15],
+        "insured_name": row[16],
+        "insured_address": row[17],
+        "policy_number": row[18],
+        "driver_name": row[19],
+        "assigned_vendor_name": row[20],
     }
 
 

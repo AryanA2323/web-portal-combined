@@ -61,30 +61,105 @@ class AIBriefService:
         return images
 
     def _build_context_block(self, case_context: Dict[str, Any]) -> str:
-        """Build the case context block used in prompts."""
-        context_lines = [
+        """Build the comprehensive case context block used in prompts.
+
+        Includes all key case details organized by section:
+        - Case Information
+        - Incident Details
+        - Client Information
+        - Vendor Information
+        - People Involved
+        - Investigation Summary
+        """
+        sections = []
+
+        # Case Information
+        case_info = [
             f"Case Number: {case_context.get('case_number') or 'N/A'}",
             f"Claim Number: {case_context.get('claim_number') or 'N/A'}",
-            f"Client Name: {case_context.get('client_name') or 'N/A'}",
             f"Case Type: {case_context.get('case_type') or 'N/A'}",
-            f"Assigned Vendor: {case_context.get('assigned_vendor_name') or case_context.get('assigned_vendor') or 'N/A'}",
-            f"Incident Brief: {case_context.get('incident_brief') or 'N/A'}",
-            f"Location: {case_context.get('incident_location') or 'N/A'}",
-            f"Investigation Status: {case_context.get('investigation_report_status') or 'N/A'}",
+            f"Category: {case_context.get('category') or 'N/A'}",
+            f"Case Receive Date: {case_context.get('case_receive_date') or 'N/A'}",
         ]
-        return "\n".join(context_lines)
+        sections.append("=== CASE INFORMATION ===\n" + "\n".join(case_info))
+
+        # Incident Details
+        incident_info = [
+            f"Incident Date/Time: {case_context.get('incident_date') or 'N/A'}",
+            f"Incident Location: {case_context.get('incident_location') or 'N/A'}",
+            f"FIR Number: {case_context.get('fir_number') or 'N/A'}",
+            f"Incident Brief: {case_context.get('incident_brief') or 'N/A'}",
+        ]
+        sections.append("=== INCIDENT DETAILS ===\n" + "\n".join(incident_info))
+
+        # Client Information
+        client_info = [
+            f"Client Name: {case_context.get('client_name') or 'N/A'}",
+            f"Policy Number: {case_context.get('policy_number') or 'N/A'}",
+        ]
+        sections.append("=== CLIENT DETAILS ===\n" + "\n".join(client_info))
+
+        # Vendor Information
+        vendor_info = [
+            f"Assigned Vendor: {case_context.get('assigned_vendor_name') or 'N/A'}",
+        ]
+        sections.append("=== VENDOR DETAILS ===\n" + "\n".join(vendor_info))
+
+        # People Involved
+        people_info = []
+        if case_context.get('insured_name'):
+            insured_addr = case_context.get('insured_address') or ''
+            people_info.append(f"Insured: {case_context.get('insured_name')}" + (f" ({insured_addr})" if insured_addr else ""))
+        if case_context.get('claimant_name'):
+            claimant_addr = case_context.get('claimant_address') or ''
+            people_info.append(f"Claimant: {case_context.get('claimant_name')}" + (f" ({claimant_addr})" if claimant_addr else ""))
+        if case_context.get('driver_name'):
+            people_info.append(f"Driver: {case_context.get('driver_name')}")
+        if not people_info:
+            people_info.append("No party information available")
+        sections.append("=== PARTIES INVOLVED ===\n" + "\n".join(people_info))
+
+        # Investigation Summary
+        inv_info = [
+            f"Investigation Status: {case_context.get('investigation_report_status') or 'N/A'}",
+            f"Full Case Status: {case_context.get('full_case_status') or 'N/A'}",
+            f"Scope of Work: {case_context.get('scope_of_work') or 'N/A'}",
+        ]
+        sections.append("=== INVESTIGATION SUMMARY ===\n" + "\n".join(inv_info))
+
+        return "\n\n".join(sections)
 
     _SYSTEM_INSTRUCTION = (
         "You are assisting an insurance incident-management admin team. "
-        "Read the vendor statement and the case context, then produce a factual, concise report. "
-        "Do not invent facts. If something is unclear, say that it is not stated.\n\n"
-        "Return the response in exactly this format:\n"
-        "Vendor Statement Summary:\n"
-        "- 3 to 6 short bullet points\n\n"
-        "Incident Summary:\n"
-        "- one short paragraph, maximum 120 words\n\n"
-        "Recommended Review Notes:\n"
-        "- 2 to 4 short bullet points for the admin reviewer"
+        "Read the vendor statement and the case context carefully, then produce a comprehensive, factual investigation report. "
+        "Do not invent facts. If information is not available or unclear, state that it is not mentioned.\n\n"
+        "Return the response in exactly this structured format with clear section headers:\n\n"
+        "## CASE INFORMATION\n"
+        "- Case Number: [from context]\n"
+        "- Claim Number: [from context]\n"
+        "- Case Type: [from context]\n"
+        "- Case Receive Date: [from context]\n\n"
+        "## INCIDENT DETAILS\n"
+        "- Incident Date/Time: [from context or vendor statement]\n"
+        "- Incident Location: [full location from context]\n"
+        "- FIR Number: [if available]\n"
+        "- Brief Description: [1-2 sentences summarizing incident]\n\n"
+        "## CLIENT DETAILS\n"
+        "- Client/Insurance Company: [from context]\n"
+        "- Policy Number: [if available]\n\n"
+        "## VENDOR DETAILS\n"
+        "- Investigating Vendor: [from context]\n"
+        "- Investigation Status: [from context]\n\n"
+        "## PARTIES INVOLVED\n"
+        "- Insured: [name and address if available]\n"
+        "- Claimant: [name and address if available]\n"
+        "- Driver: [name if available]\n\n"
+        "## VENDOR STATEMENT SUMMARY\n"
+        "- 4 to 6 bullet points summarizing key findings from the vendor statement\n\n"
+        "## INVESTIGATION SUMMARY\n"
+        "- A concise paragraph (100-150 words) summarizing the investigation findings, scope of work, and current status\n\n"
+        "## RECOMMENDED REVIEW NOTES\n"
+        "- 3 to 5 action items or observations for the admin reviewer to consider"
     )
 
     def build_prompt(self, case_context: Dict[str, Any], statement_text: str) -> str:
@@ -108,9 +183,9 @@ class AIBriefService:
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
                 "top_p": 0.8,
-                "max_tokens": 900,
+                "max_tokens": 1500,
             },
-            timeout=45,
+            timeout=60,
         )
         return self._parse_response(response)
 
@@ -146,9 +221,9 @@ class AIBriefService:
                 "messages": [{"role": "user", "content": content}],
                 "temperature": 0.3,
                 "top_p": 0.8,
-                "max_tokens": 900,
+                "max_tokens": 1500,
             },
-            timeout=60,
+            timeout=90,
         )
         return self._parse_response(response)
 
