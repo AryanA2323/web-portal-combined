@@ -17,13 +17,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-your-secret-key-here-change-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = False
 
 ALLOWED_HOSTS = [
     '*',
     '192.168.31.164',
     'localhost',
     '127.0.0.1',
+    "claimverify.shovelsolutions.in",
 ]
 
 
@@ -117,7 +118,7 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -193,6 +194,10 @@ OUTLOOK_TENANT_ID = os.environ.get('OUTLOOK_TENANT_ID', 'common')
 # Geocoding API Keys
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
 AZURE_MAPS_API_KEY = os.environ.get('AZURE_MAPS_API_KEY', '')
+
+# AI API Keys
+GROK_API_KEY = os.environ.get('GROK_API_KEY', '')
+
 
 # Logging
 LOGGING = {

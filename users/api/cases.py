@@ -10,6 +10,9 @@ from ninja.errors import HttpError
 from ninja.pagination import paginate, PageNumberPagination
 from django.db import connection, connections
 from django.http import HttpRequest
+from django.core.files.uploadedfile import UploadedFile
+
+from users.services.ai_brief_service import AIBriefGenerationError, AIBriefService
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +193,14 @@ class RecentActivitySchema(Schema):
     type: str
     text: str
     time: str
+
+
+class AIBriefReportResponse(Schema):
+    """AI brief generation response."""
+    case_id: int
+    case_number: str
+    report_text: str
+    statement_excerpt: str
 
 
 class CreateCaseSchema(Schema):
@@ -386,6 +397,8 @@ def get_cases_incident_db(
     search: Optional[str] = None,
     full_case_status: Optional[str] = None,
     case_type: Optional[str] = None,
+    investigation_report_status: Optional[str] = None,
+    assigned_vendor_name: Optional[str] = None,
 ):
     """
     Returns paginated cases from incident_case_db.cases joined with all 5 check
@@ -406,6 +419,21 @@ def get_cases_incident_db(
             if case_type:
                 conditions.append("c.case_type = %s")
                 params.append(case_type)
+
+            if investigation_report_status:
+                conditions.append("c.investigation_report_status = %s")
+                params.append(investigation_report_status)
+
+            if assigned_vendor_name:
+                conditions.append("EXISTS (SELECT 1 FROM claimant_checks cc LEFT JOIN users_vendor uv ON uv.id = cc.assigned_vendor_id WHERE cc.case_id = c.id AND uv.company_name ILIKE %s) OR "
+                                  "EXISTS (SELECT 1 FROM insured_checks ic LEFT JOIN users_vendor uv ON uv.id = ic.assigned_vendor_id WHERE ic.case_id = c.id AND uv.company_name ILIKE %s) OR "
+                                  "EXISTS (SELECT 1 FROM driver_checks dc LEFT JOIN users_vendor uv ON uv.id = dc.assigned_vendor_id WHERE dc.case_id = c.id AND uv.company_name ILIKE %s) OR "
+                                  "EXISTS (SELECT 1 FROM spot_checks sc LEFT JOIN users_vendor uv ON uv.id = sc.assigned_vendor_id WHERE sc.case_id = c.id AND uv.company_name ILIKE %s) OR "
+                                  "EXISTS (SELECT 1 FROM chargesheets cs LEFT JOIN users_vendor uv ON uv.id = cs.assigned_vendor_id WHERE cs.case_id = c.id AND uv.company_name ILIKE %s) OR "
+                                  "EXISTS (SELECT 1 FROM rti_checks rt LEFT JOIN users_vendor uv ON uv.id = rt.assigned_vendor_id WHERE rt.case_id = c.id AND uv.company_name ILIKE %s) OR "
+                                  "EXISTS (SELECT 1 FROM rto_checks ro LEFT JOIN users_vendor uv ON uv.id = ro.assigned_vendor_id WHERE ro.case_id = c.id AND uv.company_name ILIKE %s)")
+                vendor_param = f"%{assigned_vendor_name}%"
+                params.extend([vendor_param] * 7)
 
             if search:
                 conditions.append(
@@ -729,6 +757,98 @@ def get_cases_incident_db(
     except Exception as exc:
         logger.error(f"Failed to fetch cases from incident_case_db: {exc}")
         return {"cases": [], "total": 0}
+
+
+def _fetch_ai_brief_case_context(case_id: int) -> dict:
+    """Fetch concise case context for AI brief generation."""
+    with connections['default'].cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                c.id,
+                c.case_number,
+                c.claim_number,
+                c.client_name,
+                c.case_type,
+                c.investigation_report_status,
+                COALESCE(sc.accident_brief, '') AS incident_brief,
+                CONCAT_WS(', ', NULLIF(sc.place_of_accident, ''), NULLIF(sc.district, ''), NULLIF(sc.police_station, '')) AS incident_location,
+                COALESCE(
+                    (SELECT uv.company_name FROM claimant_checks cc LEFT JOIN users_vendor uv ON uv.id = cc.assigned_vendor_id WHERE cc.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
+                    (SELECT uv.company_name FROM insured_checks ic LEFT JOIN users_vendor uv ON uv.id = ic.assigned_vendor_id WHERE ic.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
+                    (SELECT uv.company_name FROM driver_checks dc LEFT JOIN users_vendor uv ON uv.id = dc.assigned_vendor_id WHERE dc.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
+                    (SELECT uv.company_name FROM spot_checks sp LEFT JOIN users_vendor uv ON uv.id = sp.assigned_vendor_id WHERE sp.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
+                    (SELECT uv.company_name FROM chargesheets ch LEFT JOIN users_vendor uv ON uv.id = ch.assigned_vendor_id WHERE ch.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
+                    (SELECT uv.company_name FROM rti_checks rt LEFT JOIN users_vendor uv ON uv.id = rt.assigned_vendor_id WHERE rt.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
+                    (SELECT uv.company_name FROM rto_checks ro LEFT JOIN users_vendor uv ON uv.id = ro.assigned_vendor_id WHERE ro.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
+                    ''
+                ) AS assigned_vendor_name
+            FROM cases c
+            LEFT JOIN spot_checks sc ON sc.case_id = c.id
+            WHERE c.id = %s
+            """,
+            [case_id],
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        raise HttpError(404, f"Case id={case_id} not found")
+
+    return {
+        "case_id": row[0],
+        "case_number": row[1],
+        "claim_number": row[2],
+        "client_name": row[3],
+        "case_type": row[4],
+        "investigation_report_status": row[5],
+        "incident_brief": row[6],
+        "incident_location": row[7],
+        "assigned_vendor_name": row[8],
+    }
+
+
+@router.post(
+    "/cases/incident-db/{case_id}/ai-brief-report",
+    response={200: AIBriefReportResponse},
+    summary="Generate AI brief report",
+    description="Generate an AI brief report from an uploaded vendor statement PDF for an incident-db case.",
+)
+def generate_ai_brief_report(
+    request: HttpRequest,
+    case_id: int,
+):
+    """Generate an AI report from vendor statement PDF and case context."""
+    if not is_admin_or_super_admin(request.user):
+        raise HttpError(403, "Admin access required")
+
+    uploaded_file: UploadedFile | None = None
+    if hasattr(request, 'FILES'):
+        uploaded_file = request.FILES.get('statement_pdf')
+
+    if not uploaded_file:
+        raise HttpError(400, "statement_pdf file is required")
+
+    if not uploaded_file.name.lower().endswith('.pdf'):
+        raise HttpError(400, "Only PDF files are supported")
+
+    try:
+        case_context = _fetch_ai_brief_case_context(case_id)
+        service = AIBriefService()
+        result = service.generate_report(case_context, uploaded_file.read())
+        return {
+            "case_id": case_context["case_id"],
+            "case_number": case_context["case_number"] or "",
+            "report_text": result["report_text"],
+            "statement_excerpt": result["statement_text"][:1000],
+        }
+    except AIBriefGenerationError as exc:
+        logger.error(f"AI brief generation failed for case {case_id}: {exc}")
+        raise HttpError(400, str(exc))
+    except HttpError:
+        raise
+    except Exception as exc:
+        logger.error(f"Unexpected AI brief generation error for case {case_id}: {exc}")
+        raise HttpError(500, "Failed to generate AI brief report")
 
 
 # ---------------------------------------------------------------------------
