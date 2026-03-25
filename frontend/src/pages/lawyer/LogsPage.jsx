@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -13,42 +13,90 @@ import {
   Chip,
   TextField,
   InputAdornment,
-  IconButton,
+  CircularProgress,
+  Alert,
+  TablePagination,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
-import { Search, FilterList, FileDownload } from '@mui/icons-material';
+import { Search, FilterList, FileDownload, Description } from '@mui/icons-material';
 import LawyerLayout from './components/LawyerLayout';
-
-// Sample data
-const sampleLogs = [
-  { id: 'LOG-1005', caseId: '12342', clientName: 'Juan Doe', action: 'Accepted', initiatedBy: 'John Doe', timestamp: 'April 21, 2022 | 02:58 PM', status: 'accepted' },
-  { id: 'LOG-1004', caseId: '12341', clientName: 'Alice Johnson', action: 'Rejected', subAction: 'Sent back to vendor D (mestamp A)', initiatedBy: 'defense@lawfirm.com', timestamp: 'April 21, 2022 | 11:45AM', status: 'rejected' },
-  { id: 'LOG-1003', caseId: '12342', clientName: 'John Doe', action: 'Accepted', initiatedBy: 'John Doe', timestamp: 'June 16, 2022 | 11:31 AM', status: 'accepted' },
-  { id: 'LOG-1002', caseId: '12341', clientName: 'Alice Johnson', action: 'Rejected', subAction: 'Sent back to Vendor D (mestamp A)', initiatedBy: 'John Doe', timestamp: 'July 27, 2022 | 12:45 PM', status: 'rejected' },
-  { id: 'LOG-1001', caseId: '12342', clientName: 'John Doe', action: 'Accepted', initiatedBy: 'John Doe created', timestamp: 'July 22, 2022 | 11:30 AM', status: 'accepted' },
-  { id: 'LOG-1000', caseId: '12302', clientName: 'John Doe', action: 'Real Estate', initiatedBy: 'Vendor-C@investigations.com', timestamp: 'June 22, 2022 | 11:30 AM', status: 'estate' },
-  { id: 'LOG-1000', caseId: '12301', clientName: 'John Doe', action: 'Accepted', initiatedBy: 'John Doe', timestamp: 'June 22, 2022 | 11:30 AM', status: 'accepted' },
-];
+import api from '../../services/api';
 
 const LogsPage = () => {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  const getStatusColor = (status) => {
-    switch (status) {
+  // Detail dialog state
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedLog, setSelectedLog] = useState(null);
+
+  // Fetch logs
+  const fetchLogs = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.get('/lawyer/logs');
+      setLogs(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch logs:', err);
+      setError('Failed to load activity logs. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  const getStatusColor = (action) => {
+    switch (action.toLowerCase()) {
       case 'accepted':
         return { bg: '#27ae60', color: '#fff' };
       case 'rejected':
         return { bg: '#e74c3c', color: '#fff' };
-      case 'estate':
-        return { bg: '#34495e', color: '#fff' };
+      case 'pending review':
+        return { bg: '#f39c12', color: '#fff' };
       default:
-        return { bg: '#95a5a6', color: '#fff' };
+        return { bg: '#34495e', color: '#fff' };
     }
   };
 
-  const filteredLogs = sampleLogs.filter(log =>
-    log.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.caseId.includes(searchTerm) ||
-    log.id.toLowerCase().includes(searchTerm.toLowerCase())
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const handleViewDetails = (log) => {
+    setSelectedLog(log);
+    setDetailOpen(true);
+  };
+
+  // Filter logs based on search
+  const filteredLogs = logs.filter((log) =>
+    log.case_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.case_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.action?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const paginatedLogs = filteredLogs.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
   );
 
   return (
@@ -59,14 +107,20 @@ const LogsPage = () => {
             Home / Logs
           </Typography>
           <Typography variant="h4" fontWeight={700} sx={{ color: '#2c3e50', mb: 3 }}>
-            Logs
+            Activity Logs
           </Typography>
         </Box>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
 
         <Paper sx={{ overflow: 'hidden' }}>
           <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
             <TextField
-              placeholder="Search logs..."
+              placeholder="Search logs by case number, title, or client..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -93,110 +147,214 @@ const LogsPage = () => {
               >
                 Export
               </Button>
-              <Button
-                variant="contained"
-                sx={{
-                  backgroundColor: '#3498db',
-                  '&:hover': { backgroundColor: '#2980b9' },
-                }}
-              >
-                + New Logs
-              </Button>
             </Box>
           </Box>
 
           <Box sx={{ p: 2 }}>
-            <Button
-              variant="text"
-              startIcon={<FilterList />}
-              sx={{ mb: 2, color: '#34495e' }}
-            >
-              Advanced filter →
-            </Button>
-
-            <TableContainer>
-              <Table>
-                <TableHead sx={{ backgroundColor: '#f8f9fa' }}>
-                  <TableRow>
-                    <TableCell><strong>ID</strong></TableCell>
-                    <TableCell><strong>Case ID</strong></TableCell>
-                    <TableCell><strong>Client Name</strong></TableCell>
-                    <TableCell><strong>Action</strong></TableCell>
-                    <TableCell><strong>Initiated By</strong></TableCell>
-                    <TableCell><strong>Timestamp</strong></TableCell>
-                    <TableCell><strong>Actions</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredLogs.map((log) => {
-                    const statusStyle = getStatusColor(log.status);
-                    return (
-                      <TableRow key={`${log.id}-${log.caseId}`} hover>
-                        <TableCell>{log.id}</TableCell>
-                        <TableCell>{log.caseId}</TableCell>
-                        <TableCell>{log.clientName}</TableCell>
-                        <TableCell>
-                          <Box>
-                            <Chip
-                              label={log.action}
-                              size="small"
-                              sx={{
-                                backgroundColor: statusStyle.bg,
-                                color: statusStyle.color,
-                                fontWeight: 500,
-                              }}
-                            />
-                            {log.subAction && (
-                              <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                                {log.subAction}
-                              </Typography>
-                            )}
-                          </Box>
-                        </TableCell>
-                        <TableCell>{log.initiatedBy}</TableCell>
-                        <TableCell>{log.timestamp}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="contained"
-                            size="small"
-                            sx={{
-                              backgroundColor: '#34495e',
-                              '&:hover': { backgroundColor: '#2c3e50' },
-                            }}
-                          >
-                            Review
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            {filteredLogs.length === 0 && (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography color="text.secondary">No logs found</Typography>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
               </Box>
+            ) : (
+              <>
+                <TableContainer>
+                  <Table>
+                    <TableHead sx={{ backgroundColor: '#f8f9fa' }}>
+                      <TableRow>
+                        <TableCell><strong>Log ID</strong></TableCell>
+                        <TableCell><strong>Case Number</strong></TableCell>
+                        <TableCell><strong>Client Name</strong></TableCell>
+                        <TableCell><strong>Action</strong></TableCell>
+                        <TableCell><strong>Reviewed At</strong></TableCell>
+                        <TableCell><strong>Notes</strong></TableCell>
+                        <TableCell><strong>Actions</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {paginatedLogs.map((log) => {
+                        const statusStyle = getStatusColor(log.action);
+                        return (
+                          <TableRow key={log.id} hover>
+                            <TableCell>
+                              <Typography sx={{ color: '#667eea', fontWeight: 600 }}>
+                                LOG-{log.id}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography sx={{ fontWeight: 500 }}>
+                                {log.case_number}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                {log.case_title?.substring(0, 30)}{log.case_title?.length > 30 ? '...' : ''}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>{log.client_name || '-'}</TableCell>
+                            <TableCell>
+                              <Chip
+                                label={log.action}
+                                size="small"
+                                sx={{
+                                  backgroundColor: statusStyle.bg,
+                                  color: statusStyle.color,
+                                  fontWeight: 500,
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {formatDate(log.reviewed_at || log.assigned_at)}
+                            </TableCell>
+                            <TableCell>
+                              <Typography
+                                sx={{
+                                  maxWidth: 200,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {log.review_notes || '-'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="contained"
+                                size="small"
+                                onClick={() => handleViewDetails(log)}
+                                sx={{
+                                  backgroundColor: '#34495e',
+                                  '&:hover': { backgroundColor: '#2c3e50' },
+                                }}
+                              >
+                                View
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                {filteredLogs.length === 0 && (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <Description sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />
+                    <Typography color="text.secondary">
+                      {logs.length === 0 ? 'No activity logs yet' : 'No logs match your search'}
+                    </Typography>
+                  </Box>
+                )}
+
+                <TablePagination
+                  component="div"
+                  count={filteredLogs.length}
+                  page={page}
+                  onPageChange={(e, newPage) => setPage(newPage)}
+                  rowsPerPage={rowsPerPage}
+                  onRowsPerPageChange={(e) => {
+                    setRowsPerPage(parseInt(e.target.value, 10));
+                    setPage(0);
+                  }}
+                  rowsPerPageOptions={[10, 25, 50]}
+                />
+              </>
             )}
-
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 3 }}>
-              <Button variant="outlined" size="small">Prev</Button>
-              <Button variant="contained" size="small">1</Button>
-              <Button variant="outlined" size="small">2</Button>
-              <Button variant="outlined" size="small">3</Button>
-              <Button variant="outlined" size="small">Next →</Button>
-            </Box>
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
-              Showing 1 to 6 of 108 log entries
-            </Typography>
           </Box>
         </Paper>
 
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 3 }}>
-          © 2024 Lawyer Portal. All rights reserved.
-        </Typography>
+        {/* Log Detail Dialog */}
+        <Dialog
+          open={detailOpen}
+          onClose={() => setDetailOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Description />
+            Log Details - LOG-{selectedLog?.id}
+          </DialogTitle>
+          <DialogContent>
+            {selectedLog && (
+              <Box sx={{ mt: 1 }}>
+                <Box sx={{ mb: 2 }}>
+                  <Chip
+                    label={selectedLog.action}
+                    sx={{
+                      backgroundColor: getStatusColor(selectedLog.action).bg,
+                      color: getStatusColor(selectedLog.action).color,
+                      fontWeight: 600,
+                    }}
+                  />
+                </Box>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  Case Number
+                </Typography>
+                <Typography sx={{ mb: 2, color: '#667eea' }}>
+                  {selectedLog.case_number}
+                </Typography>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  Case Title
+                </Typography>
+                <Typography sx={{ mb: 2 }}>
+                  {selectedLog.case_title}
+                </Typography>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  Client
+                </Typography>
+                <Typography sx={{ mb: 2 }}>
+                  {selectedLog.client_name || 'N/A'}
+                </Typography>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  Assigned At
+                </Typography>
+                <Typography sx={{ mb: 2 }}>
+                  {formatDate(selectedLog.assigned_at)}
+                </Typography>
+
+                {selectedLog.reviewed_at && (
+                  <>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      Reviewed At
+                    </Typography>
+                    <Typography sx={{ mb: 2 }}>
+                      {formatDate(selectedLog.reviewed_at)}
+                    </Typography>
+                  </>
+                )}
+
+                {selectedLog.review_notes && (
+                  <>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      Review Notes
+                    </Typography>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 2,
+                        backgroundColor: selectedLog.action === 'Rejected' ? '#fff5f5' : '#f0fff4',
+                        border: `1px solid ${selectedLog.action === 'Rejected' ? '#ffc9c9' : '#b2f2bb'}`,
+                        borderRadius: '8px',
+                      }}
+                    >
+                      {selectedLog.review_notes}
+                    </Paper>
+                  </>
+                )}
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button
+              onClick={() => setDetailOpen(false)}
+              sx={{ textTransform: 'none' }}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </LawyerLayout>
   );

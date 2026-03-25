@@ -1,14 +1,16 @@
-import { Box, Typography, Paper, Card, CardContent, Divider } from '@mui/material';
-import { Assessment, CheckCircle, Pending, Archive, Description, CheckCircleOutline, CancelOutlined } from '@mui/icons-material';
+import { useState, useEffect } from 'react';
+import { Box, Typography, Paper, Card, CardContent, Divider, CircularProgress, Alert } from '@mui/material';
+import { Assessment, CheckCircle, Pending, Cancel, Description, CheckCircleOutline, CancelOutlined } from '@mui/icons-material';
 import LawyerLayout from './components/LawyerLayout';
+import api from '../../services/api';
 
-const StatCard = ({ title, value, icon: Icon, color, bgColor }) => (
+const StatCard = ({ title, value, icon: Icon, color, bgColor, loading }) => (
   <Card sx={{ height: '100%', boxShadow: 2 }}>
     <CardContent>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box>
           <Typography variant="h4" fontWeight={700} sx={{ color: color, mb: 1 }}>
-            {value}
+            {loading ? <CircularProgress size={24} /> : value}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {title}
@@ -32,30 +34,83 @@ const StatCard = ({ title, value, icon: Icon, color, bgColor }) => (
 );
 
 const DashboardPage = () => {
-  const stats = [
-    { title: 'Total Reports', value: '108', icon: Assessment, color: '#3498db', bgColor: '#e3f2fd' },
-    { title: 'Pending Review', value: '33', icon: Pending, color: '#f39c12', bgColor: '#fff3e0' },
-    { title: 'Reviewed', value: '75', icon: CheckCircle, color: '#27ae60', bgColor: '#e8f5e9' },
-    { title: 'Archived', value: '12', icon: Archive, color: '#95a5a6', bgColor: '#f5f5f5' },
+  const [stats, setStats] = useState({
+    total: 0,
+    pending: 0,
+    accepted: 0,
+    rejected: 0,
+  });
+  const [recentReports, setRecentReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [statsRes, reportsRes] = await Promise.all([
+          api.get('/lawyer/reports/stats'),
+          api.get('/lawyer/reports'),
+        ]);
+        setStats(statsRes.data || { total: 0, pending: 0, accepted: 0, rejected: 0 });
+        // Get last 5 reports for recent activity
+        setRecentReports((reportsRes.data || []).slice(0, 5));
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+        setError('Failed to load dashboard data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const statCards = [
+    { title: 'Total Reports', value: stats.total, icon: Assessment, color: '#3498db', bgColor: '#e3f2fd' },
+    { title: 'Pending Review', value: stats.pending, icon: Pending, color: '#f39c12', bgColor: '#fff3e0' },
+    { title: 'Accepted', value: stats.accepted, icon: CheckCircle, color: '#27ae60', bgColor: '#e8f5e9' },
+    { title: 'Rejected', value: stats.rejected, icon: Cancel, color: '#e74c3c', bgColor: '#ffebee' },
   ];
 
-  const recentActivities = [
-    { id: 1, vendor: 'Vendor A', action: 'submitted a Contract Dispute report', client: 'Jane Smith', time: '2 hours ago', type: 'submitted' },
-    { id: 2, action: 'accepted a Business Litigation report', client: 'ACME Corp.', time: '4 hours ago', type: 'accepted' },
-    { id: 3, vendor: 'Vendor C', action: 'submitted a Real Estate report', client: 'John Doe', time: '1 day ago', type: 'submitted' },
-    { id: 4, action: 'rejected a Personal Injury report', client: 'Juan Doe', time: '2 days ago', type: 'rejected' },
-    { id: 5, action: 'accepted a Family Law report', client: 'Alice Johnson', time: '3 days ago', type: 'accepted' },
-  ];
-
-  const getActivityIcon = (type) => {
-    switch (type) {
-      case 'accepted':
+  const getActivityIcon = (status) => {
+    switch (status) {
+      case 'ACCEPTED':
         return <CheckCircleOutline sx={{ color: '#27ae60', fontSize: 20 }} />;
-      case 'rejected':
+      case 'REJECTED':
         return <CancelOutlined sx={{ color: '#e74c3c', fontSize: 20 }} />;
       default:
         return <Description sx={{ color: '#3498db', fontSize: 20 }} />;
     }
+  };
+
+  const getActivityText = (report) => {
+    switch (report.status) {
+      case 'ACCEPTED':
+        return `You accepted the report for "${report.case_title}"`;
+      case 'REJECTED':
+        return `You rejected the report for "${report.case_title}"`;
+      case 'ASSIGNED':
+        return `Report assigned for "${report.case_title}" - pending review`;
+      default:
+        return `Report for "${report.case_title}"`;
+    }
+  };
+
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays === 1) return '1 day ago';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
   };
 
   return (
@@ -65,51 +120,62 @@ const DashboardPage = () => {
           Dashboard
         </Typography>
 
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
         <Box sx={{ display: 'flex', gap: 3, mb: 4 }}>
-          {stats.map((stat, index) => (
+          {statCards.map((stat, index) => (
             <Box key={index} sx={{ flex: 1 }}>
-              <StatCard {...stat} />
+              <StatCard {...stat} loading={loading} />
             </Box>
           ))}
         </Box>
 
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" fontWeight={600} sx={{ mb: 2, color: '#2c3e50' }}>
-            Recent Activity
+            Recent Reports
           </Typography>
           <Paper sx={{ p: 3 }}>
-            {recentActivities.map((activity, index) => (
-              <Box key={activity.id}>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 32, mt: 0.5 }}>
-                    {getActivityIcon(activity.type)}
-                  </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="body2" sx={{ color: '#333' }}>
-                      {activity.vendor && (
-                        <>
-                          <strong>{activity.vendor}</strong> {activity.action}
-                        </>
-                      )}
-                      {!activity.vendor && (
-                        <>
-                          <strong>You</strong> {activity.action}
-                        </>
-                      )}
-                      {activity.client && (
-                        <>
-                          {' '}for <strong>{activity.client}</strong>
-                        </>
-                      )}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#999', display: 'block', mt: 0.5 }}>
-                      {activity.time}
-                    </Typography>
-                  </Box>
-                </Box>
-                {index < recentActivities.length - 1 && <Divider sx={{ my: 2 }} />}
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress />
               </Box>
-            ))}
+            ) : recentReports.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 3, color: '#666' }}>
+                <Description sx={{ fontSize: 48, opacity: 0.3, mb: 1 }} />
+                <Typography color="text.secondary">No reports assigned yet</Typography>
+              </Box>
+            ) : (
+              recentReports.map((report, index) => (
+                <Box key={report.id}>
+                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 32, mt: 0.5 }}>
+                      {getActivityIcon(report.status)}
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" sx={{ color: '#333' }}>
+                        {getActivityText(report)}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#667eea', fontWeight: 600 }}>
+                        {report.case_number}
+                      </Typography>
+                      {report.client_name && (
+                        <Typography variant="caption" sx={{ color: '#666', ml: 1 }}>
+                          | Client: {report.client_name}
+                        </Typography>
+                      )}
+                      <Typography variant="caption" sx={{ color: '#999', display: 'block', mt: 0.5 }}>
+                        {formatTimeAgo(report.reviewed_at || report.assigned_at || report.created_at)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  {index < recentReports.length - 1 && <Divider sx={{ my: 2 }} />}
+                </Box>
+              ))
+            )}
           </Paper>
         </Box>
       </Box>

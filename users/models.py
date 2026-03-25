@@ -826,5 +826,66 @@ class CaseDocument(models.Model):
         return f"{self.case.claim_number} - {self.document_name}"
 
 
+class Report(models.Model):
+    """AI-generated reports for legal review."""
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        ASSIGNED = 'ASSIGNED', 'Assigned'
+        ACCEPTED = 'ACCEPTED', 'Accepted'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    case = models.ForeignKey(
+        InsuranceCase,
+        on_delete=models.CASCADE,
+        related_name='reports',
+    )
+    report_content = models.TextField(
+        help_text='AI-generated report content'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    assigned_lawyer = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_reports',
+        limit_choices_to={'role': CustomUser.Role.LAWYER},
+    )
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(
+        blank=True,
+        help_text='Lawyer review notes or rejection reason'
+    )
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_reports',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'reports'
+        indexes = [
+            models.Index(fields=['case', 'status']),
+            models.Index(fields=['assigned_lawyer', 'status']),
+            models.Index(fields=['status']),
+            models.Index(fields=['created_at']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Report for {self.case.case_number} - {self.status}"
+
+
 # Import verification models
 from .models_verification import CaseVerification, VerificationDocument, VerificationComment, ClaimantDependent

@@ -119,6 +119,32 @@ const AIBriefPage = () => {
     saveStoredReports(reportsByCase);
   }, [reportsByCase]);
 
+  // Migrate localStorage reports to database on mount
+  useEffect(() => {
+    const migrateReports = async () => {
+      const storedReports = loadStoredReports();
+      const reportEntries = Object.entries(storedReports);
+
+      if (reportEntries.length === 0) return;
+
+      const reportsToMigrate = reportEntries.map(([caseId, report]) => ({
+        case_id: parseInt(caseId, 10),
+        report_content: report.reportText || '',
+      })).filter(r => r.report_content);
+
+      if (reportsToMigrate.length === 0) return;
+
+      try {
+        const result = await api.post('/reports/bulk', { reports: reportsToMigrate });
+        console.log('Reports migration result:', result.data);
+      } catch (err) {
+        console.error('Failed to migrate reports to database:', err);
+      }
+    };
+
+    migrateReports();
+  }, []);
+
   useEffect(() => {
     fetchVendors();
   }, []);
@@ -327,6 +353,17 @@ const AIBriefPage = () => {
         generatedAt: new Date().toISOString(),
         sourceFileName: statementFile.name,
       };
+
+      // Save report to database for legal review
+      try {
+        await api.post('/reports', {
+          case_id: selectedCase.id,
+          report_content: response.data.report_text,
+        });
+      } catch (saveErr) {
+        console.error('Failed to save report to database:', saveErr);
+        // Continue even if save fails - report is still in localStorage
+      }
 
       setReportsByCase((prev) => ({
         ...prev,
