@@ -453,3 +453,201 @@ This document lists all direct dependencies and major project tooling/configurat
 For fully expanded transitive dependency trees, refer to lockfiles:
 - `frontend/package-lock.json`
 - `Vendor_Portal/package-lock.json`
+
+---
+
+## Vendor Speech Statement Feature
+
+### Feature Overview
+Vendors can record Marathi speech statements on-site using the mobile app. The system automatically:
+1. Transcribes Marathi speech to text using Groq Whisper API
+2. Translates the Marathi transcript to English using Groq LLM
+3. Allows vendors to review and edit the translation before applying
+4. Saves the English translation to the correct case statement field
+5. Preserves the original Marathi transcript for audit purposes
+
+### Workflow
+1. Vendor opens a check detail screen in the mobile app
+2. Vendor taps "Start Recording" and speaks the statement in Marathi
+3. Vendor taps "Stop Recording" when finished
+4. Vendor taps "Process Recording" to transcribe and translate
+5. System displays the Marathi transcript and editable English translation
+6. Vendor edits the translation if needed
+7. Vendor taps "Apply to Statement" to save
+
+### API Endpoints
+
+#### Preview Statement Audio
+```
+POST /api/vendor-check-statement-audio-preview/{case_id}/{check_type}
+```
+- **Authentication**: Bearer token (Vendor role required)
+- **Content-Type**: multipart/form-data
+- **Body**: `audio` file field
+- **Returns**: Transcript preview without applying to statement
+- **Response**:
+  ```json
+  {
+    "success": true,
+    "audit_id": 123,
+    "transcript_mr": "मराठी मजकूर...",
+    "translation_en": "English text...",
+    "detected_language": "mr",
+    "confidence": 0.95,
+    "provider": "groq",
+    "audio_duration_seconds": 45.5
+  }
+  ```
+
+#### Apply Statement Audio
+```
+POST /api/vendor-check-statement-audio-apply/{case_id}/{check_type}
+```
+- **Authentication**: Bearer token (Vendor role required)
+- **Content-Type**: multipart/form-data
+- **Body**: `audio` file field
+- **Returns**: Applies translation to statement field
+- **Response**:
+  ```json
+  {
+    "success": true,
+    "audit_id": 124,
+    "transcript_mr": "मराठी मजकूर...",
+    "translation_en": "English text...",
+    "applied_to_column": "statement",
+    "detected_language": "mr",
+    "confidence": 0.95,
+    "provider": "groq"
+  }
+  ```
+
+#### Apply Manual Text
+```
+POST /api/vendor-check-statement-text-apply/{case_id}/{check_type}
+```
+- **Authentication**: Bearer token (Vendor role required)
+- **Content-Type**: application/json
+- **Body**:
+  ```json
+  {
+    "edited_english_text": "Final statement text...",
+    "transcript_mr": "Optional Marathi original"
+  }
+  ```
+- **Returns**: Applies edited text to statement field
+
+### Database Schema Changes
+
+#### New Columns in Check Tables
+Added to `claimant_checks`, `insured_checks`, `driver_checks`, `chargesheets`, and `spot_checks`:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `statement_audio_path` | TEXT | Path to uploaded audio file |
+| `statement_transcript_mr` | TEXT | Original Marathi transcript |
+| `statement_transcript_en` | TEXT | English translation |
+| `statement_transcript_provider` | VARCHAR(50) | Provider used (e.g., 'groq') |
+| `statement_transcript_confidence` | NUMERIC(4,3) | Confidence score (0.0-1.0) |
+| `statement_transcript_updated_at` | TIMESTAMP | Last transcript update time |
+
+#### New Audit Table: `statement_audio_audit`
+Tracks all statement recording and transcription activity:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | SERIAL | Primary key |
+| `vendor_id` | INTEGER | FK to users_vendor |
+| `case_id` | INTEGER | Case reference |
+| `check_type` | VARCHAR(20) | claimant, insured, driver, chargesheet, spot |
+| `audio_file` | VARCHAR(500) | Path to audio file |
+| `audio_mime_type` | VARCHAR(100) | MIME type of audio |
+| `audio_size_bytes` | INTEGER | File size |
+| `audio_duration_seconds` | NUMERIC(8,2) | Audio duration |
+| `transcript_mr` | TEXT | Marathi transcript |
+| `translation_en` | TEXT | English translation |
+| `detected_language` | VARCHAR(20) | Detected language |
+| `stt_provider` | VARCHAR(50) | STT provider |
+| `stt_model` | VARCHAR(100) | STT model used |
+| `translation_model` | VARCHAR(100) | Translation model |
+| `confidence` | NUMERIC(4,3) | Confidence score |
+| `raw_provider_response` | JSONB | Raw API response |
+| `is_applied_to_check` | BOOLEAN | Whether applied |
+| `applied_at` | TIMESTAMP | When applied |
+| `source` | VARCHAR(50) | audio, audio_preview, manual_edit |
+| `created_at` | TIMESTAMP | Record creation time |
+| `updated_at` | TIMESTAMP | Last update time |
+
+### Check Type to Column Mapping
+The apply endpoint writes to the correct column based on check type:
+
+| Check Type | Table | Statement Column |
+|------------|-------|------------------|
+| claimant | claimant_checks | statement |
+| insured | insured_checks | statement |
+| driver | driver_checks | statement |
+| chargesheet | chargesheets | statement |
+| spot | spot_checks | **observations** |
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GROQ_API_KEY` | - | Groq API key for STT and translation |
+| `SPEECH_PROVIDER` | groq | Speech provider (for future extensibility) |
+| `SPEECH_MAX_FILE_MB` | 15 | Maximum audio file size in MB |
+| `SPEECH_MAX_DURATION_SECONDS` | 180 | Maximum audio duration (best effort) |
+| `SPEECH_REQUEST_TIMEOUT_SECONDS` | 60 | API request timeout |
+| `SPEECH_STT_MODEL` | whisper-large-v3 | Whisper model for transcription |
+| `SPEECH_TRANSLATION_MODEL` | llama-3.3-70b-versatile | LLM for translation |
+
+### Mobile App Changes
+- Added `expo-av` dependency for audio recording
+- Updated `CaseDetails.tsx` with recording UI:
+  - Start/Stop/Re-record buttons
+  - Recording duration display
+  - Processing state indicator
+  - Marathi transcript preview
+  - Editable English translation input
+  - Apply to Statement button
+- Updated `api.ts` with new endpoint methods:
+  - `previewStatementAudio()`
+  - `applyStatementAudio()`
+  - `applyStatementText()`
+
+### Migrations
+- `0029_add_statement_transcript_columns.py`: Adds transcript columns to check tables
+- `0030_create_statement_audio_audit.py`: Creates audit table with indexes and triggers
+
+### Non-Regression Notes
+- All existing vendor check endpoints remain unchanged
+- Evidence photo upload functionality is unaffected
+- Existing statement/observations columns continue to work
+- New columns have safe defaults (NULL)
+- Migrations are reversible
+
+### Rollback Plan
+1. Revert mobile app to previous version
+2. Run reverse migrations:
+   ```bash
+   python manage.py migrate users 0028
+   ```
+3. Remove environment variables
+4. Restart backend server
+
+### Testing
+Run statement feature tests:
+```bash
+python manage.py test users.tests_statement
+```
+
+Test coverage includes:
+- Authentication and authorization
+- Vendor check assignment validation
+- Audio file validation (format, size)
+- Preview endpoint success
+- Apply endpoint success
+- Spot check writes to observations
+- Manual text apply
+- Transcript column persistence
+- Non-regression for existing endpoints
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,14 +9,48 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  TextInput,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import { theme } from '@/config/theme';
 import apiService from '@/services/api';
 import { API_BASE_URL } from '@/config/constants';
 
 const PRIMARY_BLUE = theme.colors.primary;
+const RECORDING_RED = '#E53935';
+const SUCCESS_GREEN = '#4CAF50';
+
+// Optimized recording settings for speech recognition
+// Whisper works best with 16kHz mono audio
+const SPEECH_RECORDING_OPTIONS: Audio.RecordingOptions = {
+  isMeteringEnabled: false,
+  android: {
+    extension: '.m4a',
+    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+    audioEncoder: Audio.AndroidAudioEncoder.AAC,
+    sampleRate: 16000,  // Whisper is trained on 16kHz
+    numberOfChannels: 1,  // Mono for speech
+    bitRate: 64000,  // Good quality for speech
+  },
+  ios: {
+    extension: '.m4a',
+    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+    audioQuality: Audio.IOSAudioQuality.HIGH,
+    sampleRate: 16000,  // Whisper is trained on 16kHz
+    numberOfChannels: 1,  // Mono for speech
+    bitRate: 64000,  // Good quality for speech
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: 'audio/webm',
+    bitsPerSecond: 64000,
+  },
+};
 
 const checkTypeLabels: Record<string, string> = {
   claimant: 'Claimant Check',
@@ -90,8 +124,31 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Statement Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [recordingUri, setRecordingUri] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [transcriptMr, setTranscriptMr] = useState('');
+  const [translationEn, setTranslationEn] = useState('');
+  const [editedTranslation, setEditedTranslation] = useState('');
+  const [isApplying, setIsApplying] = useState(false);
+
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     loadData();
+    return () => {
+      // Cleanup recording on unmount
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      }
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+    };
   }, [caseId, checkType]);
 
   const loadData = async () => {
@@ -107,6 +164,193 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       setLoading(false);
     }
   };
+
+  // ============== Audio Recording Functions ==============
+
+  const requestMicrophonePermission = async (): Promise<boolean> => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Microphone permission is required to record statements. Please grant permission in your device settings.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('Error requesting microphone permission:', err);
+      return false;
+    }
+  };
+
+  const startRecording = async () => {
+    const hasPermission = await requestMicrophonePermission();
+    if (!hasPermission) return;
+
+    try {
+      // Configure audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      // Create and start recording with optimized speech settings
+      const { recording } = await Audio.Recording.createAsync(
+        SPEECH_RECORDING_OPTIONS
+      );
+
+      recordingRef.current = recording;
+      setIsRecording(true);
+      setRecordingDuration(0);
+      setRecordingUri(null);
+      setShowPreview(false);
+      setTranscriptMr('');
+      setTranslationEn('');
+      setEditedTranslation('');
+
+      // Start duration timer
+      durationIntervalRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+
+      console.log('[Recording] Started');
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+      Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recordingRef.current) return;
+
+    try {
+      // Stop duration timer
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+        durationIntervalRef.current = null;
+      }
+
+      // Stop recording
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+
+      setIsRecording(false);
+      setRecordingUri(uri);
+
+      console.log('[Recording] Stopped, URI:', uri);
+
+      // Reset audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+    } catch (err) {
+      console.error('Failed to stop recording:', err);
+      setIsRecording(false);
+      Alert.alert('Recording Error', 'Failed to stop recording.');
+    } finally {
+      recordingRef.current = null;
+    }
+  };
+
+  const discardRecording = () => {
+    setRecordingUri(null);
+    setRecordingDuration(0);
+    setShowPreview(false);
+    setTranscriptMr('');
+    setTranslationEn('');
+    setEditedTranslation('');
+  };
+
+  const processRecording = async () => {
+    if (!recordingUri) {
+      Alert.alert('No Recording', 'Please record a statement first.');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const filename = `statement_${Date.now()}.m4a`;
+      const audioFile = {
+        uri: recordingUri,
+        name: filename,
+        mimeType: 'audio/m4a',
+      };
+
+      console.log('[Recording] Processing audio:', audioFile);
+
+      const result = await apiService.previewStatementAudio(caseId, checkType, audioFile);
+
+      if (result.success) {
+        setTranscriptMr(result.transcript_mr);
+        setTranslationEn(result.translation_en);
+        setEditedTranslation(result.translation_en);
+        setShowPreview(true);
+
+        console.log('[Recording] Preview success:', {
+          mrLength: result.transcript_mr.length,
+          enLength: result.translation_en.length,
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to process recording:', err);
+      const errorMsg = err.details?.error || err.message || 'Failed to process audio';
+      Alert.alert('Processing Failed', errorMsg);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const applyStatement = async () => {
+    if (!editedTranslation.trim()) {
+      Alert.alert('Empty Statement', 'Please enter a statement before applying.');
+      return;
+    }
+
+    setIsApplying(true);
+
+    try {
+      const result = await apiService.applyStatementText(
+        caseId,
+        checkType,
+        editedTranslation.trim(),
+        transcriptMr
+      );
+
+      if (result.success) {
+        Alert.alert(
+          'Statement Applied',
+          `Statement has been saved to the ${result.applied_to_column} field.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Reset state and reload data
+                discardRecording();
+                loadData();
+              },
+            },
+          ]
+        );
+      }
+    } catch (err: any) {
+      console.error('Failed to apply statement:', err);
+      const errorMsg = err.details?.error || err.message || 'Failed to save statement';
+      Alert.alert('Apply Failed', errorMsg);
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const formatDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // ============== Photo Upload Functions ==============
 
   const pickAndUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -132,7 +376,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       setUploading(true);
       const res = await apiService.uploadCheckEvidence(caseId, checkType, photos);
       Alert.alert('Success', res.message || 'Evidence uploaded');
-      await loadData(); // Refresh to show new evidence
+      await loadData();
     } catch (err: any) {
       console.error('Upload failed:', err);
       Alert.alert('Upload Failed', err.message || 'Failed to upload evidence');
@@ -244,7 +488,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Case Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📋 Case Information</Text>
+          <Text style={styles.sectionTitle}>Case Information</Text>
           <DetailRow label="Claim Number" value={caseInfo.claim_number} />
           <DetailRow label="Client Name" value={caseInfo.client_name} />
           <DetailRow label="Category" value={caseInfo.category} />
@@ -261,7 +505,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         {/* Check Details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            🔍 {checkTypeLabels[checkType] || 'Check'} Details
+            {checkTypeLabels[checkType] || 'Check'} Details
           </Text>
           <DetailRow label="Status" value={checkInfo.check_status} />
           {Object.entries(fieldLabels).map(([field, label]) => (
@@ -269,9 +513,129 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           ))}
         </View>
 
+        {/* Statement Recording Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Record Statement (Marathi)</Text>
+          <Text style={styles.sectionSubtitle}>
+            Speak in Marathi - it will be automatically translated to English
+          </Text>
+
+          {/* Recording Controls */}
+          {!showPreview && (
+            <View style={styles.recordingSection}>
+              {!isRecording && !recordingUri && (
+                <TouchableOpacity
+                  style={styles.recordButton}
+                  onPress={startRecording}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.recordButtonIcon}>🎤</Text>
+                  <Text style={styles.recordButtonText}>Start Recording</Text>
+                </TouchableOpacity>
+              )}
+
+              {isRecording && (
+                <View style={styles.recordingActive}>
+                  <View style={styles.recordingIndicator}>
+                    <View style={styles.recordingDot} />
+                    <Text style={styles.recordingText}>Recording...</Text>
+                  </View>
+                  <Text style={styles.durationText}>{formatDuration(recordingDuration)}</Text>
+                  <TouchableOpacity
+                    style={styles.stopButton}
+                    onPress={stopRecording}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.stopButtonText}>⏹️ Stop Recording</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {!isRecording && recordingUri && (
+                <View style={styles.recordingComplete}>
+                  <Text style={styles.recordingCompleteText}>
+                    Recording saved ({formatDuration(recordingDuration)})
+                  </Text>
+
+                  <View style={styles.recordingActions}>
+                    <TouchableOpacity
+                      style={styles.reRecordButton}
+                      onPress={discardRecording}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.reRecordButtonText}>🔄 Re-record</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.processButton, isProcessing && styles.disabledButton]}
+                      onPress={processRecording}
+                      disabled={isProcessing}
+                      activeOpacity={0.8}
+                    >
+                      {isProcessing ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.processButtonText}>Process Recording</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Preview Section */}
+          {showPreview && (
+            <View style={styles.previewSection}>
+              {/* Marathi Transcript */}
+              <View style={styles.transcriptBox}>
+                <Text style={styles.transcriptLabel}>Marathi Transcript:</Text>
+                <Text style={styles.marathiText}>{transcriptMr}</Text>
+              </View>
+
+              {/* Editable English Translation */}
+              <View style={styles.translationBox}>
+                <Text style={styles.transcriptLabel}>English Translation (editable):</Text>
+                <TextInput
+                  style={styles.translationInput}
+                  value={editedTranslation}
+                  onChangeText={setEditedTranslation}
+                  multiline
+                  textAlignVertical="top"
+                  placeholder="Edit translation if needed..."
+                />
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.previewActions}>
+                <TouchableOpacity
+                  style={styles.discardButton}
+                  onPress={discardRecording}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.discardButtonText}>Discard</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.applyButton, isApplying && styles.disabledButton]}
+                  onPress={applyStatement}
+                  disabled={isApplying}
+                  activeOpacity={0.8}
+                >
+                  {isApplying ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.applyButtonText}>Apply to Statement</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+
         {/* Evidence Photos */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📸 Evidence Photos ({evidencePhotos.length})</Text>
+          <Text style={styles.sectionTitle}>Evidence Photos ({evidencePhotos.length})</Text>
 
           {evidencePhotos.length === 0 ? (
             <Text style={styles.noEvidenceText}>No evidence uploaded yet</Text>
@@ -307,7 +671,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             {uploading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.uploadButtonText}>📁 Upload from Gallery</Text>
+              <Text style={styles.uploadButtonText}>Upload from Gallery</Text>
             )}
           </TouchableOpacity>
 
@@ -320,7 +684,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             {uploading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.uploadButtonText}>📷 Take Photo</Text>
+              <Text style={styles.uploadButtonText}>Take Photo</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -410,7 +774,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#1a1a1a',
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 16,
   },
   detailRow: {
     flexDirection: 'row',
@@ -432,6 +801,187 @@ const styles = StyleSheet.create({
     flex: 2,
     textAlign: 'right',
   },
+  // Recording styles
+  recordingSection: {
+    marginTop: 8,
+  },
+  recordButton: {
+    backgroundColor: PRIMARY_BLUE,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  recordButtonIcon: {
+    fontSize: 24,
+  },
+  recordButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  recordingActive: {
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#FFF3F3',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: RECORDING_RED,
+  },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  recordingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: RECORDING_RED,
+    marginRight: 8,
+  },
+  recordingText: {
+    fontSize: 16,
+    color: RECORDING_RED,
+    fontWeight: '600',
+  },
+  durationText: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 16,
+    fontVariant: ['tabular-nums'],
+  },
+  stopButton: {
+    backgroundColor: RECORDING_RED,
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+  },
+  stopButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  recordingComplete: {
+    padding: 16,
+    backgroundColor: '#F0FFF0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: SUCCESS_GREEN,
+  },
+  recordingCompleteText: {
+    fontSize: 14,
+    color: SUCCESS_GREEN,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  recordingActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  reRecordButton: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  reRecordButtonText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  processButton: {
+    flex: 2,
+    backgroundColor: PRIMARY_BLUE,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  processButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  // Preview styles
+  previewSection: {
+    marginTop: 8,
+  },
+  transcriptBox: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FFE082',
+  },
+  transcriptLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  marathiText: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
+  },
+  translationBox: {
+    marginBottom: 16,
+  },
+  translationInput: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    color: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    minHeight: 120,
+    maxHeight: 200,
+    textAlignVertical: 'top',
+  },
+  previewActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  discardButton: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  discardButtonText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  applyButton: {
+    flex: 2,
+    backgroundColor: SUCCESS_GREEN,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  // Evidence photo styles
   noEvidenceText: {
     fontSize: 14,
     color: '#999',

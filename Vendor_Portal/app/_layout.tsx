@@ -55,7 +55,7 @@ function RootNavigator() {
     if (isLoading || !appIsReady) return;
 
     const inAuthGroup = segments[0] === '(tabs)';
-    const isLoginRoute = segments[0] === undefined || segments.length === 0;
+    const isLoginRoute = segments[0] === undefined;
     const isPublicRoute = segments[0] === 'login';
     
     // Routes that authenticated users can access
@@ -96,7 +96,6 @@ function RootNavigator() {
     <Stack
       screenOptions={{
         headerShown: false,
-        animationEnabled: true,
       }}
     />
   );
@@ -106,7 +105,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <Provider store={store}>
-        <StatusBar barStyle="dark-content" translucent={false} />
+        <StatusBar style="dark" translucent={false} />
         <RootNavigator />
       </Provider>
     </SafeAreaProvider>

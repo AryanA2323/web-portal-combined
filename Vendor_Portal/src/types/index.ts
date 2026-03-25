@@ -5,7 +5,7 @@ export interface LoginRequest {
 
 export interface AuthResponse {
   access: string;
-  refresh: string;
+  refresh: string | null;
   user: VendorUser;
 }
 

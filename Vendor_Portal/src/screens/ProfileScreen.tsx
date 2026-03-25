@@ -13,8 +13,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store';
 import { logoutUser } from '@/store/authSlice';
 import { theme } from '@/config/theme';
-import axios from 'axios';
-import { API_URL } from '@/services/api';
 
 export default function ProfileScreen() {
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);

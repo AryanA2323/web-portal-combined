@@ -962,12 +962,543 @@ def extract_gps_from_image(image_file: UploadedFile):
 def convert_to_degrees(value):
     """
     Convert GPS coordinates from degrees/minutes/seconds to decimal degrees.
-    
+
     Args:
         value: tuple of (degrees, minutes, seconds)
-    
+
     Returns:
         float: Decimal degrees
     """
     d, m, s = value
     return float(d) + float(m) / 60.0 + float(s) / 3600.0
+
+
+# =============================================================================
+# Vendor Statement Audio Endpoints
+# =============================================================================
+
+# Mapping from check_type to table and final statement column
+_CHECK_STATEMENT_COLUMN_MAP = {
+    'claimant': ('claimant_checks', 'statement'),
+    'insured': ('insured_checks', 'statement'),
+    'driver': ('driver_checks', 'statement'),
+    'chargesheet': ('chargesheets', 'statement'),
+    'spot': ('spot_checks', 'observations'),  # spot uses observations instead of statement
+}
+
+# Max file size for audio (configurable via env)
+import os
+SPEECH_MAX_FILE_MB = int(os.environ.get('SPEECH_MAX_FILE_MB', '15'))
+SPEECH_MAX_FILE_BYTES = SPEECH_MAX_FILE_MB * 1024 * 1024
+
+
+def _validate_vendor_check_assignment(request, case_id: int, check_type: str):
+    """
+    Validate vendor authentication and check assignment.
+
+    Returns:
+        Tuple of (error_response, vendor_id, check_id, table_name, statement_column)
+        error_response is None if validation passes
+    """
+    if not request.user.is_authenticated:
+        return (401, {"error": "Not authenticated"}), None, None, None, None
+    if request.user.role != 'VENDOR':
+        return (403, {"error": "Vendor access required"}), None, None, None, None
+
+    vendor_id = get_vendor_id_from_user(request.user)
+    if not vendor_id:
+        return (403, {"error": "Vendor profile not found"}), None, None, None, None
+
+    check_type_lower = check_type.lower()
+    if check_type_lower not in _CHECK_STATEMENT_COLUMN_MAP:
+        return (400, {"error": f"Unknown check type '{check_type}'"}), None, None, None, None
+
+    table_name, statement_column = _CHECK_STATEMENT_COLUMN_MAP[check_type_lower]
+
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(f"""
+                SELECT id FROM {table_name}
+                WHERE case_id = %s AND assigned_vendor_id = %s
+            """, [case_id, vendor_id])
+            row = cursor.fetchone()
+            if not row:
+                return (404, {"error": "Check not found or not assigned to you"}), None, None, None, None
+            check_id = row[0]
+    except Exception as e:
+        logger.error(f"[Statement] Failed to verify check assignment: {e}")
+        return (500, {"error": "Failed to verify check assignment"}), None, None, None, None
+
+    return None, vendor_id, check_id, table_name, statement_column
+
+
+def _save_audio_file(audio_file, case_id: int, check_type: str, vendor_id: int) -> str:
+    """
+    Save uploaded audio file and return relative path.
+    """
+    from django.conf import settings
+
+    upload_dir = os.path.join(
+        settings.MEDIA_ROOT, 'statement_audio', f'case_{case_id}', check_type
+    )
+    os.makedirs(upload_dir, exist_ok=True)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    safe_name = audio_file.name.replace(' ', '_') if audio_file.name else 'audio.m4a'
+    filename = f'v{vendor_id}_{timestamp}_{safe_name}'
+    filepath = os.path.join(upload_dir, filename)
+
+    with open(filepath, 'wb') as dest:
+        for chunk in audio_file.chunks():
+            dest.write(chunk)
+
+    relative_path = f'statement_audio/case_{case_id}/{check_type}/{filename}'
+    logger.info(f"[Statement] Saved audio file: {relative_path}")
+    return relative_path
+
+
+def _create_audit_record(
+    vendor_id: int,
+    case_id: int,
+    check_type: str,
+    audio_path: str,
+    mime_type: str,
+    size_bytes: int,
+    transcript_mr: str,
+    translation_en: str,
+    result,
+    source: str = 'audio',
+    is_applied: bool = False,
+) -> int:
+    """
+    Create an audit record in statement_audio_audit table.
+    Returns the audit record ID.
+    """
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO statement_audio_audit (
+                    vendor_id, case_id, check_type,
+                    audio_file, audio_mime_type, audio_size_bytes, audio_duration_seconds,
+                    transcript_mr, translation_en, detected_language,
+                    stt_provider, stt_model, translation_model, confidence,
+                    raw_provider_response, is_applied_to_check, applied_at, source
+                ) VALUES (
+                    %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s
+                ) RETURNING id
+            """, [
+                vendor_id, case_id, check_type,
+                audio_path, mime_type, size_bytes,
+                result.audio_duration_seconds if result else None,
+                transcript_mr, translation_en,
+                result.detected_language if result else 'mr',
+                result.provider if result else 'manual',
+                result.stt_model if result else None,
+                result.translation_model if result else None,
+                result.confidence if result else None,
+                json.dumps(result.provider_metadata) if result and result.provider_metadata else None,
+                is_applied,
+                datetime.now() if is_applied else None,
+                source,
+            ])
+            audit_id = cursor.fetchone()[0]
+            return audit_id
+    except Exception as e:
+        logger.error(f"[Statement] Failed to create audit record: {e}")
+        raise
+
+
+def _update_check_transcript_columns(
+    table_name: str,
+    check_id: int,
+    audio_path: Optional[str],
+    transcript_mr: str,
+    transcript_en: str,
+    provider: str,
+    confidence: Optional[float],
+):
+    """
+    Update the transcript columns in the check table.
+    """
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(f"""
+                UPDATE {table_name} SET
+                    statement_audio_path = COALESCE(%s, statement_audio_path),
+                    statement_transcript_mr = %s,
+                    statement_transcript_en = %s,
+                    statement_transcript_provider = %s,
+                    statement_transcript_confidence = %s,
+                    statement_transcript_updated_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = %s
+            """, [
+                audio_path, transcript_mr, transcript_en,
+                provider, confidence, check_id
+            ])
+    except Exception as e:
+        logger.error(f"[Statement] Failed to update transcript columns: {e}")
+        raise
+
+
+def _update_final_statement_column(
+    table_name: str,
+    statement_column: str,
+    check_id: int,
+    text: str,
+):
+    """
+    Update the final workflow statement/observations column.
+    """
+    try:
+        # Clamp text length to prevent DB overflow (max 65535 for TEXT)
+        clamped_text = text[:65000] if text else ""
+        with connections['default'].cursor() as cursor:
+            cursor.execute(f"""
+                UPDATE {table_name} SET
+                    {statement_column} = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            """, [clamped_text, check_id])
+    except Exception as e:
+        logger.error(f"[Statement] Failed to update statement column: {e}")
+        raise
+
+
+@router.post(
+    "/vendor-check-statement-audio-preview/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Preview Statement Audio Transcription",
+    description="Upload Marathi audio, transcribe, and translate to English. Does NOT update the final statement.",
+)
+def vendor_check_statement_audio_preview(request: HttpRequest, case_id: int, check_type: str):
+    """
+    Process audio recording and return preview of transcript/translation.
+
+    - Validates vendor is assigned to this check
+    - Validates audio file (format, size)
+    - Transcribes Marathi speech using Groq Whisper
+    - Translates to English using Groq LLM
+    - Saves audit record and updates transcript columns
+    - Does NOT update the final workflow statement column
+    """
+    from users.services.speech_statement_service import (
+        get_speech_service,
+        SpeechStatementError,
+        AudioValidationError,
+    )
+
+    # Validate vendor and check assignment
+    error_response, vendor_id, check_id, table_name, statement_column = \
+        _validate_vendor_check_assignment(request, case_id, check_type)
+    if error_response:
+        return error_response
+
+    # Get uploaded audio file
+    audio_file = request.FILES.get('audio')
+    if not audio_file:
+        return 400, {"error": "No audio file provided. Upload with field name 'audio'."}
+
+    # Basic file size check
+    if audio_file.size > SPEECH_MAX_FILE_BYTES:
+        return 400, {"error": f"Audio file too large. Maximum size is {SPEECH_MAX_FILE_MB}MB."}
+
+    try:
+        # Read audio bytes
+        audio_bytes = audio_file.read()
+        content_type = audio_file.content_type
+        filename = audio_file.name
+
+        logger.info(
+            f"[Statement] Preview request: case={case_id}, check={check_type}, "
+            f"vendor={vendor_id}, size={len(audio_bytes)}, type={content_type}"
+        )
+
+        # Process audio
+        service = get_speech_service()
+        result = service.process_audio(audio_bytes, content_type, filename)
+
+        # Save audio file
+        audio_path = _save_audio_file(audio_file, case_id, check_type, vendor_id)
+
+        # Create audit record (not applied)
+        audit_id = _create_audit_record(
+            vendor_id=vendor_id,
+            case_id=case_id,
+            check_type=check_type.lower(),
+            audio_path=audio_path,
+            mime_type=content_type or 'audio/m4a',
+            size_bytes=len(audio_bytes),
+            transcript_mr=result.transcript_mr,
+            translation_en=result.translation_en,
+            result=result,
+            source='audio_preview',
+            is_applied=False,
+        )
+
+        # Update transcript columns (but not final statement)
+        _update_check_transcript_columns(
+            table_name=table_name,
+            check_id=check_id,
+            audio_path=audio_path,
+            transcript_mr=result.transcript_mr,
+            transcript_en=result.translation_en,
+            provider=result.provider,
+            confidence=result.confidence,
+        )
+
+        logger.info(
+            f"[Statement] Preview success: case={case_id}, check={check_type}, "
+            f"audit_id={audit_id}, mr_len={len(result.transcript_mr)}, en_len={len(result.translation_en)}"
+        )
+
+        return {
+            "success": True,
+            "audit_id": audit_id,
+            "transcript_mr": result.transcript_mr,
+            "translation_en": result.translation_en,
+            "detected_language": result.detected_language,
+            "confidence": result.confidence,
+            "provider": result.provider,
+            "audio_duration_seconds": result.audio_duration_seconds,
+        }
+
+    except AudioValidationError as e:
+        logger.warning(f"[Statement] Audio validation failed: {e.message}")
+        return 400, {"error": e.message}
+    except SpeechStatementError as e:
+        logger.error(f"[Statement] Processing failed: {e.message}")
+        return 500, {"error": e.message}
+    except Exception as e:
+        logger.exception(f"[Statement] Unexpected error in preview: {e}")
+        return 500, {"error": "Failed to process audio. Please try again."}
+
+
+@router.post(
+    "/vendor-check-statement-audio-apply/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Apply Statement Audio Transcription",
+    description="Upload Marathi audio, transcribe, translate, and save to the case statement field.",
+)
+def vendor_check_statement_audio_apply(request: HttpRequest, case_id: int, check_type: str):
+    """
+    Process audio recording and apply translation to the case statement.
+
+    - Validates vendor is assigned to this check
+    - Validates audio file (format, size)
+    - Transcribes Marathi speech using Groq Whisper
+    - Translates to English using Groq LLM
+    - Updates all transcript columns
+    - Updates the final workflow statement/observations column
+    - Creates audit record marked as applied
+    """
+    from django.db import transaction
+    from users.services.speech_statement_service import (
+        get_speech_service,
+        SpeechStatementError,
+        AudioValidationError,
+    )
+
+    # Validate vendor and check assignment
+    error_response, vendor_id, check_id, table_name, statement_column = \
+        _validate_vendor_check_assignment(request, case_id, check_type)
+    if error_response:
+        return error_response
+
+    # Get uploaded audio file
+    audio_file = request.FILES.get('audio')
+    if not audio_file:
+        return 400, {"error": "No audio file provided. Upload with field name 'audio'."}
+
+    if audio_file.size > SPEECH_MAX_FILE_BYTES:
+        return 400, {"error": f"Audio file too large. Maximum size is {SPEECH_MAX_FILE_MB}MB."}
+
+    try:
+        audio_bytes = audio_file.read()
+        content_type = audio_file.content_type
+        filename = audio_file.name
+
+        logger.info(
+            f"[Statement] Apply request: case={case_id}, check={check_type}, "
+            f"vendor={vendor_id}, size={len(audio_bytes)}, type={content_type}"
+        )
+
+        # Process audio
+        service = get_speech_service()
+        result = service.process_audio(audio_bytes, content_type, filename)
+
+        # Save audio file
+        audio_path = _save_audio_file(audio_file, case_id, check_type, vendor_id)
+
+        # Use transaction to ensure all updates succeed together
+        with transaction.atomic():
+            # Create audit record (applied)
+            audit_id = _create_audit_record(
+                vendor_id=vendor_id,
+                case_id=case_id,
+                check_type=check_type.lower(),
+                audio_path=audio_path,
+                mime_type=content_type or 'audio/m4a',
+                size_bytes=len(audio_bytes),
+                transcript_mr=result.transcript_mr,
+                translation_en=result.translation_en,
+                result=result,
+                source='audio',
+                is_applied=True,
+            )
+
+            # Update transcript columns
+            _update_check_transcript_columns(
+                table_name=table_name,
+                check_id=check_id,
+                audio_path=audio_path,
+                transcript_mr=result.transcript_mr,
+                transcript_en=result.translation_en,
+                provider=result.provider,
+                confidence=result.confidence,
+            )
+
+            # Update final statement column
+            _update_final_statement_column(
+                table_name=table_name,
+                statement_column=statement_column,
+                check_id=check_id,
+                text=result.translation_en,
+            )
+
+        logger.info(
+            f"[Statement] Apply success: case={case_id}, check={check_type}, "
+            f"audit_id={audit_id}, column={statement_column}"
+        )
+
+        return {
+            "success": True,
+            "audit_id": audit_id,
+            "transcript_mr": result.transcript_mr,
+            "translation_en": result.translation_en,
+            "applied_to_column": statement_column,
+            "detected_language": result.detected_language,
+            "confidence": result.confidence,
+            "provider": result.provider,
+            "audio_duration_seconds": result.audio_duration_seconds,
+        }
+
+    except AudioValidationError as e:
+        logger.warning(f"[Statement] Audio validation failed: {e.message}")
+        return 400, {"error": e.message}
+    except SpeechStatementError as e:
+        logger.error(f"[Statement] Processing failed: {e.message}")
+        return 500, {"error": e.message}
+    except Exception as e:
+        logger.exception(f"[Statement] Unexpected error in apply: {e}")
+        return 500, {"error": "Failed to process audio. Please try again."}
+
+
+@router.post(
+    "/vendor-check-statement-text-apply/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Apply Manual Statement Text",
+    description="Apply manually edited English statement text to the case.",
+)
+def vendor_check_statement_text_apply(request: HttpRequest, case_id: int, check_type: str):
+    """
+    Apply manually edited statement text to the case.
+
+    JSON body:
+    - edited_english_text: The final English text to apply (required)
+    - transcript_mr: Original Marathi text (optional, for audit)
+
+    This endpoint allows vendors to edit the translated text before applying.
+    """
+    from django.db import transaction
+
+    # Validate vendor and check assignment
+    error_response, vendor_id, check_id, table_name, statement_column = \
+        _validate_vendor_check_assignment(request, case_id, check_type)
+    if error_response:
+        return error_response
+
+    # Parse JSON body
+    try:
+        import json
+        body = json.loads(request.body.decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return 400, {"error": "Invalid JSON body"}
+
+    edited_english_text = body.get('edited_english_text', '').strip()
+    transcript_mr = body.get('transcript_mr', '').strip()
+
+    if not edited_english_text:
+        return 400, {"error": "edited_english_text is required and cannot be empty"}
+
+    # Validate text length
+    if len(edited_english_text) > 65000:
+        return 400, {"error": "Statement text too long. Maximum 65000 characters."}
+
+    try:
+        logger.info(
+            f"[Statement] Manual text apply: case={case_id}, check={check_type}, "
+            f"vendor={vendor_id}, text_len={len(edited_english_text)}"
+        )
+
+        with transaction.atomic():
+            # Create audit record for manual edit
+            with connections['default'].cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO statement_audio_audit (
+                        vendor_id, case_id, check_type,
+                        audio_file, audio_mime_type, audio_size_bytes,
+                        transcript_mr, translation_en, detected_language,
+                        stt_provider, is_applied_to_check, applied_at, source
+                    ) VALUES (
+                        %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s, %s, %s
+                    ) RETURNING id
+                """, [
+                    vendor_id, case_id, check_type.lower(),
+                    '', 'text/plain', len(edited_english_text),
+                    transcript_mr, edited_english_text, 'mr',
+                    'manual', True, datetime.now(), 'manual_edit',
+                ])
+                audit_id = cursor.fetchone()[0]
+
+            # Update transcript columns
+            _update_check_transcript_columns(
+                table_name=table_name,
+                check_id=check_id,
+                audio_path=None,  # No audio for manual edit
+                transcript_mr=transcript_mr,
+                transcript_en=edited_english_text,
+                provider='manual',
+                confidence=None,
+            )
+
+            # Update final statement column
+            _update_final_statement_column(
+                table_name=table_name,
+                statement_column=statement_column,
+                check_id=check_id,
+                text=edited_english_text,
+            )
+
+        logger.info(
+            f"[Statement] Manual text apply success: case={case_id}, check={check_type}, "
+            f"audit_id={audit_id}, column={statement_column}"
+        )
+
+        return {
+            "success": True,
+            "audit_id": audit_id,
+            "applied_text": edited_english_text[:200] + "..." if len(edited_english_text) > 200 else edited_english_text,
+            "applied_to_column": statement_column,
+        }
+
+    except Exception as e:
+        logger.exception(f"[Statement] Unexpected error in manual text apply: {e}")
+        return 500, {"error": "Failed to save statement. Please try again."}

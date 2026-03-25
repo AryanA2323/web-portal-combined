@@ -346,6 +346,122 @@ class ApiService {
       return null;
     }
   }
+
+  // ==========================================================================
+  // Statement Audio Endpoints - Marathi Speech-to-Text with English Translation
+  // ==========================================================================
+
+  /**
+   * Preview audio transcription without applying to statement.
+   * Processes the audio, returns Marathi transcript and English translation.
+   */
+  async previewStatementAudio(
+    caseId: number,
+    checkType: string,
+    audioFile: { uri: string; name: string; mimeType: string }
+  ): Promise<{
+    success: boolean;
+    audit_id: number;
+    transcript_mr: string;
+    translation_en: string;
+    detected_language: string;
+    confidence: number | null;
+    provider: string;
+    audio_duration_seconds: number | null;
+  }> {
+    try {
+      const formData = new FormData();
+      const file: any = {
+        uri: audioFile.uri,
+        name: audioFile.name,
+        type: audioFile.mimeType,
+      };
+      formData.append('audio', file);
+
+      const response = await this.api.post(
+        `/vendor-check-statement-audio-preview/${caseId}/${checkType}`,
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 120000, // 2 minutes for audio processing
+        }
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  /**
+   * Apply audio transcription to case statement.
+   * Processes audio, translates, and saves to the statement field.
+   */
+  async applyStatementAudio(
+    caseId: number,
+    checkType: string,
+    audioFile: { uri: string; name: string; mimeType: string }
+  ): Promise<{
+    success: boolean;
+    audit_id: number;
+    transcript_mr: string;
+    translation_en: string;
+    applied_to_column: string;
+    detected_language: string;
+    confidence: number | null;
+    provider: string;
+    audio_duration_seconds: number | null;
+  }> {
+    try {
+      const formData = new FormData();
+      const file: any = {
+        uri: audioFile.uri,
+        name: audioFile.name,
+        type: audioFile.mimeType,
+      };
+      formData.append('audio', file);
+
+      const response = await this.api.post(
+        `/vendor-check-statement-audio-apply/${caseId}/${checkType}`,
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 120000, // 2 minutes for audio processing
+        }
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  /**
+   * Apply manually edited statement text.
+   * Allows vendor to modify the translation before saving.
+   */
+  async applyStatementText(
+    caseId: number,
+    checkType: string,
+    editedEnglishText: string,
+    transcriptMr?: string
+  ): Promise<{
+    success: boolean;
+    audit_id: number;
+    applied_text: string;
+    applied_to_column: string;
+  }> {
+    try {
+      const response = await this.api.post(
+        `/vendor-check-statement-text-apply/${caseId}/${checkType}`,
+        {
+          edited_english_text: editedEnglishText,
+          transcript_mr: transcriptMr || '',
+        }
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
 }
 
 export default new ApiService();
