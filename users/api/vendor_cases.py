@@ -271,14 +271,19 @@ _CHECK_TYPE_LABELS = {
 
 @router.get(
     "/vendor-assigned-checks",
+    response={200: dict, 401: ApiErrorSchema, 403: ApiErrorSchema, 500: ApiErrorSchema},
     summary="Get Vendor's Assigned Checks",
     description="Get all sub-checks assigned to the authenticated vendor across all cases.",
 )
 def get_vendor_assigned_checks(request: HttpRequest):
     """Return all sub-check rows where assigned_vendor_id matches the logged-in vendor."""
+    logger.info(f"vendor-assigned-checks called, user authenticated: {request.user.is_authenticated}")
     if not request.user.is_authenticated:
+        logger.warning("vendor-assigned-checks: User not authenticated")
         return 401, {"error": "Not authenticated"}
+    logger.info(f"vendor-assigned-checks: User role = {request.user.role}")
     if request.user.role != 'VENDOR':
+        logger.warning(f"vendor-assigned-checks: Non-vendor role: {request.user.role}")
         return 403, {"error": "Vendor access required"}
 
     vendor_id = get_vendor_id_from_user(request.user)

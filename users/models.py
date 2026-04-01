@@ -387,9 +387,10 @@ class AuthToken(models.Model):
             import secrets
             self.token = secrets.token_hex(32)
         if not self.expires_at:
-            from datetime import datetime, timedelta
+            from django.utils import timezone
+            from datetime import timedelta
             # Token expires in 7 days by default
-            self.expires_at = datetime.now() + timedelta(days=7)
+            self.expires_at = timezone.now() + timedelta(days=7)
         super().save(*args, **kwargs)
     
     @property

@@ -2,12 +2,15 @@
 Authentication utilities for Django Ninja API.
 """
 
+import logging
 from typing import Optional, Any
 from django.http import HttpRequest
 from ninja.security import HttpBearer, APIKeyHeader
 from users.models import AuthToken
 from datetime import datetime
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 class BearerTokenAuth(HttpBearer):
@@ -58,32 +61,40 @@ class SessionOrTokenAuth:
     def __call__(self, request: HttpRequest) -> Optional[Any]:
         # First check if user is authenticated via session
         if request.user and request.user.is_authenticated:
+            logger.info(f"Session auth success for user: {request.user.username}")
             return request.user
-        
+
         # Then check for Bearer token
         auth_header = request.headers.get('Authorization', '')
         if auth_header.startswith('Bearer '):
             token = auth_header[7:]
+            logger.info(f"Bearer token received, length: {len(token)}")
             try:
                 token_obj = AuthToken.objects.select_related('user').get(token=token)
-                
+
                 if token_obj.is_expired:
+                    logger.warning(f"Token expired for user: {token_obj.user.username}")
                     token_obj.delete()
                     return None
-                
+
                 if not token_obj.user.is_active:
+                    logger.warning(f"User inactive: {token_obj.user.username}")
                     return None
-                
+
                 # Update last used
                 token_obj.last_used_at = timezone.now()
                 token_obj.save(update_fields=['last_used_at'])
-                
+
                 request.user = token_obj.user
+                logger.info(f"Token auth success for user: {token_obj.user.username}, role: {token_obj.user.role}")
                 return token_obj.user
-                
+
             except AuthToken.DoesNotExist:
+                logger.warning(f"Token not found in database: {token[:8]}...")
                 return None
-        
+        else:
+            logger.info(f"No Bearer token in Authorization header: '{auth_header[:30] if auth_header else 'empty'}'")
+
         return None
 
 

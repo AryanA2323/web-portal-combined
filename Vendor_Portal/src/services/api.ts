@@ -25,8 +25,12 @@ class ApiService {
       async (config: InternalAxiosRequestConfig) => {
         try {
           const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-          if (token) {
+          if (token && token.length > 0) {
             config.headers.Authorization = `Bearer ${token}`;
+            // Debug log for troubleshooting (only log token length, not the actual token)
+            console.log(`[API] Request to ${config.url}, token attached (length: ${token.length})`);
+          } else {
+            console.log(`[API] Request to ${config.url}, no token available`);
           }
         } catch (error) {
           console.error('Error retrieving token:', error);
@@ -137,14 +141,32 @@ class ApiService {
         username: email,
         password,
       });
-      
+
+      // Check if 2FA is required (202 response)
+      if (response.status === 202 || response.data.requires_2fa) {
+        throw {
+          message: response.data.message || 'Two-factor authentication required',
+          status: 202,
+        };
+      }
+
       // Extract the token from the response
       const { token, user } = response.data;
       const accessToken = token?.token || token;
-      
+
+      // Validate token before storing
+      if (!accessToken || typeof accessToken !== 'string' || accessToken.length < 10) {
+        console.error('Invalid token received:', accessToken);
+        throw {
+          message: 'Invalid authentication token received',
+          status: 401,
+        };
+      }
+
       // Store the access token (refresh token not available from this endpoint)
       await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-      
+      console.log('Token stored successfully, length:', accessToken.length);
+
       // Transform backend user data to match VendorUser interface
       const vendorUser = {
         id: user.id,
@@ -154,7 +176,7 @@ class ApiService {
         company: user.company || '',
         role: user.role,
       };
-      
+
       // Return formatted response matching AuthResponse type
       return {
         user: vendorUser,
