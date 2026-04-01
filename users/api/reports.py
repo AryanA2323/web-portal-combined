@@ -9,6 +9,7 @@ from ninja import Router, Schema
 from ninja.errors import HttpError
 from django.http import HttpRequest
 from django.utils import timezone
+from django.db import connections
 
 from users.models import Report, InsuranceCase, CustomUser
 
@@ -249,10 +250,25 @@ def create_report(request: HttpRequest, payload: CreateReportSchema):
     if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
         raise HttpError(403, "Access denied")
 
-    # Check if case exists
+    # Check if case exists (try by ID from incident-db first, then fallback to case_number lookup)
+    case = None
     try:
         case = InsuranceCase.objects.get(id=payload.case_id)
     except InsuranceCase.DoesNotExist:
+        # If case not found by ID, try to find it by querying the cases table and matching by case_number
+        try:
+            with connections['default'].cursor() as cursor:
+                cursor.execute("SELECT case_number FROM cases WHERE id = %s", [payload.case_id])
+                result = cursor.fetchone()
+                if result:
+                    case_number = result[0]
+                    case = InsuranceCase.objects.get(case_number=case_number)
+                    logger.info(f"Mapped incident-db case ID {payload.case_id} to insurance_case ID {case.id} via case_number {case_number}")
+        except (InsuranceCase.DoesNotExist, Exception) as e:
+            logger.warning(f"Could not map case ID {payload.case_id} to insurance_case: {str(e)}")
+            raise HttpError(404, "Case not found")
+
+    if not case:
         raise HttpError(404, "Case not found")
 
     # Create report
