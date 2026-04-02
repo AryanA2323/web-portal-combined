@@ -22,6 +22,7 @@ import {
   TableHead,
   TablePagination,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material';
 import {
@@ -114,6 +115,11 @@ const AIBriefPage = () => {
   const [viewReportDialogOpen, setViewReportDialogOpen] = useState(false);
   const [statementFile, setStatementFile] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedContent, setEditedContent] = useState('');
+  const [lawyers, setLawyers] = useState([]);
+  const [selectedLawyer, setSelectedLawyer] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     saveStoredReports(reportsByCase);
@@ -147,11 +153,21 @@ const AIBriefPage = () => {
 
   useEffect(() => {
     fetchVendors();
+    fetchLawyers();
   }, []);
 
   useEffect(() => {
     fetchCases();
   }, [page, rowsPerPage, statusFilter, caseTypeFilter, vendorFilter, vendors]);
+
+  const fetchLawyers = async () => {
+    try {
+      const response = await api.get('/lawyers');
+      setLawyers(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch lawyers:', err);
+    }
+  };
 
   const fetchVendors = async () => {
     try {
@@ -345,7 +361,21 @@ const AIBriefPage = () => {
         }
       );
 
+      // Save report to database for legal review
+      let reportId = null;
+      try {
+        const saveResponse = await api.post('/reports', {
+          case_id: selectedCase.id,
+          report_content: response.data.report_text,
+        });
+        reportId = saveResponse.data.id;
+      } catch (saveErr) {
+        console.error('Failed to save report to database:', saveErr);
+        // Continue even if save fails - report is still in localStorage
+      }
+
       const reportRecord = {
+        id: reportId,
         caseId: response.data.case_id,
         caseNumber: response.data.case_number,
         reportText: response.data.report_text,
@@ -353,17 +383,6 @@ const AIBriefPage = () => {
         generatedAt: new Date().toISOString(),
         sourceFileName: statementFile.name,
       };
-
-      // Save report to database for legal review
-      try {
-        await api.post('/reports', {
-          case_id: selectedCase.id,
-          report_content: response.data.report_text,
-        });
-      } catch (saveErr) {
-        console.error('Failed to save report to database:', saveErr);
-        // Continue even if save fails - report is still in localStorage
-      }
 
       setReportsByCase((prev) => ({
         ...prev,
@@ -447,6 +466,131 @@ const AIBriefPage = () => {
 
     const fileName = `${caseNum}_AI_Brief_Report.pdf`;
     doc.save(fileName);
+  };
+
+  const handleEditReport = async () => {
+    if (activeReport) {
+      // If report doesn't have an ID, first save it to database
+      if (!activeReport.id) {
+        setSubmitting(true);
+        try {
+          const saveResponse = await api.post('/reports', {
+            case_id: activeReport.caseId,
+            report_content: activeReport.reportText,
+          });
+          
+          // Update the report with the database ID
+          const updatedReport = {
+            ...activeReport,
+            id: saveResponse.data.id,
+          };
+          
+          setReportsByCase((prev) => ({
+            ...prev,
+            [activeReportCaseId]: updatedReport,
+          }));
+          
+          setEditedContent(activeReport.reportText);
+          setEditMode(true);
+          setSuccess('Report saved to database. You can now edit.');
+        } catch (err) {
+          console.error('Failed to save report to database:', err);
+          setError('Could not save report to database. Please try again.');
+        } finally {
+          setSubmitting(false);
+        }
+      } else {
+        setEditedContent(activeReport.reportText);
+        setEditMode(true);
+      }
+    }
+  };
+
+  const handleSaveReport = async () => {
+    if (!activeReport || !editedContent.trim()) {
+      setError('Report content cannot be empty.');
+      return;
+    }
+
+    if (!activeReport.id) {
+      setError('Report ID is missing. Please close and reopen the report.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await api.put(`/reports/${activeReport.id}/content`, {
+        report_content: editedContent,
+      });
+
+      // Update the local report
+      setReportsByCase((prev) => ({
+        ...prev,
+        [activeReportCaseId]: {
+          ...prev[activeReportCaseId],
+          reportText: editedContent,
+        },
+      }));
+
+      setEditMode(false);
+      setSuccess('Report updated successfully.');
+    } catch (err) {
+      console.error('Failed to save report:', err);
+      setError(err.response?.data?.detail || err.message || 'Failed to save report.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAssignLawyer = async () => {
+    if (!activeReport || !selectedLawyer) {
+      setError('Please select a lawyer to assign.');
+      return;
+    }
+
+    // If report doesn't have an ID, save it first
+    let reportId = activeReport.id;
+    if (!reportId) {
+      setSubmitting(true);
+      try {
+        const saveResponse = await api.post('/reports', {
+          case_id: activeReport.caseId,
+          report_content: activeReport.reportText,
+        });
+        reportId = saveResponse.data.id;
+        
+        // Update the report with the database ID
+        const updatedReport = {
+          ...activeReport,
+          id: reportId,
+        };
+        setReportsByCase((prev) => ({
+          ...prev,
+          [activeReportCaseId]: updatedReport,
+        }));
+      } catch (err) {
+        console.error('Failed to save report to database:', err);
+        setError('Could not save report to database before assignment. Please try again.');
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    try {
+      const response = await api.post(`/reports/${reportId}/assign`, {
+        lawyer_id: selectedLawyer.id,
+      });
+
+      setSelectedLawyer(null);
+      setViewReportDialogOpen(false);
+      setSuccess(`Report assigned to ${selectedLawyer.full_name} successfully.`);
+      fetchCases();
+    } catch (err) {
+      console.error('Failed to assign lawyer:', err);
+      setError(err.response?.data?.detail || 'Failed to assign lawyer.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const isSelected = (id) => selected.indexOf(id) !== -1;
@@ -816,7 +960,11 @@ const AIBriefPage = () => {
 
       <Dialog
         open={viewReportDialogOpen}
-        onClose={() => setViewReportDialogOpen(false)}
+        onClose={() => {
+          setViewReportDialogOpen(false);
+          setEditMode(false);
+          setSelectedLawyer(null);
+        }}
         maxWidth="md"
         fullWidth
       >
@@ -833,7 +981,7 @@ const AIBriefPage = () => {
             variant="outlined"
             startIcon={<Download />}
             onClick={handleDownloadReport}
-            disabled={!activeReport}
+            disabled={!activeReport || editMode}
             sx={{
               textTransform: 'none',
               fontWeight: 600,
@@ -849,28 +997,73 @@ const AIBriefPage = () => {
               <Typography sx={{ fontSize: '13px', color: '#64748b', mb: 2 }}>
                 Source PDF: {activeReport.sourceFileName} | Generated {formatRelativeDate(activeReport.generatedAt)}
               </Typography>
-              <Box
-                sx={{
-                  borderRadius: '10px',
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  p: 2.5,
-                }}
-              >
-                <Typography
-                  component="pre"
+              
+              {editMode ? (
+                <TextField
+                  multiline
+                  fullWidth
+                  rows={15}
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  variant="outlined"
                   sx={{
-                    m: 0,
-                    whiteSpace: 'pre-wrap',
-                    fontFamily: 'inherit',
-                    fontSize: '14px',
-                    lineHeight: 1.7,
-                    color: '#1e293b',
+                    borderRadius: '10px',
+                    '& .MuiOutlinedInput-root': {
+                      fontFamily: 'inherit',
+                      fontSize: '14px',
+                    },
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    borderRadius: '10px',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    p: 2.5,
                   }}
                 >
-                  {activeReport.reportText}
-                </Typography>
-              </Box>
+                  <Typography
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'inherit',
+                      fontSize: '14px',
+                      lineHeight: 1.7,
+                      color: '#1e293b',
+                    }}
+                  >
+                    {activeReport.reportText}
+                  </Typography>
+                </Box>
+              )}
+
+              {!editMode && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
+                    Assign to Lawyer for Review
+                  </Typography>
+                  <FormControl fullWidth>
+                    <Select
+                      value={selectedLawyer?.id || ''}
+                      onChange={(e) => {
+                        const lawyer = lawyers.find((l) => l.id === e.target.value);
+                        setSelectedLawyer(lawyer);
+                      }}
+                      displayEmpty
+                      sx={{ mb: 2 }}
+                    >
+                      <MenuItem value="">Select a lawyer</MenuItem>
+                      {lawyers.map((lawyer) => (
+                        <MenuItem key={lawyer.id} value={lawyer.id}>
+                          {lawyer.full_name} ({lawyer.email})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              )}
             </Box>
           ) : (
             <Typography sx={{ color: '#64748b', textAlign: 'center', py: 4 }}>
@@ -878,13 +1071,63 @@ const AIBriefPage = () => {
             </Typography>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
+        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
           <Button
-            onClick={() => setViewReportDialogOpen(false)}
+            onClick={() => {
+              setViewReportDialogOpen(false);
+              setEditMode(false);
+              setSelectedLawyer(null);
+            }}
             sx={{ textTransform: 'none' }}
           >
-            Close
+            {editMode ? 'Cancel Edit' : 'Close'}
           </Button>
+          {editMode && (
+            <Button
+              variant="contained"
+              onClick={handleSaveReport}
+              disabled={submitting || !editedContent.trim()}
+              sx={{
+                backgroundColor: '#667eea',
+                textTransform: 'none',
+                fontWeight: 600,
+                '&:hover': { backgroundColor: '#5568d3' },
+              }}
+            >
+              {submitting ? <CircularProgress size={20} color="inherit" /> : 'Save Changes'}
+            </Button>
+          )}
+          {!editMode && (
+            <>
+              <Button
+                variant="outlined"
+                onClick={handleEditReport}
+                disabled={submitting}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderColor: '#667eea',
+                  color: '#667eea',
+                  '&:hover': { backgroundColor: '#f0f4ff' },
+                }}
+              >
+                Edit Report
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleAssignLawyer}
+                disabled={submitting || !selectedLawyer}
+                sx={{
+                  backgroundColor: '#667eea',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  '&:hover': { backgroundColor: '#5568d3' },
+                }}
+              >
+                {submitting ? <CircularProgress size={20} color="inherit" /> : 'Assign to Lawyer'}
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
     </AdminLayout>

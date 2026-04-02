@@ -127,39 +127,49 @@ class AIBriefService:
         ]
         sections.append("=== INVESTIGATION SUMMARY ===\n" + "\n".join(inv_info))
 
+        # Statements (if available)
+        statements_info = []
+        if case_context.get('claimant_statement'):
+            statements_info.append(f"Claimant Statement: {case_context.get('claimant_statement')}")
+        if case_context.get('insured_statement'):
+            statements_info.append(f"Insured Statement: {case_context.get('insured_statement')}")
+        if case_context.get('driver_statement'):
+            statements_info.append(f"Driver Statement: {case_context.get('driver_statement')}")
+        
+        if statements_info:
+            sections.append("=== AVAILABLE STATEMENTS ===\n" + "\n".join(statements_info))
+
         return "\n\n".join(sections)
 
     _SYSTEM_INSTRUCTION = (
         "You are assisting an insurance incident-management admin team. "
-        "Read the vendor statement and the case context carefully, then produce a comprehensive, factual investigation report. "
+        "Read the vendor statement and case context carefully, then produce a comprehensive, structured investigation report. "
         "Do not invent facts. If information is not available or unclear, state that it is not mentioned.\n\n"
         "Return the response in exactly this structured format with clear section headers:\n\n"
         "## CASE INFORMATION\n"
         "- Case Number: [from context]\n"
         "- Claim Number: [from context]\n"
+        "- Insured Name: [from context]\n"
+        "- Claimant Name: [from context]\n"
         "- Case Type: [from context]\n"
+        "- Category: [from context]\n"
         "- Case Receive Date: [from context]\n\n"
-        "## INCIDENT DETAILS\n"
-        "- Incident Date/Time: [from context or vendor statement]\n"
-        "- Incident Location: [full location from context]\n"
-        "- FIR Number: [if available]\n"
-        "- Brief Description: [1-2 sentences summarizing incident]\n\n"
-        "## CLIENT DETAILS\n"
-        "- Client/Insurance Company: [from context]\n"
-        "- Policy Number: [if available]\n\n"
-        "## VENDOR DETAILS\n"
-        "- Investigating Vendor: [from context]\n"
-        "- Investigation Status: [from context]\n\n"
-        "## PARTIES INVOLVED\n"
-        "- Insured: [name and address if available]\n"
-        "- Claimant: [name and address if available]\n"
-        "- Driver: [name if available]\n\n"
-        "## VENDOR STATEMENT SUMMARY\n"
-        "- 4 to 6 bullet points summarizing key findings from the vendor statement\n\n"
-        "## INVESTIGATION SUMMARY\n"
-        "- A concise paragraph (100-150 words) summarizing the investigation findings, scope of work, and current status\n\n"
-        "## RECOMMENDED REVIEW NOTES\n"
-        "- 3 to 5 action items or observations for the admin reviewer to consider"
+        "## CLAIMANT STATEMENT\n"
+        "[If claimant statement is available in case context, include it here. If not available, write 'Not provided in case data']\n\n"
+        "## INSURED STATEMENT\n"
+        "[If insured statement is available in case context, include it here. If not available, write 'Not provided in case data']\n\n"
+        "## DRIVER STATEMENT\n"
+        "[If driver statement is available in case context, include it here. If not available, write 'Not provided in case data']\n\n"
+        "## AI SUMMARY\n"
+        "Provide a comprehensive analysis synthesizing information from:\n"
+        "- All available statements (claimant, insured, driver)\n"
+        "- The vendor statement from the uploaded PDF\n"
+        "- Case context and investigation details\n\n"
+        "The summary should be 200-300 words and highlight:\n"
+        "- Key facts and findings\n"
+        "- Consistency or inconsistencies across statements\n"
+        "- Important observations and recommendations\n"
+        "- Next steps for investigation"
     )
 
     def build_prompt(self, case_context: Dict[str, Any], statement_text: str) -> str:

@@ -768,6 +768,7 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
     - Client details
     - Vendor details
     - Investigation summary
+    - Statements from claimant, insured, and driver checks
     """
     with connections['default'].cursor() as cursor:
         cursor.execute(
@@ -805,6 +806,11 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
                     (SELECT claimant_address FROM claimant_checks WHERE case_id = c.id LIMIT 1),
                     ''
                 ) AS claimant_address,
+                -- Claimant statement
+                COALESCE(
+                    (SELECT statement FROM claimant_checks WHERE case_id = c.id AND statement != '' LIMIT 1),
+                    ''
+                ) AS claimant_statement,
                 -- Insured details
                 COALESCE(
                     (SELECT insured_name FROM insured_checks WHERE case_id = c.id LIMIT 1),
@@ -818,11 +824,21 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
                     (SELECT policy_number FROM insured_checks WHERE case_id = c.id LIMIT 1),
                     ''
                 ) AS policy_number,
+                -- Insured statement
+                COALESCE(
+                    (SELECT statement FROM insured_checks WHERE case_id = c.id AND statement != '' LIMIT 1),
+                    ''
+                ) AS insured_statement,
                 -- Driver details
                 COALESCE(
                     (SELECT driver_name FROM driver_checks WHERE case_id = c.id LIMIT 1),
                     ''
                 ) AS driver_name,
+                -- Driver statement
+                COALESCE(
+                    (SELECT statement FROM driver_checks WHERE case_id = c.id AND statement != '' LIMIT 1),
+                    ''
+                ) AS driver_statement,
                 -- Assigned vendor name (from any check type)
                 COALESCE(
                     (SELECT uv.company_name FROM claimant_checks cc LEFT JOIN users_vendor uv ON uv.id = cc.assigned_vendor_id WHERE cc.case_id = c.id AND uv.company_name IS NOT NULL LIMIT 1),
@@ -867,11 +883,14 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
         "fir_number": row[13],
         "claimant_name": row[14],
         "claimant_address": row[15],
-        "insured_name": row[16],
-        "insured_address": row[17],
-        "policy_number": row[18],
-        "driver_name": row[19],
-        "assigned_vendor_name": row[20],
+        "claimant_statement": row[16],
+        "insured_name": row[17],
+        "insured_address": row[18],
+        "policy_number": row[19],
+        "insured_statement": row[20],
+        "driver_name": row[21],
+        "driver_statement": row[22],
+        "assigned_vendor_name": row[23],
     }
 
 

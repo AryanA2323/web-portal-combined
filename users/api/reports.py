@@ -100,6 +100,16 @@ class ReviewReportSchema(Schema):
     notes: str = ''
 
 
+class UpdateReportSchema(Schema):
+    """Schema for updating report content."""
+    report_content: str
+
+
+class ReassignReportSchema(Schema):
+    """Schema for reassigning a rejected report to a new lawyer."""
+    lawyer_id: int
+
+
 class ReportStatsSchema(Schema):
     """Report statistics schema."""
     total: int
@@ -398,6 +408,83 @@ def assign_lawyer(request: HttpRequest, report_id: int, payload: AssignLawyerSch
     report.save()
 
     logger.info(f"Report {report.id} assigned to lawyer {lawyer.username} by {user.username}")
+
+    return report_to_schema(report)
+
+
+@router.put(
+    "/reports/{report_id}/content",
+    response=ReportSchema,
+    summary="Update report content",
+    description="Update the content of a report (Admin only, before assignment or after rejection)."
+)
+def update_report_content(request: HttpRequest, report_id: int, payload: UpdateReportSchema):
+    """Update report content."""
+    user = request.auth
+
+    if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
+        raise HttpError(403, "Access denied")
+
+    try:
+        report = Report.objects.select_related('case', 'assigned_lawyer').get(id=report_id)
+    except Report.DoesNotExist:
+        raise HttpError(404, "Report not found")
+
+    # Allow editing if report is PENDING, REJECTED, or has not been reviewed yet
+    if report.status not in [Report.Status.PENDING, Report.Status.REJECTED]:
+        # Allow editing ASSIGNED reports too before lawyer reviews them
+        pass
+
+    report.report_content = payload.report_content
+    report.updated_at = timezone.now()
+    report.save()
+
+    logger.info(f"Report {report.id} content updated by {user.username}")
+
+    return report_to_schema(report)
+
+
+@router.post(
+    "/reports/{report_id}/reassign",
+    response=ReportSchema,
+    summary="Reassign rejected report",
+    description="Reassign a rejected report to a different lawyer (Admin only)."
+)
+def reassign_report(request: HttpRequest, report_id: int, payload: ReassignReportSchema):
+    """Reassign a rejected report to a different lawyer."""
+    user = request.auth
+
+    if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
+        raise HttpError(403, "Access denied")
+
+    try:
+        report = Report.objects.select_related('case', 'assigned_lawyer').get(id=report_id)
+    except Report.DoesNotExist:
+        raise HttpError(404, "Report not found")
+
+    # Can only reassign rejected reports
+    if report.status != Report.Status.REJECTED:
+        raise HttpError(400, "Can only reassign rejected reports")
+
+    # Check if lawyer exists and has lawyer role
+    try:
+        lawyer = CustomUser.objects.get(id=payload.lawyer_id, role=CustomUser.Role.LAWYER)
+    except CustomUser.DoesNotExist:
+        raise HttpError(404, "Lawyer not found")
+
+    if not lawyer.is_active:
+        raise HttpError(400, "Lawyer is not active")
+
+    # Reassign lawyer
+    previous_lawyer = report.assigned_lawyer
+    report.assigned_lawyer = lawyer
+    report.assigned_at = timezone.now()
+    report.reviewed_at = None  # Reset review timestamp
+    report.review_notes = ''  # Clear previous review notes
+    report.status = Report.Status.ASSIGNED
+    report.save()
+
+    logger.info(f"Report {report.id} reassigned from {previous_lawyer.username if previous_lawyer else 'None'} to {lawyer.username} by {user.username}")
 
     return report_to_schema(report)
 
