@@ -2,9 +2,11 @@
 Cases API endpoints.
 """
 
+import json
 import logging
 from typing import List, Optional
 from datetime import datetime
+from urllib.parse import urlparse
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from ninja.pagination import paginate, PageNumberPagination
@@ -17,6 +19,37 @@ from users.services.ai_brief_service import AIBriefGenerationError, AIBriefServi
 logger = logging.getLogger(__name__)
 
 router = Router(tags=["Cases"])
+
+
+def _build_absolute_media_url(request: HttpRequest, raw_url: str) -> str:
+    """Build an absolute media URL using the current request host."""
+    if not raw_url:
+        return ""
+    if str(raw_url).startswith(("http://", "https://")):
+        return str(raw_url)
+
+    normalized_path = str(raw_url)
+    if normalized_path.startswith("media/"):
+        normalized_path = f"/{normalized_path}"
+    elif not normalized_path.startswith("/"):
+        normalized_path = f"/media/{normalized_path}"
+
+    return request.build_absolute_uri(normalized_path)
+
+
+def _extract_evidence_filename(evidence_item) -> str:
+    """Extract a stable filename from a vendor evidence item."""
+    if isinstance(evidence_item, dict):
+        filename = evidence_item.get("filename") or evidence_item.get("file_name")
+        if filename:
+            return str(filename)
+        raw_url = evidence_item.get("url") or evidence_item.get("photo_url") or ""
+    elif isinstance(evidence_item, str):
+        raw_url = evidence_item
+    else:
+        return ""
+
+    return urlparse(str(raw_url)).path.rstrip("/").split("/")[-1]
 
 
 # =============================================================================
@@ -201,6 +234,7 @@ class AIBriefReportResponse(Schema):
     case_number: str
     report_text: str
     statement_excerpt: str
+    evidence_photos: Optional[List[dict]] = None  # List of evidence photo URLs
 
 
 class CreateCaseSchema(Schema):
@@ -769,6 +803,7 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
     - Vendor details
     - Investigation summary
     - Statements from claimant, insured, and driver checks
+    - Vendor evidence photos from all supported checks
     """
     with connections['default'].cursor() as cursor:
         cursor.execute(
@@ -866,6 +901,53 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
     if case_receive_date:
         case_receive_date = case_receive_date.strftime('%Y-%m-%d') if hasattr(case_receive_date, 'strftime') else str(case_receive_date)
 
+    def _parse_jsonb_list(value):
+        if not value:
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                return []
+            return parsed if isinstance(parsed, list) else []
+        return []
+
+    vendor_evidence = []
+    seen_evidence_urls = set()
+    evidence_tables = (
+        "claimant_checks",
+        "insured_checks",
+        "driver_checks",
+        "spot_checks",
+        "chargesheets",
+    )
+    try:
+        with connections['default'].cursor() as cursor:
+            for table in evidence_tables:
+                cursor.execute(
+                    f"SELECT vendor_evidence FROM {table} WHERE case_id = %s AND vendor_evidence IS NOT NULL",
+                    [case_id],
+                )
+                for (raw_evidence,) in cursor.fetchall():
+                    for item in _parse_jsonb_list(raw_evidence):
+                        if isinstance(item, str):
+                            evidence_item = {"url": item}
+                        elif isinstance(item, dict):
+                            evidence_item = item
+                        else:
+                            continue
+
+                        evidence_url = (evidence_item.get("url") or "").strip()
+                        if not evidence_url or evidence_url in seen_evidence_urls:
+                            continue
+
+                        seen_evidence_urls.add(evidence_url)
+                        vendor_evidence.append(evidence_item)
+    except Exception as exc:
+        logger.warning(f"Failed to fetch vendor evidence for case {case_id}: {exc}")
+
     return {
         "case_id": row[0],
         "case_number": row[1],
@@ -891,6 +973,7 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
         "driver_name": row[21],
         "driver_statement": row[22],
         "assigned_vendor_name": row[23],
+        "vendor_evidence": vendor_evidence,
     }
 
 
@@ -922,11 +1005,28 @@ def generate_ai_brief_report(
         case_context = _fetch_ai_brief_case_context(case_id)
         service = AIBriefService()
         result = service.generate_report(case_context, uploaded_file.read())
+        
+        vendor_evidence = []
+        for item in case_context.get('vendor_evidence', []):
+            if isinstance(item, dict):
+                evidence_item = dict(item)
+            elif isinstance(item, str):
+                evidence_item = {"url": item}
+            else:
+                continue
+
+            raw_url = evidence_item.get("url") or evidence_item.get("photo_url") or ""
+            evidence_item["preview_url"] = _build_absolute_media_url(request, raw_url)
+            if not evidence_item.get("filename"):
+                evidence_item["filename"] = _extract_evidence_filename(evidence_item)
+            vendor_evidence.append(evidence_item)
+        
         return {
             "case_id": case_context["case_id"],
             "case_number": case_context["case_number"] or "",
             "report_text": result["report_text"],
             "statement_excerpt": result["statement_text"][:1000],
+            "evidence_photos": vendor_evidence if vendor_evidence else None,
         }
     except AIBriefGenerationError as exc:
         logger.error(f"AI brief generation failed for case {case_id}: {exc}")
@@ -936,6 +1036,29 @@ def generate_ai_brief_report(
     except Exception as exc:
         logger.error(f"Unexpected AI brief generation error for case {case_id}: {exc}")
         raise HttpError(500, "Failed to generate AI brief report")
+
+
+@router.delete(
+    "/cases/incident-db/{case_id}",
+    summary="Delete Case",
+    description="Delete a case and all its related verification checks. Admin access required.",
+)
+def delete_case_from_incident_db(request: HttpRequest, case_id: int):
+    """Delete a case from incident_case_db and all its related verification checks."""
+    if not is_admin_or_super_admin(request.user):
+        raise HttpError(403, "Admin access required")
+
+    try:
+        from users.incident_case_db import delete_case
+        result = delete_case(case_id)
+        logger.info(f"[API] Case {case_id} deleted by user {request.user.username}")
+        return result
+    except ValueError as exc:
+        logger.warning(f"[API] Case {case_id} not found: {exc}")
+        raise HttpError(404, str(exc))
+    except Exception as exc:
+        logger.error(f"[API] Failed to delete case {case_id}: {exc}")
+        raise HttpError(500, f"Failed to delete case: {str(exc)}")
 
 
 # ---------------------------------------------------------------------------

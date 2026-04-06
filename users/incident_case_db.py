@@ -640,3 +640,59 @@ def insert_rto_check(case_id,
     except Exception as e:
         logger.error(f"[incident_case_db] Failed to insert rto_check: {e}")
         raise
+
+
+# =========================================================================
+# DELETE CASE
+# =========================================================================
+
+def delete_case(case_id):
+    """
+    Delete a case and all its related verification checks from incident_case_db.
+    
+    This will delete:
+    - The case record from cases table
+    - All claimant_checks related to this case
+    - All insured_checks related to this case
+    - All driver_checks related to this case
+    - All spot_checks related to this case
+    - All rti_checks related to this case
+    - All rto_checks related to this case
+    - All chargesheets related to this case
+    
+    Args:
+        case_id (int): The ID of the case to delete
+        
+    Returns:
+        dict: Success status and message
+        
+    Raises:
+        Exception: If the case doesn't exist or deletion fails
+    """
+    try:
+        with _get_cursor() as cursor:
+            # First check if case exists
+            cursor.execute("SELECT id FROM cases WHERE id = %s", [case_id])
+            if not cursor.fetchone():
+                raise ValueError(f"Case with id {case_id} not found")
+            
+            # Delete all related verification checks first (due to foreign key constraints)
+            cursor.execute("DELETE FROM claimant_checks WHERE case_id = %s", [case_id])
+            cursor.execute("DELETE FROM insured_checks WHERE case_id = %s", [case_id])
+            cursor.execute("DELETE FROM driver_checks WHERE case_id = %s", [case_id])
+            cursor.execute("DELETE FROM spot_checks WHERE case_id = %s", [case_id])
+            cursor.execute("DELETE FROM rti_checks WHERE case_id = %s", [case_id])
+            cursor.execute("DELETE FROM rto_checks WHERE case_id = %s", [case_id])
+            cursor.execute("DELETE FROM chargesheets WHERE case_id = %s", [case_id])
+            
+            # Delete the case itself
+            cursor.execute("DELETE FROM cases WHERE id = %s", [case_id])
+            
+        logger.info(f"[incident_case_db] Deleted case id={case_id} and all related verification checks")
+        return {"success": True, "message": f"Case {case_id} and all related verification checks deleted successfully"}
+    except ValueError as e:
+        logger.warning(f"[incident_case_db] Case not found: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"[incident_case_db] Failed to delete case {case_id}: {e}")
+        raise

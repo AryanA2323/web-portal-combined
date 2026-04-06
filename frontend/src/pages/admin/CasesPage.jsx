@@ -36,6 +36,7 @@ import {
   Warning,
   ExpandMore,
   ChevronRight,
+  Delete,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
@@ -102,6 +103,11 @@ const CasesPage = () => {
   const [selectedVendorId, setSelectedVendorId] = useState('');
   const [vendorAssigning, setVendorAssigning] = useState(false);
   const [vendorModalTarget, setVendorModalTarget] = useState(null); // { caseId, checkType }
+
+  // Delete case modal state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [caseToDelete, setCaseToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Fetch data on mount
   useEffect(() => {
@@ -301,6 +307,36 @@ const CasesPage = () => {
     }
   };
 
+  // Delete case handler
+  const handleDeleteCase = async () => {
+    if (!caseToDelete) return;
+    try {
+      setDeleting(true);
+      await api.delete(`/cases/incident-db/${caseToDelete.id}`);
+      setDeleteDialogOpen(false);
+      setCaseToDelete(null);
+      alert(`Case ${caseToDelete.case_number} deleted successfully.`);
+      await fetchData();
+    } catch (error) {
+      console.error('Failed to delete case:', error);
+      alert(error.response?.data?.detail || error.response?.data?.error || 'Failed to delete case. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Open delete confirmation dialog
+  const openDeleteDialog = (caseData) => {
+    setCaseToDelete(caseData);
+    setDeleteDialogOpen(true);
+  };
+
+  // Close delete confirmation dialog
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setCaseToDelete(null);
+  };
+
   // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -485,6 +521,7 @@ const CasesPage = () => {
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>SLA</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>TAT Days</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px' }}>Last Updated</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', width: 80, textAlign: 'center' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -626,13 +663,28 @@ const CasesPage = () => {
                           {formatDate(row.updated_at)}
                         </Typography>
                       </TableCell>
+
+                      {/* Actions */}
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        <IconButton
+                          size="small"
+                          onClick={() => openDeleteDialog(row)}
+                          sx={{
+                            color: '#f56565',
+                            '&:hover': { backgroundColor: '#ffe0e0' },
+                          }}
+                          title="Delete case"
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </TableCell>
                     </TableRow>
 
                     {/* ── Sub-items (verification checks) ── */}
                     {subItems.length > 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={13}
+                          colSpan={14}
                           sx={{ py: 0, borderBottom: isExpanded ? '1px solid #e0e0e0' : 'none', p: 0 }}
                         >
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
@@ -769,7 +821,7 @@ const CasesPage = () => {
               })}
               {!loading && cases.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={13} sx={{ textAlign: 'center', py: 4 }}>
+                  <TableCell colSpan={14} sx={{ textAlign: 'center', py: 4 }}>
                     <Typography variant="body1" color="text.secondary">
                       No cases found. Try adjusting your filters or create a new case.
                     </Typography>
@@ -861,6 +913,49 @@ const CasesPage = () => {
             }}
           >
             {vendorAssigning ? <CircularProgress size={20} color="inherit" /> : 'Assign'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Case Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={closeDeleteDialog}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, fontSize: '18px', pb: 1 }}>
+          Delete Case
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: '14px', color: '#666', mb: 2 }}>
+            Are you sure you want to delete case <strong>{caseToDelete?.case_number}</strong>?
+          </Typography>
+          <Typography sx={{ fontSize: '12px', color: '#999' }}>
+            This action will permanently delete the case and all its related verification checks. This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={closeDeleteDialog}
+            disabled={deleting}
+            sx={{ textTransform: 'none', color: '#666' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={deleting}
+            onClick={handleDeleteCase}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              backgroundColor: '#f56565',
+              borderRadius: '8px',
+              '&:hover': { backgroundColor: '#e53e3e' },
+            }}
+          >
+            {deleting ? <CircularProgress size={20} color="inherit" /> : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -5,13 +5,16 @@ Endpoints for vendors to manage their assigned cases.
 
 import logging
 import json
+import os
 from typing import List, Optional
 from datetime import datetime
+from urllib.parse import unquote, urlparse
 from ninja import Router, Schema
 from django.db import connection, connections
 from django.http import HttpRequest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import UploadedFile
+from django.conf import settings
 from users.services.speech_statement_service import get_speech_service
 
 logger = logging.getLogger(__name__)
@@ -148,6 +151,65 @@ def vendor_has_case_assignment(cursor, vendor_id: int, case_number: str) -> bool
         if cursor.fetchone():
             return True
     return False
+
+
+def parse_json_list(value) -> List:
+    """Parse a JSON/JSONB field into a Python list."""
+    if not value:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+    return []
+
+
+def extract_evidence_filename(evidence_entry) -> str:
+    """Extract a filename from a vendor_evidence entry."""
+    if isinstance(evidence_entry, dict):
+        filename = evidence_entry.get("filename") or evidence_entry.get("file_name")
+        if filename:
+            return str(filename)
+        raw_url = evidence_entry.get("url") or evidence_entry.get("photo_url") or ""
+    elif isinstance(evidence_entry, str):
+        raw_url = evidence_entry
+    else:
+        return ""
+
+    return os.path.basename(urlparse(str(raw_url)).path.rstrip("/"))
+
+
+def media_relative_path_from_url(raw_url: str) -> Optional[str]:
+    """Convert a stored media URL into a path relative to MEDIA_ROOT."""
+    if not raw_url:
+        return None
+
+    path = unquote(urlparse(str(raw_url)).path).lstrip("/")
+    if not path:
+        return None
+    if path.startswith("media/"):
+        path = path[len("media/"):]
+    return path or None
+
+
+def build_absolute_media_url(request: HttpRequest, raw_url: str) -> str:
+    """Build an absolute media URL using the current request host."""
+    if not raw_url:
+        return ""
+    if str(raw_url).startswith(("http://", "https://")):
+        return str(raw_url)
+
+    normalized_path = str(raw_url)
+    if normalized_path.startswith("media/"):
+        normalized_path = f"/{normalized_path}"
+    elif not normalized_path.startswith("/"):
+        normalized_path = f"/media/{normalized_path}"
+
+    return request.build_absolute_uri(normalized_path)
 
 
 # =============================================================================
@@ -487,7 +549,24 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                         evidence_list = []
                 except (json.JSONDecodeError, TypeError, ValueError):
                     evidence_list = []
-            check_detail['evidence_photos'] = evidence_list
+            normalized_evidence_list = []
+            for item in evidence_list:
+                if isinstance(item, dict):
+                    evidence_item = dict(item)
+                elif isinstance(item, str):
+                    evidence_item = {
+                        "url": item,
+                        "filename": extract_evidence_filename(item),
+                    }
+                else:
+                    continue
+
+                raw_url = evidence_item.get("url") or evidence_item.get("photo_url") or ""
+                evidence_item["preview_url"] = build_absolute_media_url(request, raw_url)
+                if not evidence_item.get("filename"):
+                    evidence_item["filename"] = extract_evidence_filename(evidence_item)
+                normalized_evidence_list.append(evidence_item)
+            check_detail['evidence_photos'] = normalized_evidence_list
 
             return {
                 "case": case_info,
@@ -509,9 +588,6 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
 )
 def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type: str):
     """Upload evidence photo for a vendor-assigned check."""
-    import os
-    from django.conf import settings
-
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     if request.user.role != 'VENDOR':
@@ -547,15 +623,7 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
         return 400, {"error": "No photos provided"}
 
     # Parse existing evidence list
-    evidence_list = []
-    if existing_evidence:
-        try:
-            if isinstance(existing_evidence, list):
-                evidence_list = existing_evidence
-            elif isinstance(existing_evidence, str):
-                evidence_list = json.loads(existing_evidence)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            evidence_list = []
+    evidence_list = parse_json_list(existing_evidence)
 
     upload_dir = os.path.join(
         settings.MEDIA_ROOT, 'evidence_photos', f'case_{case_id}', check_type
@@ -600,6 +668,80 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
         "message": f"Uploaded {len(uploaded)} photo(s)",
         "uploaded": uploaded,
         "total_evidence": len(evidence_list),
+    }
+
+
+@router.delete(
+    "/vendor-check-evidence/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Delete uploaded evidence from a vendor check",
+    description="Remove one evidence photo from the check's vendor_evidence column and delete the file from storage.",
+)
+def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type: str, filename: str):
+    """Delete a specific evidence photo from a vendor-assigned check."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role != 'VENDOR':
+        return 403, {"error": "Vendor access required"}
+
+    vendor_id = get_vendor_id_from_user(request.user)
+    if not vendor_id:
+        return 403, {"error": "Vendor profile not found"}
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+    if not filename:
+        return 400, {"error": "filename is required"}
+
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(f"""
+                SELECT id, vendor_evidence FROM {table}
+                WHERE case_id = %s AND assigned_vendor_id = %s
+            """, [case_id, vendor_id])
+            check_row = cursor.fetchone()
+            if not check_row:
+                return 404, {"error": "Check not found or not assigned to you"}
+
+            check_id = check_row[0]
+            evidence_list = parse_json_list(check_row[1])
+
+            delete_index = next(
+                (idx for idx, item in enumerate(evidence_list) if extract_evidence_filename(item) == filename),
+                None,
+            )
+            if delete_index is None:
+                return 404, {"error": "Evidence photo not found"}
+
+            deleted_item = evidence_list.pop(delete_index)
+
+            cursor.execute(f"""
+                UPDATE {table} SET vendor_evidence = %s, updated_at = NOW()
+                WHERE id = %s
+            """, [json.dumps(evidence_list), check_id])
+    except Exception as exc:
+        logger.error(f"Failed to delete vendor evidence for case={case_id} check={check_type}: {exc}")
+        return 500, {"error": "Failed to delete evidence photo"}
+
+    file_url = deleted_item if isinstance(deleted_item, str) else (
+        deleted_item.get("url") or deleted_item.get("photo_url") or ""
+    )
+    relative_media_path = media_relative_path_from_url(file_url)
+    if relative_media_path:
+        try:
+            media_root = os.path.abspath(settings.MEDIA_ROOT)
+            absolute_file_path = os.path.abspath(os.path.join(media_root, relative_media_path))
+            if absolute_file_path.startswith(media_root + os.sep) and os.path.exists(absolute_file_path):
+                os.remove(absolute_file_path)
+        except Exception as exc:
+            logger.warning(f"Failed to delete evidence file {relative_media_path}: {exc}")
+
+    return {
+        "success": True,
+        "message": "Evidence photo removed successfully",
+        "deleted_filename": filename,
+        "remaining": len(evidence_list),
     }
 
 

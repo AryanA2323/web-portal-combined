@@ -264,6 +264,17 @@ class ApiService {
     }
   }
 
+  async deleteCheckEvidence(caseId: number, checkType: string, filename: string): Promise<any> {
+    try {
+      const response = await this.api.delete(`/vendor-check-evidence/${caseId}/${checkType}`, {
+        params: { filename },
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
   async getCases(): Promise<any> {
     try {
       // This is for admin/super admin only

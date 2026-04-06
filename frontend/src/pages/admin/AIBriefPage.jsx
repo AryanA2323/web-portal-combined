@@ -29,8 +29,10 @@ import {
   AutoAwesome,
   CheckCircle,
   ChevronRight,
+  Delete,
   Description,
   Download,
+  Refresh,
   Schedule,
   TrendingUp,
   UploadFile,
@@ -66,6 +68,49 @@ const loadStoredReports = () => {
 
 const saveStoredReports = (reports) => {
   localStorage.setItem(REPORT_STORAGE_KEY, JSON.stringify(reports));
+};
+
+const getEvidencePhotoUrl = (photo) => {
+  if (!photo) return '';
+  if (typeof photo === 'string') return photo;
+  return photo.preview_url || photo.url || photo.photo_url || '';
+};
+
+const resolveEvidencePhotoUrl = (photoUrl) => {
+  if (!photoUrl) return '';
+  if (photoUrl.startsWith('data:')) return photoUrl;
+  if (photoUrl.startsWith('http')) {
+    try {
+      const parsedUrl = new URL(photoUrl);
+      if (parsedUrl.pathname.startsWith('/media/')) {
+        return `${parsedUrl.pathname}${parsedUrl.search || ''}`;
+      }
+    } catch {
+      return photoUrl;
+    }
+    return photoUrl;
+  }
+  if (photoUrl.startsWith('/media/')) return photoUrl;
+  if (photoUrl.startsWith('media/')) return `/${photoUrl}`;
+  return `/media/${photoUrl.replace(/^\/+/, '')}`;
+};
+
+const getImageDataUrl = async (photo) => {
+  const imgSrc = resolveEvidencePhotoUrl(getEvidencePhotoUrl(photo));
+  if (!imgSrc) return null;
+
+  const response = await fetch(imgSrc);
+  if (!response.ok) {
+    throw new Error(`Failed to load image: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 };
 
 const formatRelativeDate = (value) => {
@@ -120,6 +165,9 @@ const AIBriefPage = () => {
   const [lawyers, setLawyers] = useState([]);
   const [selectedLawyer, setSelectedLawyer] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteReportDialogOpen, setDeleteReportDialogOpen] = useState(false);
+  const [deletingReport, setDeletingReport] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     saveStoredReports(reportsByCase);
@@ -380,6 +428,7 @@ const AIBriefPage = () => {
         caseNumber: response.data.case_number,
         reportText: response.data.report_text,
         statementExcerpt: response.data.statement_excerpt,
+        evidencePhotos: response.data.evidence_photos || [],
         generatedAt: new Date().toISOString(),
         sourceFileName: statementFile.name,
       };
@@ -401,7 +450,7 @@ const AIBriefPage = () => {
     }
   };
 
-  const handleDownloadReport = () => {
+  const handleDownloadReport = async () => {
     if (!activeReport || !activeReportCase) return;
 
     const doc = new jsPDF();
@@ -424,6 +473,40 @@ const AIBriefPage = () => {
         }
         doc.text(line, margin, y);
         y += fontSize * 0.5;
+      }
+    };
+
+    const addImage = async (photo, caption = '') => {
+      // Check if we need a new page
+      if (y > doc.internal.pageSize.getHeight() - 100) {
+        doc.addPage();
+        y = 20;
+      }
+
+      try {
+        const imageDataUrl = await getImageDataUrl(photo);
+        if (!imageDataUrl) return;
+        const imageFormat = imageDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(imageDataUrl, imageFormat, margin, y, maxWidth, 80);
+        y += 90; // Height of image + spacing
+
+        if (caption) {
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(100, 100, 100);
+          const captionLines = doc.splitTextToSize(`Caption: ${caption}`, maxWidth);
+          for (const line of captionLines) {
+            if (y > doc.internal.pageSize.getHeight() - 20) {
+              doc.addPage();
+              y = 20;
+            }
+            doc.text(line, margin, y);
+            y += 4;
+          }
+          y += 4;
+        }
+      } catch (err) {
+        console.error('Failed to add image to PDF:', err);
       }
     };
 
@@ -454,13 +537,29 @@ const AIBriefPage = () => {
         y += 4;
         continue;
       }
-      // Section headers (lines ending with colon like "Vendor Statement Summary:")
-      if (/^[A-Z].*:$/.test(trimmed) && !trimmed.startsWith('-')) {
+      // Section headers: all caps words without colons (e.g. "CASE INFORMATION", "CLAIMANT STATEMENT")
+      // This regex matches lines that are all uppercase letters and spaces/hyphens
+      if (/^[A-Z\s-]+$/.test(trimmed) && trimmed.length > 3) {
         y += 2;
         addText(trimmed, 13, true, [51, 65, 85]);
         y += 1;
       } else {
         addText(trimmed, 10, false);
+      }
+    }
+
+    // Add evidence photos section
+    const evidencePhotos = activeReport.evidencePhotos || [];
+    if (evidencePhotos.length > 0) {
+      y += 8;
+      doc.setDrawColor(200, 200, 200);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 8;
+      addText('VENDOR EVIDENCE', 13, true, [51, 65, 85]);
+      y += 6;
+
+      for (const photo of evidencePhotos) {
+        await addImage(photo, '');
       }
     }
 
@@ -590,6 +689,60 @@ const AIBriefPage = () => {
       setError(err.response?.data?.detail || 'Failed to assign lawyer.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Delete AI brief report handler
+  const handleDeleteReport = async () => {
+    if (!activeReport) return;
+
+    try {
+      setDeletingReport(true);
+      setError('');
+
+      if (activeReport.id) {
+        // Delete from database
+        await api.delete(`/reports/${activeReport.id}`);
+      }
+
+      // Remove from local state
+      setReportsByCase((prev) => {
+        const updated = { ...prev };
+        delete updated[activeReportCaseId];
+        return updated;
+      });
+
+      setDeleteReportDialogOpen(false);
+      setViewReportDialogOpen(false);
+      setActiveReportCaseId(null);
+      setSuccess(`AI brief report for case ${activeReportCase?.case_number || activeReportCaseId} deleted successfully.`);
+      fetchCases();
+    } catch (err) {
+      console.error('Failed to delete report:', err);
+      setError(err.response?.data?.detail || 'Failed to delete report.');
+    } finally {
+      setDeletingReport(false);
+    }
+  };
+
+  // Regenerate AI brief report handler
+  const handleRegenerateReport = async () => {
+    if (!activeReportCase) return;
+
+    try {
+      setRegenerating(true);
+      setError('');
+
+      // For now, show a message that they need to upload a new statement
+      setViewReportDialogOpen(false);
+      setSelected([activeReportCase.id]);
+      setReportDialogOpen(true);
+      setSuccess('Please upload a new vendor statement PDF to regenerate the report.');
+    } catch (err) {
+      console.error('Failed to prepare regenerate:', err);
+      setError('Failed to prepare report regeneration.');
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -1039,6 +1192,49 @@ const AIBriefPage = () => {
                 </Box>
               )}
 
+              {!editMode && activeReport.evidencePhotos && activeReport.evidencePhotos.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
+                    Vendor Evidence
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                      gap: 2,
+                      maxHeight: '500px',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {activeReport.evidencePhotos.map((photo, idx) => {
+                      const photoUrl = getEvidencePhotoUrl(photo);
+                      return (
+                        <Box
+                          key={idx}
+                          sx={{
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            border: '1px solid #e2e8f0',
+                            backgroundColor: '#f8fafc',
+                          }}
+                        >
+                          <img
+                            src={resolveEvidencePhotoUrl(photoUrl)}
+                            alt={`Vendor Evidence ${idx + 1}`}
+                            style={{
+                              width: '100%',
+                              height: 'auto',
+                              maxHeight: '250px',
+                              objectFit: 'cover',
+                            }}
+                          />
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              )}
+
               {!editMode && (
                 <Box sx={{ mt: 3 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
@@ -1101,6 +1297,36 @@ const AIBriefPage = () => {
             <>
               <Button
                 variant="outlined"
+                startIcon={<Delete />}
+                onClick={() => setDeleteReportDialogOpen(true)}
+                disabled={!activeReport || submitting}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderColor: '#f56565',
+                  color: '#f56565',
+                  '&:hover': { backgroundColor: '#ffe0e0' },
+                }}
+              >
+                Delete Report
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<Refresh />}
+                onClick={handleRegenerateReport}
+                disabled={!activeReport || submitting}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderColor: '#667eea',
+                  color: '#667eea',
+                  '&:hover': { backgroundColor: '#f0f4ff' },
+                }}
+              >
+                Regenerate Report
+              </Button>
+              <Button
+                variant="outlined"
                 onClick={handleEditReport}
                 disabled={submitting}
                 sx={{
@@ -1128,6 +1354,49 @@ const AIBriefPage = () => {
               </Button>
             </>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Report Confirmation Dialog */}
+      <Dialog
+        open={deleteReportDialogOpen}
+        onClose={() => setDeleteReportDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, fontSize: '18px', pb: 1 }}>
+          Delete AI Brief Report
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: '14px', color: '#666', mb: 2 }}>
+            Are you sure you want to delete the AI brief report for case <strong>{activeReportCase?.case_number}</strong>?
+          </Typography>
+          <Typography sx={{ fontSize: '12px', color: '#999' }}>
+            This action will permanently delete the report. You can always regenerate it later by uploading a new vendor statement.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setDeleteReportDialogOpen(false)}
+            disabled={deletingReport}
+            sx={{ textTransform: 'none', color: '#666' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={deletingReport}
+            onClick={handleDeleteReport}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              backgroundColor: '#f56565',
+              borderRadius: '8px',
+              '&:hover': { backgroundColor: '#e53e3e' },
+            }}
+          >
+            {deletingReport ? <CircularProgress size={20} color="inherit" /> : 'Delete Report'}
+          </Button>
         </DialogActions>
       </Dialog>
     </AdminLayout>

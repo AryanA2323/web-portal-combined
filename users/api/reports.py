@@ -640,3 +640,29 @@ def get_lawyer_logs(request: HttpRequest):
         })
 
     return logs
+
+
+@router.delete(
+    "/reports/{report_id}",
+    summary="Delete Report",
+    description="Delete an AI-generated report. Admin access required.",
+)
+def delete_report(request: HttpRequest, report_id: int):
+    """Delete a report by ID."""
+    user = request.auth
+
+    # Only admins can delete reports
+    if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
+        raise HttpError(403, "Access denied")
+
+    try:
+        report = Report.objects.get(id=report_id)
+        case_number = report.case.case_number if report.case else 'Unknown'
+        report.delete()
+        logger.info(f"[API] Report {report_id} for case {case_number} deleted by user {user.username}")
+        return {"success": True, "message": f"Report {report_id} deleted successfully"}
+    except Report.DoesNotExist:
+        raise HttpError(404, f"Report with id {report_id} not found")
+    except Exception as e:
+        logger.error(f"[API] Failed to delete report {report_id}: {e}")
+        raise HttpError(500, f"Failed to delete report: {str(e)}")

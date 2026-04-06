@@ -117,12 +117,48 @@ interface CaseDetailsProps {
   checkType: string;
 }
 
+const getEvidencePhotoName = (photo: any): string => {
+  if (typeof photo === 'string') {
+    const parts = photo.split('/');
+    return parts[parts.length - 1] || 'evidence.jpg';
+  }
+  return photo?.filename || photo?.file_name || 'evidence.jpg';
+};
+
+const getEvidencePhotoUri = (photo: any, apiHost: string): string => {
+  const rawUrl =
+    typeof photo === 'string'
+      ? photo
+      : photo?.preview_url || photo?.url || photo?.photo_url || '';
+
+  if (!rawUrl) return '';
+
+  if (
+    rawUrl.startsWith('http://') ||
+    rawUrl.startsWith('https://') ||
+    rawUrl.startsWith('file:') ||
+    rawUrl.startsWith('content:') ||
+    rawUrl.startsWith('data:')
+  ) {
+    return encodeURI(rawUrl);
+  }
+
+  const normalizedPath = rawUrl.startsWith('/')
+    ? rawUrl
+    : rawUrl.startsWith('media/')
+      ? `/${rawUrl}`
+      : `/media/${rawUrl}`;
+
+  return encodeURI(`${apiHost}${normalizedPath}`);
+};
+
 export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deletingPhotoName, setDeletingPhotoName] = useState<string | null>(null);
 
   // Statement Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -385,6 +421,38 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     }
   };
 
+  const handleDeletePhoto = (photo: any) => {
+    const photoName = getEvidencePhotoName(photo);
+    if (!photoName) {
+      Alert.alert('Remove Failed', 'This photo could not be identified.');
+      return;
+    }
+
+    Alert.alert(
+      'Remove Photo',
+      'Do you want to remove this evidence photo?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeletingPhotoName(photoName);
+              await apiService.deleteCheckEvidence(caseId, checkType, photoName);
+              await loadData();
+            } catch (err: any) {
+              console.error('Delete photo failed:', err);
+              Alert.alert('Remove Failed', err.message || 'Failed to remove evidence photo');
+            } finally {
+              setDeletingPhotoName(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -642,14 +710,38 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           ) : (
             <View style={styles.photosGrid}>
               {evidencePhotos.map((photo: any, idx: number) => (
-                <View key={idx} style={styles.photoCard}>
-                  <Image
-                    source={{ uri: `${apiHost}${photo.url}` }}
-                    style={styles.photoImage}
-                    resizeMode="cover"
-                  />
+                <View key={`${getEvidencePhotoName(photo)}-${idx}`} style={styles.photoCard}>
+                  <View style={styles.photoImageWrapper}>
+                    <Image
+                      source={{ uri: getEvidencePhotoUri(photo, apiHost) }}
+                      style={styles.photoImage}
+                      resizeMode="cover"
+                      onError={(event) => {
+                        console.log('Evidence image failed to load:', {
+                          photo,
+                          resolvedUri: getEvidencePhotoUri(photo, apiHost),
+                          error: event.nativeEvent.error,
+                        });
+                      }}
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.removePhotoButton,
+                        deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled,
+                      ]}
+                      onPress={() => handleDeletePhoto(photo)}
+                      disabled={deletingPhotoName === getEvidencePhotoName(photo)}
+                      activeOpacity={0.8}
+                    >
+                      {deletingPhotoName === getEvidencePhotoName(photo) ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.removePhotoButtonText}>×</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.photoName} numberOfLines={1}>
-                    {photo.filename}
+                    {getEvidencePhotoName(photo)}
                   </Text>
                   <Text style={styles.photoDate}>
                     {new Date(photo.uploaded_at).toLocaleDateString()}
@@ -1002,9 +1094,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
+  photoImageWrapper: {
+    position: 'relative',
+    backgroundColor: '#fff',
+  },
   photoImage: {
     width: '100%',
     height: 120,
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removePhotoButtonDisabled: {
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  removePhotoButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 20,
+    marginTop: -1,
   },
   photoName: {
     fontSize: 11,
