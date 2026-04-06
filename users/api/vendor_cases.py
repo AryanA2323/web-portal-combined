@@ -12,6 +12,7 @@ from django.db import connection, connections
 from django.http import HttpRequest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import UploadedFile
+from users.services.speech_statement_service import get_speech_service
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,59 @@ def get_vendor_id_from_user(user):
         return None
 
 
+CHECK_ASSIGNMENT_TABLES = (
+    'claimant_checks',
+    'insured_checks',
+    'driver_checks',
+    'spot_checks',
+    'chargesheets',
+    'rti_checks',
+    'rto_checks',
+)
+
+
+def get_vendor_assigned_case_numbers(cursor, vendor_id: int) -> List[str]:
+    """Return distinct insurance case numbers that have at least one assigned sub-check."""
+    union_query = " UNION ".join(
+        [
+            f"""
+            SELECT c.case_number
+            FROM {table} t
+            JOIN cases c ON c.id = t.case_id
+            WHERE t.assigned_vendor_id = %s
+              AND c.case_number IS NOT NULL
+              AND c.case_number <> ''
+            """
+            for table in CHECK_ASSIGNMENT_TABLES
+        ]
+    )
+
+    cursor.execute(
+        f"SELECT DISTINCT case_number FROM ({union_query}) assigned_cases ORDER BY case_number",
+        [vendor_id] * len(CHECK_ASSIGNMENT_TABLES),
+    )
+    return [row[0] for row in cursor.fetchall()]
+
+
+def vendor_has_case_assignment(cursor, vendor_id: int, case_number: str) -> bool:
+    """Check whether a vendor has any assigned sub-check for the given case number."""
+    for table in CHECK_ASSIGNMENT_TABLES:
+        cursor.execute(
+            f"""
+            SELECT 1
+            FROM {table} t
+            JOIN cases c ON c.id = t.case_id
+            WHERE t.assigned_vendor_id = %s
+              AND c.case_number = %s
+            LIMIT 1
+            """,
+            [vendor_id, case_number],
+        )
+        if cursor.fetchone():
+            return True
+    return False
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
@@ -132,17 +186,33 @@ def get_vendor_cases(
     
     try:
         with connection.cursor() as cursor:
+            case_numbers = get_vendor_assigned_case_numbers(cursor, vendor_id)
+            if not case_numbers:
+                return {
+                    "cases": [],
+                    "total": 0,
+                    "statistics": {
+                        "total": 0,
+                        "open": 0,
+                        "in_progress": 0,
+                        "resolved": 0,
+                        "closed": 0,
+                    },
+                }
+
+            case_placeholders = ", ".join(["%s"] * len(case_numbers))
+
             # Build WHERE clause
-            where_conditions = [f"assigned_vendor_id = {vendor_id}"]
-            params = []
+            where_conditions = [f"ic.case_number IN ({case_placeholders})"]
+            params = list(case_numbers)
             
             if status:
-                where_conditions.append("status = %s")
+                where_conditions.append("ic.status = %s")
                 params.append(status)
             
             if search:
                 where_conditions.append(
-                    "(title ILIKE %s OR description ILIKE %s OR case_number ILIKE %s OR claim_number ILIKE %s)"
+                    "(ic.title ILIKE %s OR ic.description ILIKE %s OR ic.case_number ILIKE %s OR ic.claim_number ILIKE %s)"
                 )
                 search_param = f"%{search}%"
                 params.extend([search_param, search_param, search_param, search_param])
@@ -150,16 +220,21 @@ def get_vendor_cases(
             where_clause = " AND ".join(where_conditions)
             
             # Get total count
-            count_query = f"SELECT COUNT(*) FROM cases_case WHERE {where_clause}"
+            count_query = f"SELECT COUNT(*) FROM insurance_case ic WHERE {where_clause}"
             cursor.execute(count_query, params)
             total = cursor.fetchone()[0]
             
             # Get paginated data
             offset = (page - 1) * page_size
             data_query = f"""
-                SELECT * FROM cases_case 
+                SELECT
+                    ic.*,
+                    ic.vendor_id AS assigned_vendor_id,
+                    v.company_name AS assigned_vendor
+                FROM insurance_case ic
+                LEFT JOIN users_vendor v ON v.id = ic.vendor_id
                 WHERE {where_clause}
-                ORDER BY created_at DESC
+                ORDER BY ic.created_at DESC
                 LIMIT %s OFFSET %s
             """
             cursor.execute(data_query, params + [page_size, offset])
@@ -169,14 +244,14 @@ def get_vendor_cases(
             stats_query = f"""
                 SELECT 
                     COUNT(*) as total,
-                    COUNT(CASE WHEN status = 'OPEN' THEN 1 END) as open,
-                    COUNT(CASE WHEN status = 'IN_PROGRESS' THEN 1 END) as in_progress,
-                    COUNT(CASE WHEN status = 'RESOLVED' THEN 1 END) as resolved,
-                    COUNT(CASE WHEN status = 'CLOSED' THEN 1 END) as closed
-                FROM cases_case 
-                WHERE assigned_vendor_id = {vendor_id}
+                    COUNT(CASE WHEN ic.status = 'OPEN' THEN 1 END) as open,
+                    COUNT(CASE WHEN ic.status = 'IN_PROGRESS' THEN 1 END) as in_progress,
+                    COUNT(CASE WHEN ic.status = 'RESOLVED' THEN 1 END) as resolved,
+                    COUNT(CASE WHEN ic.status = 'CLOSED' THEN 1 END) as closed
+                FROM insurance_case ic
+                WHERE ic.case_number IN ({case_placeholders})
             """
-            cursor.execute(stats_query)
+            cursor.execute(stats_query, case_numbers)
             stats_row = cursor.fetchone()
             statistics = {
                 'total': stats_row[0] or 0,
@@ -601,15 +676,15 @@ def get_evidence_photos(
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT id, case_number, assigned_vendor_id FROM cases_case WHERE id = %s",
+                "SELECT id, case_number FROM insurance_case WHERE id = %s",
                 [case_id]
             )
             case_row = cursor.fetchone()
             
             if not case_row:
                 return 404, {"error": "Case not found"}
-            
-            if case_row[2] != vendor.id:
+
+            if not vendor_has_case_assignment(cursor, vendor.id, case_row[1]):
                 return 403, {"error": "You are not assigned to this case"}
     except Exception as e:
         logger.error(f"Failed to verify case assignment: {e}")
@@ -768,22 +843,22 @@ def upload_evidence(
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT id, case_number, title, assigned_vendor_id, latitude, longitude FROM cases_case WHERE id = %s",
+                "SELECT id, case_number, title, latitude, longitude FROM insurance_case WHERE id = %s",
                 [case_id]
             )
             case_row = cursor.fetchone()
             
             if not case_row:
                 return 404, {"error": "Case not found"}
-            
-            if case_row[3] != vendor.id:
+
+            if not vendor_has_case_assignment(cursor, vendor.id, case_row[1]):
                 return 403, {"error": "You are not assigned to this case"}
             
             # Get case location for validation
-            if case_row[4] is not None and case_row[5] is not None:
+            if case_row[3] is not None and case_row[4] is not None:
                 case_location = {
-                    'latitude': float(case_row[4]),
-                    'longitude': float(case_row[5])
+                    'latitude': float(case_row[3]),
+                    'longitude': float(case_row[4])
                 }
                 logger.info(f"[Evidence Upload] Case location: {case_location}")
     except Exception as e:
@@ -1192,7 +1267,6 @@ def vendor_check_statement_audio_preview(request: HttpRequest, case_id: int, che
     - Does NOT update the final workflow statement column
     """
     from users.services.speech_statement_service import (
-        get_speech_service,
         SpeechStatementError,
         AudioValidationError,
     )
@@ -1303,7 +1377,6 @@ def vendor_check_statement_audio_apply(request: HttpRequest, case_id: int, check
     """
     from django.db import transaction
     from users.services.speech_statement_service import (
-        get_speech_service,
         SpeechStatementError,
         AudioValidationError,
     )

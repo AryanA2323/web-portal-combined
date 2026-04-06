@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 import base64
-import io
 import os
 from typing import Any, Dict
 
-import fitz  # PyMuPDF
 import requests
 
 
 class AIBriefGenerationError(Exception):
     """Raised when AI brief generation fails."""
+
+
+def _load_pymupdf():
+    """Import PyMuPDF lazily so the whole API does not fail at startup."""
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as exc:
+        raise AIBriefGenerationError(
+            "PyMuPDF is not installed on the backend. Install the requirements to use AI brief generation."
+        ) from exc
+    return fitz
 
 
 class AIBriefService:
@@ -27,6 +36,7 @@ class AIBriefService:
 
     def extract_pdf_text(self, pdf_bytes: bytes) -> str:
         """Extract text from a PDF using PyMuPDF. Returns empty string if none found."""
+        fitz = _load_pymupdf()
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         except Exception:
@@ -42,6 +52,7 @@ class AIBriefService:
 
     def pdf_pages_to_base64_images(self, pdf_bytes: bytes, max_pages: int = 5) -> list[str]:
         """Render PDF pages to base64-encoded PNG images using PyMuPDF."""
+        fitz = _load_pymupdf()
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         except Exception as exc:

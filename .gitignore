@@ -48,6 +48,10 @@ venv.bak/
 
 # Frontend
 node_modules/
+
+# Database backups
+*.dump
+*.sql
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -47,6 +47,27 @@ def check_super_admin(request):
 # =============================================================================
 
 @router.get(
+    "/vendors/profile",
+    response={200: VendorResponseSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema},
+    summary="Get Current Vendor Profile",
+    description="Get the authenticated vendor's profile.",
+)
+def get_vendor_profile(request):
+    """Return the current authenticated vendor profile."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
+
+    if getattr(request.user, "role", None) != "VENDOR":
+        return 403, {"error": "Vendor access required", "code": "PERMISSION_DENIED"}
+
+    try:
+        vendor = Vendor.objects.select_related("user").get(user=request.user)
+    except Vendor.DoesNotExist:
+        return 404, {"error": "Vendor profile not found", "code": "VENDOR_NOT_FOUND"}
+
+    return 200, VendorResponseSchema.from_orm_with_user(vendor)
+
+@router.get(
     "/vendors",
     response={200: List[VendorResponseSchema], 401: ErrorSchema, 403: ErrorSchema},
     summary="List All Vendors",

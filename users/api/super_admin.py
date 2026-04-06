@@ -131,20 +131,20 @@ def get_system_statistics() -> Dict[str, Any]:
     """Get overall system statistics."""
     from django.db import connection
     
-    # Query cases from cases_case table using raw SQL
+    # Query cases from insurance_case using raw SQL
     total_cases = 0
     cases_last_30_days = 0
     
     try:
         with connection.cursor() as cursor:
             # Get total cases
-            cursor.execute("SELECT COUNT(*) FROM cases_case")
+            cursor.execute("SELECT COUNT(*) FROM insurance_case")
             total_cases = cursor.fetchone()[0]
             
             # Get cases from last 30 days
             thirty_days_ago = timezone.now() - timedelta(days=30)
             cursor.execute(
-                "SELECT COUNT(*) FROM cases_case WHERE created_at >= %s",
+                "SELECT COUNT(*) FROM insurance_case WHERE created_at >= %s",
                 [thirty_days_ago]
             )
             cases_last_30_days = cursor.fetchone()[0]

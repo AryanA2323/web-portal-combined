@@ -285,7 +285,7 @@ class ApiService {
 
   async getVendorProfile(): Promise<any> {
     try {
-      const response = await this.api.get('/vendors/profile/');
+      const response = await this.api.get('/vendors/profile');
       return response.data;
     } catch (error) {
       throw this.handleError(error as AxiosError);

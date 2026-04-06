@@ -42,6 +42,7 @@ from users.schemas import (
     TwoFactorStatusSchema,
 )
 from users.models import AuthToken, EmailVerificationCode, PasswordResetToken
+from users.auth import SessionOrTokenAuth
 from users.services.email_service import email_service
 
 User = get_user_model()
@@ -165,7 +166,7 @@ def _create_role_specific_profile(user):
             admin_profile, created = Admin.objects.get_or_create(
                 user=user,
                 defaults={
-                    'employee_id': f"ADMIN_{user.id}_{user.created}".replace(' ', '_'),
+                    'employee_id': f"ADMIN_{user.id}_{int(user.date_joined.timestamp())}",
                     'department': user.sub_role or 'General',
                     'contact_email': user.email,
                 }
@@ -319,6 +320,7 @@ def resend_2fa_code(request, payload: LoginSchema):
 
 @router.post(
     "/logout",
+    auth=SessionOrTokenAuth(),
     response={200: LogoutResponseSchema, 401: ErrorSchema},
     summary="User Logout",
     description="End user session and invalidate tokens.",
@@ -347,6 +349,7 @@ def logout_view(request):
 
 @router.post(
     "/logout/all",
+    auth=SessionOrTokenAuth(),
     response={200: LogoutResponseSchema, 401: ErrorSchema},
     summary="Logout All Sessions",
     description="End all user sessions and invalidate all tokens.",
@@ -374,6 +377,7 @@ def logout_all_view(request):
 
 @router.get(
     "/2fa/status",
+    auth=SessionOrTokenAuth(),
     response={200: TwoFactorStatusSchema, 401: ErrorSchema},
     summary="Get 2FA Status",
     description="Check if 2FA is enabled for the current user.",
@@ -391,6 +395,7 @@ def get_2fa_status(request):
 
 @router.post(
     "/2fa/enable",
+    auth=SessionOrTokenAuth(),
     response={200: MessageSchema, 400: ErrorSchema, 401: ErrorSchema},
     summary="Enable 2FA",
     description="Enable two-factor authentication for the current user.",
@@ -428,6 +433,7 @@ def enable_2fa(request, payload: Enable2FASchema):
 
 @router.post(
     "/2fa/enable/verify",
+    auth=SessionOrTokenAuth(),
     response={200: TwoFactorStatusSchema, 400: ErrorSchema, 401: ErrorSchema},
     summary="Verify and Complete 2FA Setup",
     description="Verify the code and enable 2FA.",
@@ -473,6 +479,7 @@ def verify_enable_2fa(request, payload: Verify2FASchema):
 
 @router.post(
     "/2fa/disable",
+    auth=SessionOrTokenAuth(),
     response={200: TwoFactorStatusSchema, 400: ErrorSchema, 401: ErrorSchema},
     summary="Disable 2FA",
     description="Disable two-factor authentication for the current user.",
@@ -721,6 +728,7 @@ def reset_password_with_token(request, payload: PasswordResetTokenConfirmSchema)
 
 @router.get(
     "/me",
+    auth=SessionOrTokenAuth(),
     response={200: UserResponseSchema, 401: ErrorSchema},
     summary="Get Current User",
     description="Get the currently authenticated user's information.",
@@ -738,6 +746,7 @@ def get_current_user(request):
 
 @router.get(
     "/validate",
+    auth=SessionOrTokenAuth(),
     response={200: MessageSchema, 401: ErrorSchema},
     summary="Validate Session/Token",
     description="Check if current session or token is valid.",
@@ -773,6 +782,7 @@ def get_csrf_token(request):
 
 @router.post(
     "/password/change",
+    auth=SessionOrTokenAuth(),
     response={200: MessageSchema, 400: ErrorSchema, 401: ErrorSchema},
     summary="Change Password",
     description="Change the current user's password.",
@@ -824,6 +834,7 @@ def change_password(request, payload: PasswordChangeSchema):
 
 @router.post(
     "/token/refresh",
+    auth=SessionOrTokenAuth(),
     response={200: dict, 401: ErrorSchema},
     summary="Refresh API Token",
     description="Get a new API token (invalidates the current one).",
