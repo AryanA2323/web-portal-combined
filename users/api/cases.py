@@ -4,15 +4,18 @@ Cases API endpoints.
 
 import json
 import logging
+import os
 from typing import List, Optional
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlencode, urlparse
+import urllib.request
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from ninja.pagination import paginate, PageNumberPagination
 from django.db import connection, connections
 from django.http import HttpRequest
 from django.core.files.uploadedfile import UploadedFile
+from django.conf import settings
 
 from users.services.ai_brief_service import AIBriefGenerationError, AIBriefService
 
@@ -50,6 +53,194 @@ def _extract_evidence_filename(evidence_item) -> str:
         return ""
 
     return urlparse(str(raw_url)).path.rstrip("/").split("/")[-1]
+
+
+def _media_relative_path_from_url(raw_url: str) -> Optional[str]:
+    """Convert a stored media URL into a path relative to MEDIA_ROOT."""
+    if not raw_url:
+        return None
+
+    path = unquote(urlparse(str(raw_url)).path).lstrip("/")
+    if not path:
+        return None
+    if path.startswith("media/"):
+        path = path[len("media/"):]
+    return path or None
+
+
+def _coerce_exif_number(value) -> Optional[float]:
+    """Convert PIL EXIF numeric values to floats."""
+    try:
+        if hasattr(value, "numerator") and hasattr(value, "denominator"):
+            denominator = value.denominator or 1
+            return float(value.numerator) / float(denominator)
+        if isinstance(value, (tuple, list)) and len(value) == 2:
+            denominator = value[1] or 1
+            return float(value[0]) / float(denominator)
+        return float(value)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _convert_gps_to_degrees(value) -> Optional[float]:
+    """Convert EXIF GPS coordinate tuples to decimal degrees."""
+    if not value or len(value) < 3:
+        return None
+
+    degrees = _coerce_exif_number(value[0])
+    minutes = _coerce_exif_number(value[1])
+    seconds = _coerce_exif_number(value[2])
+    if degrees is None or minutes is None or seconds is None:
+        return None
+
+    return degrees + (minutes / 60.0) + (seconds / 3600.0)
+
+
+def _extract_image_exif_metadata(file_path: str) -> dict:
+    """Extract capture time and GPS metadata from a stored image file."""
+    try:
+        from PIL import Image
+        from PIL.ExifTags import GPSTAGS, TAGS
+    except Exception:
+        return {}
+
+    try:
+        with Image.open(file_path) as image:
+            exif_data = image.getexif()
+            if not exif_data:
+                return {}
+
+            exif_map = {}
+            for tag_id, value in exif_data.items():
+                exif_map[TAGS.get(tag_id, tag_id)] = value
+
+            metadata = {}
+            captured_at_raw = (
+                exif_map.get("DateTimeOriginal")
+                or exif_map.get("DateTimeDigitized")
+                or exif_map.get("DateTime")
+            )
+            if captured_at_raw:
+                try:
+                    metadata["captured_at"] = datetime.strptime(
+                        str(captured_at_raw), "%Y:%m:%d %H:%M:%S"
+                    ).isoformat()
+                except ValueError:
+                    metadata["captured_at"] = str(captured_at_raw)
+
+            gps_info_raw = exif_map.get("GPSInfo")
+            if not gps_info_raw:
+                return metadata
+
+            gps_info = {
+                GPSTAGS.get(tag_id, tag_id): value
+                for tag_id, value in gps_info_raw.items()
+            }
+            latitude = _convert_gps_to_degrees(gps_info.get("GPSLatitude"))
+            longitude = _convert_gps_to_degrees(gps_info.get("GPSLongitude"))
+            if latitude is not None and gps_info.get("GPSLatitudeRef") == "S":
+                latitude = -latitude
+            if longitude is not None and gps_info.get("GPSLongitudeRef") == "W":
+                longitude = -longitude
+
+            if latitude is not None:
+                metadata["latitude"] = round(latitude, 6)
+            if longitude is not None:
+                metadata["longitude"] = round(longitude, 6)
+
+            return metadata
+    except Exception as exc:
+        logger.debug(f"Failed to extract EXIF metadata from {file_path}: {exc}")
+        return {}
+
+
+def _reverse_geocode_to_english(latitude: float, longitude: float) -> Optional[str]:
+    """Convert decimal GPS coordinates to a readable English address."""
+    try:
+        params = urlencode(
+            {
+                "lat": latitude,
+                "lon": longitude,
+                "format": "jsonv2",
+                "zoom": 18,
+                "addressdetails": 1,
+                "accept-language": "en",
+            }
+        )
+        request = urllib.request.Request(
+            f"https://nominatim.openstreetmap.org/reverse?{params}",
+            headers={"User-Agent": "IncidentMgmtPlatform/1.0"},
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        display_name = payload.get("display_name")
+        return str(display_name).strip() if display_name else None
+    except Exception as exc:
+        logger.debug(f"Reverse geocoding failed for ({latitude}, {longitude}): {exc}")
+        return None
+
+
+def _enrich_evidence_metadata(
+    request: HttpRequest,
+    evidence_item,
+    fallback_location_name: str = "",
+) -> dict:
+    """Normalize a vendor evidence item and attach preview/time/location metadata."""
+    normalized = dict(evidence_item) if isinstance(evidence_item, dict) else {"url": evidence_item}
+
+    raw_url = normalized.get("url") or normalized.get("photo_url") or ""
+    normalized["preview_url"] = _build_absolute_media_url(request, raw_url)
+    if not normalized.get("filename"):
+        normalized["filename"] = _extract_evidence_filename(normalized)
+
+    existing_location_name = str(normalized.get("location_name") or "").strip()
+    captured_at = normalized.get("captured_at") or normalized.get("timestamp") or normalized.get("uploaded_at")
+    latitude = normalized.get("latitude")
+    longitude = normalized.get("longitude")
+
+    if raw_url:
+        relative_path = _media_relative_path_from_url(raw_url)
+        if relative_path:
+            file_path = os.path.join(settings.MEDIA_ROOT, relative_path)
+            if os.path.exists(file_path):
+                exif_metadata = _extract_image_exif_metadata(file_path)
+                if not captured_at and exif_metadata.get("captured_at"):
+                    captured_at = exif_metadata["captured_at"]
+                if latitude in (None, "") and exif_metadata.get("latitude") is not None:
+                    latitude = exif_metadata["latitude"]
+                if longitude in (None, "") and exif_metadata.get("longitude") is not None:
+                    longitude = exif_metadata["longitude"]
+
+    if latitude not in (None, ""):
+        try:
+            normalized["latitude"] = float(latitude)
+            latitude = normalized["latitude"]
+        except (TypeError, ValueError):
+            latitude = None
+    else:
+        latitude = None
+
+    if longitude not in (None, ""):
+        try:
+            normalized["longitude"] = float(longitude)
+            longitude = normalized["longitude"]
+        except (TypeError, ValueError):
+            longitude = None
+    else:
+        longitude = None
+
+    location_name = existing_location_name
+    if not location_name and latitude is not None and longitude is not None:
+        location_name = _reverse_geocode_to_english(latitude, longitude) or ""
+    if not location_name and fallback_location_name:
+        location_name = fallback_location_name
+
+    if location_name:
+        normalized["location_name"] = location_name
+    if captured_at:
+        normalized["captured_at"] = captured_at
+
+    return normalized
 
 
 # =============================================================================
@@ -1006,20 +1197,23 @@ def generate_ai_brief_report(
         service = AIBriefService()
         result = service.generate_report(case_context, uploaded_file.read())
         
+        fallback_location_name = (
+            str(case_context.get("incident_location") or "").strip()
+            or str(case_context.get("claimant_address") or "").strip()
+            or str(case_context.get("insured_address") or "").strip()
+        )
+
         vendor_evidence = []
         for item in case_context.get('vendor_evidence', []):
-            if isinstance(item, dict):
-                evidence_item = dict(item)
-            elif isinstance(item, str):
-                evidence_item = {"url": item}
-            else:
+            if not isinstance(item, (dict, str)):
                 continue
-
-            raw_url = evidence_item.get("url") or evidence_item.get("photo_url") or ""
-            evidence_item["preview_url"] = _build_absolute_media_url(request, raw_url)
-            if not evidence_item.get("filename"):
-                evidence_item["filename"] = _extract_evidence_filename(evidence_item)
-            vendor_evidence.append(evidence_item)
+            vendor_evidence.append(
+                _enrich_evidence_metadata(
+                    request,
+                    item,
+                    fallback_location_name=fallback_location_name,
+                )
+            )
         
         return {
             "case_id": case_context["case_id"],

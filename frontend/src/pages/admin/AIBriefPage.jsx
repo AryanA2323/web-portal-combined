@@ -113,6 +113,60 @@ const getImageDataUrl = async (photo) => {
   });
 };
 
+const formatEvidenceTimestamp = (photo) => {
+  const rawValue = photo?.captured_at || photo?.uploaded_at || photo?.timestamp;
+  if (!rawValue) return '';
+
+  const parsed = new Date(rawValue);
+  if (Number.isNaN(parsed.getTime())) return String(rawValue);
+
+  return parsed.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).replace(',', '');
+};
+
+const getEvidenceWatermarkLines = (photo) => {
+  const lines = [];
+  const locationName = typeof photo?.location_name === 'string' ? photo.location_name.trim() : '';
+  const timestamp = formatEvidenceTimestamp(photo);
+
+  if (locationName) {
+    lines.push(locationName);
+  }
+  if (timestamp) {
+    lines.push(timestamp);
+  }
+
+  return lines;
+};
+
+const addImageWatermark = (doc, watermarkLines, x, imageY, width, imageHeight) => {
+  if (!watermarkLines?.length) return;
+
+  const paddingX = 4;
+  const paddingY = 2.5;
+  const lineHeight = 4;
+  const wrappedLines = watermarkLines.flatMap((line) => doc.splitTextToSize(line, width - paddingX * 2));
+  const boxHeight = paddingY * 2 + wrappedLines.length * lineHeight;
+  const boxY = imageY + imageHeight - boxHeight;
+
+  doc.setFillColor(15, 23, 42);
+  doc.rect(x, boxY, width, boxHeight, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  wrappedLines.forEach((line, index) => {
+    doc.text(line, x + paddingX, boxY + paddingY + 3 + (index * lineHeight));
+  });
+  doc.setTextColor(30, 30, 30);
+};
+
 const formatRelativeDate = (value) => {
   if (!value) return 'Not generated';
   const date = new Date(value);
@@ -477,8 +531,10 @@ const AIBriefPage = () => {
     };
 
     const addImage = async (photo, caption = '') => {
-      // Check if we need a new page
-      if (y > doc.internal.pageSize.getHeight() - 100) {
+      const imageHeight = 80;
+      const watermarkLines = getEvidenceWatermarkLines(photo);
+
+      if (y > doc.internal.pageSize.getHeight() - (imageHeight + 20)) {
         doc.addPage();
         y = 20;
       }
@@ -487,8 +543,9 @@ const AIBriefPage = () => {
         const imageDataUrl = await getImageDataUrl(photo);
         if (!imageDataUrl) return;
         const imageFormat = imageDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-        doc.addImage(imageDataUrl, imageFormat, margin, y, maxWidth, 80);
-        y += 90; // Height of image + spacing
+        doc.addImage(imageDataUrl, imageFormat, margin, y, maxWidth, imageHeight);
+        addImageWatermark(doc, watermarkLines, margin, y, maxWidth, imageHeight);
+        y += imageHeight + 10;
 
         if (caption) {
           doc.setFontSize(10);
@@ -1208,6 +1265,8 @@ const AIBriefPage = () => {
                   >
                     {activeReport.evidencePhotos.map((photo, idx) => {
                       const photoUrl = getEvidencePhotoUrl(photo);
+                      const watermarkLines = getEvidenceWatermarkLines(photo);
+
                       return (
                         <Box
                           key={idx}
@@ -1218,16 +1277,47 @@ const AIBriefPage = () => {
                             backgroundColor: '#f8fafc',
                           }}
                         >
-                          <img
-                            src={resolveEvidencePhotoUrl(photoUrl)}
-                            alt={`Vendor Evidence ${idx + 1}`}
-                            style={{
-                              width: '100%',
-                              height: 'auto',
-                              maxHeight: '250px',
-                              objectFit: 'cover',
-                            }}
-                          />
+                          <Box sx={{ position: 'relative', backgroundColor: '#0f172a' }}>
+                            <img
+                              src={resolveEvidencePhotoUrl(photoUrl)}
+                              alt={`Vendor Evidence ${idx + 1}`}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                height: '250px',
+                                objectFit: 'cover',
+                              }}
+                            />
+                            {watermarkLines.length > 0 && (
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  px: 1.5,
+                                  py: 1,
+                                  background: 'linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.86) 48%, rgba(15, 23, 42, 0.96) 100%)',
+                                }}
+                              >
+                                {watermarkLines.map((line, lineIndex) => (
+                                  <Typography
+                                    key={`${idx}-${lineIndex}`}
+                                    sx={{
+                                      fontSize: '12px',
+                                      lineHeight: 1.35,
+                                      color: '#ffffff',
+                                      fontWeight: 600,
+                                      textShadow: '0 1px 2px rgba(0, 0, 0, 0.45)',
+                                      wordBreak: 'break-word',
+                                    }}
+                                  >
+                                    {line}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            )}
+                          </Box>
                         </Box>
                       );
                     })}
