@@ -356,9 +356,11 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       );
 
       if (result.success) {
+        const savedStatementIndex = result.statement_index || nextStatementIndex || statementCount + 1;
+        const totalAllowedStatements = result.max_statements_per_check || maxStatementsPerCheck;
         Alert.alert(
           'Statement Applied',
-          `Statement has been saved to the ${result.applied_to_column} field.`,
+          `Statement ${savedStatementIndex} of ${totalAllowedStatements} has been saved to the database.`,
           [
             {
               text: 'OK',
@@ -384,6 +386,13 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatStatementTimestamp = (value: string): string => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleString();
   };
 
   // ============== Photo Upload Functions ==============
@@ -533,6 +542,17 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const caseInfo = data.case || {};
   const checkInfo = data.check || {};
   const evidencePhotos = checkInfo.evidence_photos || [];
+  const statementEntries = Array.isArray(checkInfo.statement_entries) ? checkInfo.statement_entries : [];
+  const statementCount = Number.isFinite(checkInfo.statement_count)
+    ? Number(checkInfo.statement_count)
+    : statementEntries.length;
+  const maxStatementsPerCheck = Number.isFinite(checkInfo.max_statements_per_check)
+    ? Number(checkInfo.max_statements_per_check)
+    : 3;
+  const canAddStatement = typeof checkInfo.can_add_statement === 'boolean'
+    ? checkInfo.can_add_statement
+    : statementCount < maxStatementsPerCheck;
+  const nextStatementIndex = checkInfo.next_statement_index || (canAddStatement ? statementCount + 1 : null);
   const fieldLabels = checkFieldLabels[checkType] || {};
 
   // Build the base URL for media files
@@ -587,9 +607,36 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           <Text style={styles.sectionSubtitle}>
             Speak in Marathi - it will be automatically translated to English
           </Text>
+          <Text style={styles.statementCounterText}>
+            Stored Statements: {statementCount}/{maxStatementsPerCheck}
+          </Text>
+
+          {statementEntries.length > 0 && (
+            <View style={styles.savedStatementsList}>
+              {statementEntries.map((entry: any, idx: number) => (
+                <View key={`statement-entry-${idx}`} style={styles.savedStatementCard}>
+                  <Text style={styles.savedStatementTitle}>Statement {entry.index || idx + 1}</Text>
+                  <Text style={styles.savedStatementText}>{entry.translation_en || ''}</Text>
+                  {!!entry.created_at && (
+                    <Text style={styles.savedStatementMeta}>
+                      Saved: {formatStatementTimestamp(entry.created_at)}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {!canAddStatement && (
+            <View style={styles.maxStatementBanner}>
+              <Text style={styles.maxStatementBannerText}>
+                Maximum {maxStatementsPerCheck} statements have been stored for this check.
+              </Text>
+            </View>
+          )}
 
           {/* Recording Controls */}
-          {!showPreview && (
+          {!showPreview && canAddStatement && (
             <View style={styles.recordingSection}>
               {!isRecording && !recordingUri && (
                 <TouchableOpacity
@@ -598,7 +645,9 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                   activeOpacity={0.8}
                 >
                   <Text style={styles.recordButtonIcon}>🎤</Text>
-                  <Text style={styles.recordButtonText}>Start Recording</Text>
+                  <Text style={styles.recordButtonText}>
+                    Start Recording {nextStatementIndex ? `(${nextStatementIndex}/${maxStatementsPerCheck})` : ''}
+                  </Text>
                 </TouchableOpacity>
               )}
 
@@ -653,7 +702,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           )}
 
           {/* Preview Section */}
-          {showPreview && (
+          {showPreview && canAddStatement && (
             <View style={styles.previewSection}>
               {/* Marathi Transcript */}
               <View style={styles.transcriptBox}>
@@ -693,7 +742,9 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                   {isApplying ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.applyButtonText}>Apply to Statement</Text>
+                    <Text style={styles.applyButtonText}>
+                      Save Statement {nextStatementIndex || ''}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -872,6 +923,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginBottom: 16,
+  },
+  statementCounterText: {
+    fontSize: 13,
+    color: '#1a1a1a',
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  savedStatementsList: {
+    gap: 8,
+    marginBottom: 14,
+  },
+  savedStatementCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e3e8ef',
+    backgroundColor: '#f8fbff',
+    padding: 10,
+  },
+  savedStatementTitle: {
+    fontSize: 13,
+    color: '#1f3b66',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  savedStatementText: {
+    fontSize: 13,
+    color: '#1f2937',
+    lineHeight: 19,
+  },
+  savedStatementMeta: {
+    marginTop: 6,
+    fontSize: 11,
+    color: '#64748b',
+  },
+  maxStatementBanner: {
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  maxStatementBannerText: {
+    fontSize: 12,
+    color: '#991b1b',
+    fontWeight: '600',
   },
   detailRow: {
     flexDirection: 'row',

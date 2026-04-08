@@ -35,7 +35,6 @@ import {
   Refresh,
   Schedule,
   TrendingUp,
-  UploadFile,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
@@ -212,7 +211,6 @@ const AIBriefPage = () => {
   const [activeReportCaseId, setActiveReportCaseId] = useState(null);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [viewReportDialogOpen, setViewReportDialogOpen] = useState(false);
-  const [statementFile, setStatementFile] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState('');
@@ -425,23 +423,17 @@ const AIBriefPage = () => {
       setError('Select exactly one case to generate a report.');
       return;
     }
-    setStatementFile(null);
     setReportDialogOpen(true);
   };
 
   const closeGenerateDialog = () => {
     if (generating) return;
     setReportDialogOpen(false);
-    setStatementFile(null);
   };
 
   const handleGenerateReport = async () => {
     if (!selectedCase) {
       setError('No case selected for report generation.');
-      return;
-    }
-    if (!statementFile) {
-      setError('Upload a vendor statement PDF before generating the report.');
       return;
     }
 
@@ -450,18 +442,7 @@ const AIBriefPage = () => {
       setError('');
       setSuccess('');
 
-      const formData = new FormData();
-      formData.append('statement_pdf', statementFile);
-
-      const response = await api.post(
-        `/cases/incident-db/${selectedCase.id}/ai-brief-report`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
+      const response = await api.post(`/cases/incident-db/${selectedCase.id}/ai-brief-report`);
 
       // Save report to database for legal review
       let reportId = null;
@@ -482,9 +463,10 @@ const AIBriefPage = () => {
         caseNumber: response.data.case_number,
         reportText: response.data.report_text,
         statementExcerpt: response.data.statement_excerpt,
+        vendorStatements: response.data.vendor_statements || [],
         evidencePhotos: response.data.evidence_photos || [],
         generatedAt: new Date().toISOString(),
-        sourceFileName: statementFile.name,
+        sourceFileName: 'Stored Vendor Statements',
       };
 
       setReportsByCase((prev) => ({
@@ -493,7 +475,6 @@ const AIBriefPage = () => {
       }));
       setActiveReportCaseId(selectedCase.id);
       setReportDialogOpen(false);
-      setStatementFile(null);
       setViewReportDialogOpen(true);
       setSuccess(`AI brief report generated for case ${response.data.case_number}.`);
     } catch (err) {
@@ -577,7 +558,8 @@ const AIBriefPage = () => {
     addText(`Claim Number: ${activeReportCase.claim_number || 'N/A'}`, 11, false);
     addText(`Vendor: ${activeReportCase.vendorName || 'Unassigned'}`, 11, false);
     addText(`Generated: ${new Date(activeReport.generatedAt).toLocaleString()}`, 11, false);
-    addText(`Source PDF: ${activeReport.sourceFileName || 'N/A'}`, 11, false);
+    addText(`Statement Source: ${activeReport.sourceFileName || 'Stored Vendor Statements'}`, 11, false);
+    addText(`Vendor Statements: ${(activeReport.vendorStatements || []).length}`, 11, false);
     y += 4;
 
     // Divider line
@@ -794,7 +776,7 @@ const AIBriefPage = () => {
       setViewReportDialogOpen(false);
       setSelected([activeReportCase.id]);
       setReportDialogOpen(true);
-      setSuccess('Please upload a new vendor statement PDF to regenerate the report.');
+      setSuccess('Generate a fresh report from the latest stored vendor statements.');
     } catch (err) {
       console.error('Failed to prepare regenerate:', err);
       setError('Failed to prepare report regeneration.');
@@ -1127,31 +1109,12 @@ const AIBriefPage = () => {
         <DialogContent dividers>
           <Typography sx={{ fontSize: '14px', color: '#475569', mb: 2 }}>
             {selectedCase
-              ? `Upload the vendor statement PDF for case ${selectedCase.case_number || selectedCase.id}. AI will generate a concise vendor summary, incident summary, and review notes.`
+              ? `Generate AI brief for case ${selectedCase.case_number || selectedCase.id} using statements already stored by the vendor across checks.`
               : 'Select a case first.'}
           </Typography>
-
-          <Box
-            sx={{
-              border: '1px dashed #cbd5e1',
-              borderRadius: '10px',
-              p: 2,
-              backgroundColor: '#f8fafc',
-            }}
-          >
-            <Button component="label" variant="outlined" startIcon={<UploadFile />} sx={{ textTransform: 'none' }}>
-              Upload Vendor Statement PDF
-              <input
-                hidden
-                type="file"
-                accept="application/pdf,.pdf"
-                onChange={(event) => setStatementFile(event.target.files?.[0] || null)}
-              />
-            </Button>
-            <Typography sx={{ mt: 1.5, fontSize: '14px', color: '#475569' }}>
-              {statementFile ? statementFile.name : 'No PDF selected yet.'}
-            </Typography>
-          </Box>
+          <Typography sx={{ fontSize: '13px', color: '#64748b' }}>
+            The report will include all available vendor statements and evidence already saved in the database.
+          </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button onClick={closeGenerateDialog} disabled={generating} sx={{ textTransform: 'none' }}>
@@ -1160,7 +1123,7 @@ const AIBriefPage = () => {
           <Button
             variant="contained"
             onClick={handleGenerateReport}
-            disabled={generating || !statementFile}
+            disabled={generating}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
             {generating ? <CircularProgress size={20} color="inherit" /> : 'Generate'}
@@ -1205,8 +1168,43 @@ const AIBriefPage = () => {
           {activeReport && activeReportCase ? (
             <Box>
               <Typography sx={{ fontSize: '13px', color: '#64748b', mb: 2 }}>
-                Source PDF: {activeReport.sourceFileName} | Generated {formatRelativeDate(activeReport.generatedAt)}
+                Source: {activeReport.sourceFileName || 'Stored Vendor Statements'} | Generated {formatRelativeDate(activeReport.generatedAt)}
               </Typography>
+
+              {activeReport.vendorStatements && activeReport.vendorStatements.length > 0 && (
+                <Box
+                  sx={{
+                    mb: 2,
+                    borderRadius: '10px',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    p: 2,
+                  }}
+                >
+                  <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 1 }}>
+                    Vendor Statements ({activeReport.vendorStatements.length})
+                  </Typography>
+                  {activeReport.vendorStatements.map((item, index) => (
+                    <Box
+                      key={`statement-${index}`}
+                      sx={{
+                        p: 1.25,
+                        borderRadius: '8px',
+                        border: '1px solid #e2e8f0',
+                        backgroundColor: '#fff',
+                        mb: index === activeReport.vendorStatements.length - 1 ? 0 : 1,
+                      }}
+                    >
+                      <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#334155', mb: 0.5 }}>
+                        {item.check_type || 'Check'} | Statement {item.statement_index || index + 1}
+                      </Typography>
+                      <Typography sx={{ fontSize: '13px', color: '#1e293b', whiteSpace: 'pre-wrap' }}>
+                        {item.statement_text || ''}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
               
               {editMode ? (
                 <TextField
@@ -1462,7 +1460,7 @@ const AIBriefPage = () => {
             Are you sure you want to delete the AI brief report for case <strong>{activeReportCase?.case_number}</strong>?
           </Typography>
           <Typography sx={{ fontSize: '12px', color: '#999' }}>
-            This action will permanently delete the report. You can always regenerate it later by uploading a new vendor statement.
+            This action will permanently delete the report. You can always regenerate it later from stored vendor statements.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

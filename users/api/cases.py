@@ -14,7 +14,6 @@ from ninja.errors import HttpError
 from ninja.pagination import paginate, PageNumberPagination
 from django.db import connection, connections
 from django.http import HttpRequest
-from django.core.files.uploadedfile import UploadedFile
 from django.conf import settings
 
 from users.services.ai_brief_service import AIBriefGenerationError, AIBriefService
@@ -22,6 +21,7 @@ from users.services.ai_brief_service import AIBriefGenerationError, AIBriefServi
 logger = logging.getLogger(__name__)
 
 router = Router(tags=["Cases"])
+_COLUMN_EXISTS_CACHE = {}
 
 
 def _build_absolute_media_url(request: HttpRequest, raw_url: str) -> str:
@@ -243,6 +243,150 @@ def _enrich_evidence_metadata(
     return normalized
 
 
+def _normalize_statement_entries(raw_value) -> List[dict]:
+    """Parse and normalize statement_entries JSON data."""
+    if not raw_value:
+        return []
+
+    if isinstance(raw_value, list):
+        raw_items = raw_value
+    elif isinstance(raw_value, str):
+        try:
+            parsed = json.loads(raw_value)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return []
+        raw_items = parsed if isinstance(parsed, list) else []
+    else:
+        return []
+
+    normalized_items: List[dict] = []
+    for index, item in enumerate(raw_items, start=1):
+        if not isinstance(item, dict):
+            continue
+
+        statement_text = str(item.get("translation_en") or item.get("text_en") or "").strip()
+        transcript_mr = str(item.get("transcript_mr") or item.get("text_mr") or "").strip()
+        if not statement_text:
+            continue
+
+        normalized_items.append(
+            {
+                "index": int(item.get("index") or index),
+                "statement_text": statement_text,
+                "transcript_mr": transcript_mr,
+                "created_at": item.get("created_at") or "",
+                "source": str(item.get("source") or "").strip(),
+            }
+        )
+    return normalized_items
+
+
+def _column_exists(table_name: str, column_name: str) -> bool:
+    """Return whether a column exists in the current database table."""
+    cache_key = f"{table_name}.{column_name}"
+    if cache_key in _COLUMN_EXISTS_CACHE:
+        return _COLUMN_EXISTS_CACHE[cache_key]
+
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_name = %s AND column_name = %s
+                )
+                """,
+                [table_name, column_name],
+            )
+            exists = bool(cursor.fetchone()[0])
+    except Exception as exc:
+        logger.warning(f"Failed to inspect column {table_name}.{column_name}: {exc}")
+        exists = False
+
+    _COLUMN_EXISTS_CACHE[cache_key] = exists
+    return exists
+
+
+def _collect_vendor_statements(case_id: int) -> List[dict]:
+    """Collect all vendor statements (including multi-entry statements) for AI brief generation."""
+    vendor_statements: List[dict] = []
+    statement_tables = (
+        ("claimant_checks", "statement", "Claimant Check"),
+        ("insured_checks", "statement", "Insured Check"),
+        ("driver_checks", "statement", "Driver Check"),
+        ("spot_checks", "observations", "Spot Check"),
+        ("chargesheets", "statement", "Chargesheet"),
+    )
+
+    with connections['default'].cursor() as cursor:
+        for table_name, legacy_column, check_label in statement_tables:
+            if _column_exists(table_name, "statement_entries"):
+                cursor.execute(
+                    f"""
+                    SELECT id,
+                           COALESCE(statement_entries, '[]'::jsonb) AS statement_entries,
+                           COALESCE({legacy_column}, '') AS legacy_statement
+                    FROM {table_name}
+                    WHERE case_id = %s
+                    ORDER BY id
+                    """,
+                    [case_id],
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    SELECT id,
+                           '[]'::jsonb AS statement_entries,
+                           COALESCE({legacy_column}, '') AS legacy_statement
+                    FROM {table_name}
+                    WHERE case_id = %s
+                    ORDER BY id
+                    """,
+                    [case_id],
+                )
+
+            for check_id, raw_entries, legacy_statement in cursor.fetchall():
+                entries = _normalize_statement_entries(raw_entries)
+                if entries:
+                    for entry in entries:
+                        vendor_statements.append(
+                            {
+                                "check_type": check_label,
+                                "check_id": check_id,
+                                "statement_index": entry["index"],
+                                "statement_text": entry["statement_text"],
+                                "transcript_mr": entry["transcript_mr"],
+                                "created_at": entry["created_at"],
+                                "source": entry["source"] or "audio",
+                            }
+                        )
+                    continue
+
+                legacy_text = str(legacy_statement or "").strip()
+                if legacy_text:
+                    vendor_statements.append(
+                        {
+                            "check_type": check_label,
+                            "check_id": check_id,
+                            "statement_index": 1,
+                            "statement_text": legacy_text,
+                            "transcript_mr": "",
+                            "created_at": "",
+                            "source": "legacy",
+                        }
+                    )
+
+    vendor_statements.sort(
+        key=lambda item: (
+            str(item.get("created_at") or ""),
+            str(item.get("check_type") or ""),
+            int(item.get("statement_index") or 0),
+        )
+    )
+    return vendor_statements
+
+
 # =============================================================================
 # Schemas
 # =============================================================================
@@ -426,6 +570,7 @@ class AIBriefReportResponse(Schema):
     report_text: str
     statement_excerpt: str
     evidence_photos: Optional[List[dict]] = None  # List of evidence photo URLs
+    vendor_statements: Optional[List[dict]] = None  # All statements captured by vendor
 
 
 class CreateCaseSchema(Schema):
@@ -1139,6 +1284,15 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
     except Exception as exc:
         logger.warning(f"Failed to fetch vendor evidence for case {case_id}: {exc}")
 
+    vendor_statements = _collect_vendor_statements(case_id)
+    vendor_statement_text = "\n\n".join(
+        [
+            f"[{item.get('check_type')} - Statement {item.get('statement_index')}] {item.get('statement_text')}"
+            for item in vendor_statements
+            if str(item.get("statement_text") or "").strip()
+        ]
+    )
+
     return {
         "case_id": row[0],
         "case_number": row[1],
@@ -1165,6 +1319,8 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
         "driver_statement": row[22],
         "assigned_vendor_name": row[23],
         "vendor_evidence": vendor_evidence,
+        "vendor_statements": vendor_statements,
+        "vendor_statement_text": vendor_statement_text,
     }
 
 
@@ -1172,30 +1328,27 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
     "/cases/incident-db/{case_id}/ai-brief-report",
     response={200: AIBriefReportResponse},
     summary="Generate AI brief report",
-    description="Generate an AI brief report from an uploaded vendor statement PDF for an incident-db case.",
+    description="Generate an AI brief report from vendor statements stored in check tables for an incident-db case.",
 )
 def generate_ai_brief_report(
     request: HttpRequest,
     case_id: int,
 ):
-    """Generate an AI report from vendor statement PDF and case context."""
+    """Generate an AI report from stored vendor statements and case context."""
     if not is_admin_or_super_admin(request.user):
         raise HttpError(403, "Admin access required")
 
-    uploaded_file: UploadedFile | None = None
-    if hasattr(request, 'FILES'):
-        uploaded_file = request.FILES.get('statement_pdf')
-
-    if not uploaded_file:
-        raise HttpError(400, "statement_pdf file is required")
-
-    if not uploaded_file.name.lower().endswith('.pdf'):
-        raise HttpError(400, "Only PDF files are supported")
-
     try:
         case_context = _fetch_ai_brief_case_context(case_id)
+        statement_text = str(case_context.get("vendor_statement_text") or "").strip()
+        if not statement_text:
+            raise HttpError(
+                400,
+                "No vendor statements are stored for this case. Please record statements in the vendor portal first.",
+            )
+
         service = AIBriefService()
-        result = service.generate_report(case_context, uploaded_file.read())
+        result = service.generate_report_from_statement_text(case_context, statement_text)
         
         fallback_location_name = (
             str(case_context.get("incident_location") or "").strip()
@@ -1221,6 +1374,7 @@ def generate_ai_brief_report(
             "report_text": result["report_text"],
             "statement_excerpt": result["statement_text"][:1000],
             "evidence_photos": vendor_evidence if vendor_evidence else None,
+            "vendor_statements": case_context.get("vendor_statements") or [],
         }
     except AIBriefGenerationError as exc:
         logger.error(f"AI brief generation failed for case {case_id}: {exc}")

@@ -401,6 +401,9 @@ class ApiService {
     confidence: number | null;
     provider: string;
     audio_duration_seconds: number | null;
+    next_statement_index: number;
+    statement_count: number;
+    max_statements_per_check: number;
   }> {
     try {
       const formData = new FormData();
@@ -443,6 +446,9 @@ class ApiService {
     confidence: number | null;
     provider: string;
     audio_duration_seconds: number | null;
+    statement_index: number;
+    statement_count: number;
+    max_statements_per_check: number;
   }> {
     try {
       const formData = new FormData();
@@ -481,6 +487,9 @@ class ApiService {
     audit_id: number;
     applied_text: string;
     applied_to_column: string;
+    statement_index: number;
+    statement_count: number;
+    max_statements_per_check: number;
   }> {
     try {
       const response = await this.api.post(

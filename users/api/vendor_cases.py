@@ -168,6 +168,170 @@ def parse_json_list(value) -> List:
     return []
 
 
+MAX_STATEMENTS_PER_CHECK = 3
+_STATEMENT_ENTRIES_COLUMN_CACHE = {}
+
+
+def parse_statement_entries(value) -> List[dict]:
+    """Parse statement_entries JSON into a normalized list of dict records."""
+    parsed_items = parse_json_list(value)
+    normalized = []
+    for idx, item in enumerate(parsed_items, start=1):
+        if not isinstance(item, dict):
+            continue
+
+        translation = str(item.get("translation_en") or item.get("text_en") or "").strip()
+        transcript = str(item.get("transcript_mr") or item.get("text_mr") or "").strip()
+        if not translation:
+            continue
+
+        normalized.append(
+            {
+                "index": int(item.get("index") or idx),
+                "transcript_mr": transcript,
+                "translation_en": translation,
+                "audio_path": str(item.get("audio_path") or "").strip(),
+                "provider": str(item.get("provider") or "").strip() or "manual",
+                "confidence": item.get("confidence"),
+                "source": str(item.get("source") or "manual_edit"),
+                "detected_language": str(item.get("detected_language") or "mr"),
+                "created_at": item.get("created_at") or "",
+            }
+        )
+    return normalized
+
+
+def _statement_entries_column_exists(table_name: str) -> bool:
+    """Check whether statement_entries column exists for the given check table."""
+    cached = _STATEMENT_ENTRIES_COLUMN_CACHE.get(table_name)
+    if cached is not None:
+        return cached
+
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_name = %s
+                      AND column_name = 'statement_entries'
+                )
+                """,
+                [table_name],
+            )
+            exists = bool(cursor.fetchone()[0])
+    except Exception as exc:
+        logger.warning(f"Failed to inspect statement_entries column for {table_name}: {exc}")
+        exists = False
+
+    _STATEMENT_ENTRIES_COLUMN_CACHE[table_name] = exists
+    return exists
+
+
+def _get_statement_entries_for_check(table_name: str, check_id: int) -> List[dict]:
+    """Fetch statement entries safely; returns [] if migration is not applied yet."""
+    if not _statement_entries_column_exists(table_name):
+        return []
+
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                f"SELECT statement_entries FROM {table_name} WHERE id = %s",
+                [check_id],
+            )
+            row = cursor.fetchone()
+        if not row:
+            return []
+        return parse_statement_entries(row[0])
+    except Exception as exc:
+        logger.warning(f"Failed to fetch statement_entries for {table_name} id={check_id}: {exc}")
+        return []
+
+
+def _compose_statement_column_text(statement_entries: List[dict]) -> str:
+    """Build a backward-compatible statement text from structured entries."""
+    if not statement_entries:
+        return ""
+
+    lines = []
+    for index, entry in enumerate(statement_entries, start=1):
+        text_en = str(entry.get("translation_en") or "").strip()
+        if not text_en:
+            continue
+        lines.append(f"Statement {index}:\n{text_en}")
+    return "\n\n".join(lines)
+
+
+def _get_statement_entries_count(table_name: str, check_id: int) -> int:
+    """Return current number of stored statement entries for a check."""
+    return len(_get_statement_entries_for_check(table_name, check_id))
+
+
+def _append_statement_entry(
+    table_name: str,
+    statement_column: str,
+    check_id: int,
+    transcript_mr: str,
+    translation_en: str,
+    audio_path: Optional[str],
+    provider: str,
+    confidence: Optional[float],
+    source: str,
+    detected_language: str = "mr",
+) -> tuple[int, int]:
+    """
+    Append one statement entry (up to MAX_STATEMENTS_PER_CHECK) and sync final statement column.
+
+    Returns:
+        tuple[int, int]: (statement_index, total_statement_count)
+    """
+    if not _statement_entries_column_exists(table_name):
+        raise ValueError("Statement storage is not ready yet. Please run the latest database migration.")
+
+    with connections['default'].cursor() as cursor:
+        cursor.execute(
+            f"SELECT statement_entries FROM {table_name} WHERE id = %s FOR UPDATE",
+            [check_id],
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("Check not found")
+
+        statement_entries = parse_statement_entries(row[0])
+        if len(statement_entries) >= MAX_STATEMENTS_PER_CHECK:
+            raise ValueError(f"Maximum {MAX_STATEMENTS_PER_CHECK} statements can be stored for this check.")
+
+        statement_index = len(statement_entries) + 1
+        statement_entries.append(
+            {
+                "index": statement_index,
+                "transcript_mr": transcript_mr or "",
+                "translation_en": translation_en,
+                "audio_path": audio_path or "",
+                "provider": provider or "manual",
+                "confidence": confidence,
+                "source": source,
+                "detected_language": detected_language or "mr",
+                "created_at": datetime.now().isoformat(),
+            }
+        )
+
+        composed_statement_text = _compose_statement_column_text(statement_entries)
+        cursor.execute(
+            f"""
+                UPDATE {table_name} SET
+                    statement_entries = %s,
+                    {statement_column} = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            """,
+            [json.dumps(statement_entries), composed_statement_text, check_id],
+        )
+
+    return statement_index, len(statement_entries)
+
+
 def extract_evidence_filename(evidence_entry) -> str:
     """Extract a filename from a vendor_evidence entry."""
     if isinstance(evidence_entry, dict):
@@ -567,6 +731,17 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                     evidence_item["filename"] = extract_evidence_filename(evidence_item)
                 normalized_evidence_list.append(evidence_item)
             check_detail['evidence_photos'] = normalized_evidence_list
+
+            statement_entries = _get_statement_entries_for_check(table, check_detail.get('id'))
+            check_detail['statement_entries'] = statement_entries
+            check_detail['statement_count'] = len(statement_entries)
+            check_detail['max_statements_per_check'] = MAX_STATEMENTS_PER_CHECK
+            check_detail['can_add_statement'] = len(statement_entries) < MAX_STATEMENTS_PER_CHECK
+            check_detail['next_statement_index'] = (
+                len(statement_entries) + 1
+                if len(statement_entries) < MAX_STATEMENTS_PER_CHECK
+                else None
+            )
 
             return {
                 "case": case_info,
@@ -1419,6 +1594,10 @@ def vendor_check_statement_audio_preview(request: HttpRequest, case_id: int, che
     if error_response:
         return error_response
 
+    statement_count = _get_statement_entries_count(table_name, check_id)
+    if statement_count >= MAX_STATEMENTS_PER_CHECK:
+        return 400, {"error": f"Maximum {MAX_STATEMENTS_PER_CHECK} statements already stored for this check."}
+
     # Get uploaded audio file
     audio_file = request.FILES.get('audio')
     if not audio_file:
@@ -1486,6 +1665,9 @@ def vendor_check_statement_audio_preview(request: HttpRequest, case_id: int, che
             "confidence": result.confidence,
             "provider": result.provider,
             "audio_duration_seconds": result.audio_duration_seconds,
+            "next_statement_index": statement_count + 1,
+            "statement_count": statement_count,
+            "max_statements_per_check": MAX_STATEMENTS_PER_CHECK,
         }
 
     except AudioValidationError as e:
@@ -1528,6 +1710,10 @@ def vendor_check_statement_audio_apply(request: HttpRequest, case_id: int, check
         _validate_vendor_check_assignment(request, case_id, check_type)
     if error_response:
         return error_response
+
+    existing_statement_count = _get_statement_entries_count(table_name, check_id)
+    if existing_statement_count >= MAX_STATEMENTS_PER_CHECK:
+        return 400, {"error": f"Maximum {MAX_STATEMENTS_PER_CHECK} statements already stored for this check."}
 
     # Get uploaded audio file
     audio_file = request.FILES.get('audio')
@@ -1582,12 +1768,18 @@ def vendor_check_statement_audio_apply(request: HttpRequest, case_id: int, check
                 confidence=result.confidence,
             )
 
-            # Update final statement column
-            _update_final_statement_column(
+            # Append to structured statements and keep legacy statement column synchronized
+            statement_index, statement_count = _append_statement_entry(
                 table_name=table_name,
                 statement_column=statement_column,
                 check_id=check_id,
-                text=result.translation_en,
+                transcript_mr=result.transcript_mr,
+                translation_en=result.translation_en,
+                audio_path=audio_path,
+                provider=result.provider,
+                confidence=result.confidence,
+                source='audio',
+                detected_language=result.detected_language,
             )
 
         logger.info(
@@ -1605,8 +1797,14 @@ def vendor_check_statement_audio_apply(request: HttpRequest, case_id: int, check
             "confidence": result.confidence,
             "provider": result.provider,
             "audio_duration_seconds": result.audio_duration_seconds,
+            "statement_index": statement_index,
+            "statement_count": statement_count,
+            "max_statements_per_check": MAX_STATEMENTS_PER_CHECK,
         }
 
+    except ValueError as e:
+        logger.warning(f"[Statement] Apply rejected: {e}")
+        return 400, {"error": str(e)}
     except AudioValidationError as e:
         logger.warning(f"[Statement] Audio validation failed: {e.message}")
         return 400, {"error": e.message}
@@ -1641,6 +1839,10 @@ def vendor_check_statement_text_apply(request: HttpRequest, case_id: int, check_
         _validate_vendor_check_assignment(request, case_id, check_type)
     if error_response:
         return error_response
+
+    existing_statement_count = _get_statement_entries_count(table_name, check_id)
+    if existing_statement_count >= MAX_STATEMENTS_PER_CHECK:
+        return 400, {"error": f"Maximum {MAX_STATEMENTS_PER_CHECK} statements already stored for this check."}
 
     # Parse JSON body
     try:
@@ -1699,12 +1901,18 @@ def vendor_check_statement_text_apply(request: HttpRequest, case_id: int, check_
                 confidence=None,
             )
 
-            # Update final statement column
-            _update_final_statement_column(
+            # Append to structured statements and keep legacy statement column synchronized
+            statement_index, statement_count = _append_statement_entry(
                 table_name=table_name,
                 statement_column=statement_column,
                 check_id=check_id,
-                text=edited_english_text,
+                transcript_mr=transcript_mr,
+                translation_en=edited_english_text,
+                audio_path=None,
+                provider='manual',
+                confidence=None,
+                source='manual_edit',
+                detected_language='mr',
             )
 
         logger.info(
@@ -1717,8 +1925,14 @@ def vendor_check_statement_text_apply(request: HttpRequest, case_id: int, check_
             "audit_id": audit_id,
             "applied_text": edited_english_text[:200] + "..." if len(edited_english_text) > 200 else edited_english_text,
             "applied_to_column": statement_column,
+            "statement_index": statement_index,
+            "statement_count": statement_count,
+            "max_statements_per_check": MAX_STATEMENTS_PER_CHECK,
         }
 
+    except ValueError as e:
+        logger.warning(f"[Statement] Manual apply rejected: {e}")
+        return 400, {"error": str(e)}
     except Exception as e:
         logger.exception(f"[Statement] Unexpected error in manual text apply: {e}")
         return 500, {"error": "Failed to save statement. Please try again."}

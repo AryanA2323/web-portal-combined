@@ -1,4 +1,4 @@
-"""Services for generating AI brief reports from vendor statement PDFs."""
+"""Services for generating AI brief reports from vendor statements and optional PDFs."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def _load_pymupdf():
 
 
 class AIBriefService:
-    """Generate concise AI brief reports using Groq and extracted PDF text."""
+    """Generate concise AI brief reports using Groq and statement context."""
 
     text_model = "llama-3.3-70b-versatile"
     vision_model = "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -154,7 +154,7 @@ class AIBriefService:
 
     _SYSTEM_INSTRUCTION = (
         "You are assisting an insurance incident-management admin team. "
-        "Read the vendor statement and case context carefully, then produce a concise, structured investigation report. "
+        "Read the vendor statements and case context carefully, then produce a concise, structured investigation report. "
         "Do not invent facts. If information is not available or unclear, state that it is not mentioned.\n\n"
         "Return the response in exactly this structured format with clear section headers:\n\n"
         "CASE INFORMATION\n"
@@ -171,9 +171,12 @@ class AIBriefService:
         "[If insured statement is available in case context, include it verbatim here. If not available, write 'Not provided in case data']\n\n"
         "DRIVER STATEMENT\n"
         "[If driver statement is available in case context, include it verbatim here. If not available, write 'Not provided in case data']\n\n"
+        "VENDOR STATEMENTS\n"
+        "[List all stored vendor statements in sequence exactly as provided, with source/check labels when available. "
+        "If none are available, write 'Not provided in case data']\n\n"
         "AI SUMMARY\n"
         "[Provide a concise summary in exactly 2-3 sentences that synthesizes:\n"
-        "- Key findings from the vendor statement\n"
+        "- Key findings from the vendor statements\n"
         "- Consistency or inconsistencies across statements\n"
         "- Main points of interest for the investigation]\n\n"
         "IMPORTANT OBSERVATIONS AND RECOMMENDATIONS\n"
@@ -188,8 +191,28 @@ class AIBriefService:
         return (
             f"{self._SYSTEM_INSTRUCTION}\n\n"
             f"Case Context:\n{self._build_context_block(case_context)}\n\n"
-            f"Vendor Statement PDF Text:\n{statement_text[:18000]}"
+            f"Vendor Statements Text:\n{statement_text[:18000]}"
         )
+
+    def generate_report_from_statement_text(
+        self,
+        case_context: Dict[str, Any],
+        statement_text: str,
+    ) -> Dict[str, str]:
+        """Generate a structured AI brief report from stored vendor statements."""
+        if not self.api_key:
+            raise AIBriefGenerationError("GROK_API_KEY is not configured on the backend.")
+
+        normalized_text = (statement_text or "").strip()
+        if not normalized_text:
+            raise AIBriefGenerationError("No vendor statements were provided for report generation.")
+
+        prompt = self.build_prompt(case_context, normalized_text)
+        report_text = self._call_text_model(prompt)
+        return {
+            "statement_text": normalized_text,
+            "report_text": report_text,
+        }
 
     def _call_text_model(self, prompt: str) -> str:
         """Call Groq with the text-only model."""
