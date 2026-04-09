@@ -118,6 +118,13 @@ def get_config() -> Dict[str, Any]:
         "request_timeout_seconds": int(os.environ.get("SPEECH_REQUEST_TIMEOUT_SECONDS", "60")),
         "stt_model": os.environ.get("SPEECH_STT_MODEL", "whisper-large-v3"),
         "translation_model": os.environ.get("SPEECH_TRANSLATION_MODEL", "llama-3.3-70b-versatile"),
+        # Speechmatics Batch API settings
+        "speechmatics_api_key": os.environ.get("SPEECHMATICS_API_KEY", ""),
+        "speechmatics_api_url": os.environ.get(
+            "SPEECHMATICS_API_URL", "https://asr.api.speechmatics.com/v2"
+        ),
+        "speechmatics_poll_interval": int(os.environ.get("SPEECHMATICS_POLL_INTERVAL", "2")),
+        "speechmatics_max_poll_attempts": int(os.environ.get("SPEECHMATICS_MAX_POLL_ATTEMPTS", "60")),
     }
 
 
@@ -432,6 +439,7 @@ class SpeechStatementService:
         Process audio file: validate, transcribe, and translate.
 
         This is the main entry point for the service.
+        Routes to Speechmatics or Groq based on the SPEECH_PROVIDER env var.
 
         Args:
             audio_bytes: Raw audio data
@@ -446,16 +454,31 @@ class SpeechStatementService:
         """
         logger.info(
             f"[SpeechService] Processing audio: {len(audio_bytes)} bytes, "
-            f"type={content_type}, file={filename}"
+            f"type={content_type}, file={filename}, provider={self.provider}"
         )
 
         # Step 1: Validate audio
         validated_type, extension = self.validate_audio(audio_bytes, content_type, filename)
 
-        # Step 2: Transcribe Marathi speech
+        # Step 2+3: Route to the configured provider
+        if self.provider == "speechmatics":
+            return self._process_via_speechmatics(audio_bytes, extension, validated_type)
+        else:
+            return self._process_via_groq(audio_bytes, extension)
+
+    def _process_via_groq(
+        self,
+        audio_bytes: bytes,
+        extension: str,
+    ) -> TranscriptionResult:
+        """
+        Process audio via Groq Whisper (STT) + Groq LLM (translation).
+        This is the original processing path.
+        """
+        # Transcribe Marathi speech
         transcription = self.transcribe_marathi(audio_bytes, extension)
 
-        # Step 3: Translate to English
+        # Translate to English
         translation = self.translate_to_english(transcription["text"])
 
         # Build result
@@ -466,7 +489,7 @@ class SpeechStatementService:
             confidence=None,  # Whisper doesn't provide confidence in verbose mode
             stt_model=transcription["model"],
             translation_model=translation["model"],
-            provider=self.provider,
+            provider="groq",
             audio_duration_seconds=transcription.get("duration"),
             provider_metadata={
                 "stt_response": transcription.get("raw_response", {}),
@@ -474,14 +497,224 @@ class SpeechStatementService:
             },
         )
 
+    def _process_via_speechmatics(
+        self,
+        audio_bytes: bytes,
+        extension: str,
+        content_type: str,
+    ) -> TranscriptionResult:
+        """
+        Process audio via Speechmatics Batch API for Marathi transcription,
+        then use Groq LLM for English translation.
+
+        Speechmatics does not support Marathi→English translation natively,
+        so we use a hybrid approach:
+        1. Speechmatics: Marathi speech → Marathi text (STT)
+        2. Groq LLM: Marathi text → English text (translation)
+        """
+        config = get_config()
+        sm_api_key = config["speechmatics_api_key"]
+        sm_base_url = config["speechmatics_api_url"].rstrip("/")
+        poll_interval = config["speechmatics_poll_interval"]
+        max_poll_attempts = config["speechmatics_max_poll_attempts"]
+
+        if not sm_api_key:
+            raise TranscriptionError("SPEECHMATICS_API_KEY is not configured")
+
+        # ---- Step 1: Submit batch job (transcription only, no translation) ----
+        job_config = json.dumps({
+            "type": "transcription",
+            "transcription_config": {
+                "operating_point": "enhanced",
+                "language": "mr",  # Marathi source language
+            },
+        })
+
+        logger.info("[SpeechService:Speechmatics] Submitting batch job")
+        start_time = time.time()
+
+        with tempfile.NamedTemporaryFile(suffix=f".{extension}", delete=False) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+
+        try:
+            with open(tmp_path, "rb") as audio_file:
+                submit_response = self.session.post(
+                    f"{sm_base_url}/jobs/",
+                    headers={"Authorization": f"Bearer {sm_api_key}"},
+                    files={"data_file": (f"audio.{extension}", audio_file, content_type)},
+                    data={"config": job_config},
+                    timeout=self.request_timeout,
+                )
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+        if submit_response.status_code not in (200, 201):
+            error_detail = submit_response.text[:500] if submit_response.text else "Unknown"
+            logger.error(
+                f"[SpeechService:Speechmatics] Job submit failed: "
+                f"{submit_response.status_code} - {error_detail}"
+            )
+            raise TranscriptionError(
+                f"Speechmatics job submission failed ({submit_response.status_code}). "
+                "Please try again."
+            )
+
+        job_data = submit_response.json()
+        job_id = job_data.get("id")
+        if not job_id:
+            raise TranscriptionError("Speechmatics returned no job ID")
+
+        logger.info(f"[SpeechService:Speechmatics] Job submitted: {job_id}")
+
+        # ---- Step 2: Poll for completion ----
+        job_url = f"{sm_base_url}/jobs/{job_id}"
+        transcript_url = f"{sm_base_url}/jobs/{job_id}/transcript?format=json-v2"
+        headers = {"Authorization": f"Bearer {sm_api_key}"}
+
+        for attempt in range(1, max_poll_attempts + 1):
+            time.sleep(poll_interval)
+
+            try:
+                status_response = self.session.get(
+                    job_url, headers=headers, timeout=self.request_timeout
+                )
+            except requests.RequestException as e:
+                logger.warning(f"[SpeechService:Speechmatics] Poll attempt {attempt} failed: {e}")
+                continue
+
+            if status_response.status_code != 200:
+                logger.warning(
+                    f"[SpeechService:Speechmatics] Poll attempt {attempt}: "
+                    f"status {status_response.status_code}"
+                )
+                continue
+
+            job_info = status_response.json().get("job", {})
+            job_status = job_info.get("status", "")
+
+            if job_status == "done":
+                logger.info(
+                    f"[SpeechService:Speechmatics] Job {job_id} done after "
+                    f"{time.time() - start_time:.1f}s (attempt {attempt})"
+                )
+                break
+            elif job_status in ("rejected", "deleted"):
+                error_msg = job_info.get("error", "Job was rejected")
+                raise TranscriptionError(f"Speechmatics job failed: {error_msg}")
+
+            logger.debug(
+                f"[SpeechService:Speechmatics] Poll {attempt}/{max_poll_attempts}: {job_status}"
+            )
+        else:
+            # Exhausted all poll attempts
+            raise TranscriptionError(
+                "Speechmatics transcription timed out. Please try again with a shorter recording."
+            )
+
+        # ---- Step 3: Retrieve transcript ----
+        try:
+            transcript_response = self.session.get(
+                transcript_url, headers=headers, timeout=self.request_timeout
+            )
+        except requests.RequestException as e:
+            raise TranscriptionError(f"Failed to retrieve Speechmatics transcript: {e}")
+
+        if transcript_response.status_code != 200:
+            raise TranscriptionError(
+                f"Speechmatics transcript retrieval failed ({transcript_response.status_code})"
+            )
+
+        transcript_data = transcript_response.json()
+        stt_elapsed = time.time() - start_time
+
+        # ---- Step 4: Extract Marathi transcript ----
+        results = transcript_data.get("results", [])
+
+        # Join words with spaces, but punctuation attaches to previous word
+        transcript_mr = ""
+        for r in results:
+            alternatives = r.get("alternatives", [])
+            if not alternatives:
+                continue
+            content = alternatives[0].get("content", "")
+            if r.get("type") == "punctuation":
+                transcript_mr += content
+            else:
+                if transcript_mr:
+                    transcript_mr += " "
+                transcript_mr += content
+
+        transcript_mr = transcript_mr.strip()
+
+        if not transcript_mr:
+            raise TranscriptionError(
+                "Speechmatics returned empty transcript. Please speak clearly and try again."
+            )
+
+        logger.info(
+            f"[SpeechService:Speechmatics] STT complete in {stt_elapsed:.1f}s: "
+            f"mr_len={len(transcript_mr)}"
+        )
+
+        # ---- Step 5: Translate Marathi→English via Groq LLM ----
+        translation = self.translate_to_english(transcript_mr)
+        translation_en = translation["text"]
+
+        if not translation_en:
+            raise TranslationError(
+                "Translation returned empty text. Please try again."
+            )
+
+        elapsed = time.time() - start_time
+
+        # Extract audio duration from job metadata
+        audio_duration = None
+        job_meta = transcript_data.get("job", {})
+        if "duration" in job_meta:
+            audio_duration = float(job_meta["duration"])
+
+        logger.info(
+            f"[SpeechService:Speechmatics] Complete in {elapsed:.1f}s: "
+            f"mr_len={len(transcript_mr)}, en_len={len(translation_en)}"
+        )
+
+        return TranscriptionResult(
+            transcript_mr=transcript_mr,
+            translation_en=translation_en,
+            detected_language="mr",
+            confidence=None,
+            stt_model="speechmatics-batch-enhanced",
+            translation_model=translation.get("model", self.translation_model),
+            provider="speechmatics",
+            audio_duration_seconds=audio_duration,
+            provider_metadata={
+                "job_id": job_id,
+                "stt_elapsed_seconds": round(stt_elapsed, 2),
+                "total_elapsed_seconds": round(elapsed, 2),
+                "transcript_data": transcript_data,
+            },
+        )
+
 
 # Singleton instance for reuse
 _service_instance: Optional[SpeechStatementService] = None
+_service_provider: Optional[str] = None
 
 
 def get_speech_service() -> SpeechStatementService:
-    """Get or create the speech statement service singleton."""
-    global _service_instance
-    if _service_instance is None:
+    """Get or create the speech statement service singleton.
+
+    Re-creates the instance if the SPEECH_PROVIDER env var has changed,
+    ensuring hot-switching between providers without restart.
+    """
+    global _service_instance, _service_provider
+    current_provider = os.environ.get("SPEECH_PROVIDER", "groq")
+    if _service_instance is None or _service_provider != current_provider:
         _service_instance = SpeechStatementService()
+        _service_provider = current_provider
+        logger.info(f"[SpeechService] Initialized service with provider: {current_provider}")
     return _service_instance

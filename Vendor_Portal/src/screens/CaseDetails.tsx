@@ -169,6 +169,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const [transcriptMr, setTranscriptMr] = useState('');
   const [translationEn, setTranslationEn] = useState('');
   const [editedTranslation, setEditedTranslation] = useState('');
+  const [statementTitle, setStatementTitle] = useState('');
   const [isApplying, setIsApplying] = useState(false);
 
   const recordingRef = useRef<Audio.Recording | null>(null);
@@ -297,6 +298,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     setTranscriptMr('');
     setTranslationEn('');
     setEditedTranslation('');
+    setStatementTitle('');
   };
 
   const processRecording = async () => {
@@ -347,11 +349,18 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
     setIsApplying(true);
 
+    // Prepend title to statement if provided
+    const trimmedTitle = statementTitle.trim();
+    const trimmedStatement = editedTranslation.trim();
+    const finalStatement = trimmedTitle
+      ? `${trimmedTitle} - ${trimmedStatement}`
+      : trimmedStatement;
+
     try {
       const result = await apiService.applyStatementText(
         caseId,
         checkType,
-        editedTranslation.trim(),
+        finalStatement,
         transcriptMr
       );
 
@@ -704,6 +713,18 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           {/* Preview Section */}
           {showPreview && canAddStatement && (
             <View style={styles.previewSection}>
+              {/* Statement Title */}
+              <View style={styles.translationBox}>
+                <Text style={styles.transcriptLabel}>Statement Title (who is giving the statement):</Text>
+                <TextInput
+                  style={styles.titleInput}
+                  value={statementTitle}
+                  onChangeText={setStatementTitle}
+                  placeholder="e.g. Statement from Vijay Sharma (claimant)"
+                  placeholderTextColor="#999"
+                />
+              </View>
+
               {/* Marathi Transcript */}
               <View style={styles.transcriptBox}>
                 <Text style={styles.transcriptLabel}>Marathi Transcript:</Text>
@@ -1128,6 +1149,16 @@ const styles = StyleSheet.create({
   },
   translationBox: {
     marginBottom: 16,
+  },
+  titleInput: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    height: 44,
   },
   translationInput: {
     backgroundColor: '#fff',
