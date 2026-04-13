@@ -595,7 +595,7 @@ The apply endpoint writes to the correct column based on check type:
 | `GROQ_API_KEY` | - | Groq API key for STT and translation |
 | `SPEECH_PROVIDER` | groq | Speech provider (for future extensibility) |
 | `SPEECH_MAX_FILE_MB` | 15 | Maximum audio file size in MB |
-| `SPEECH_MAX_DURATION_SECONDS` | 180 | Maximum audio duration (best effort) |
+| `SPEECH_MAX_DURATION_SECONDS` | 300 | Maximum audio duration in seconds (5 minutes) |
 | `SPEECH_REQUEST_TIMEOUT_SECONDS` | 60 | API request timeout |
 | `SPEECH_STT_MODEL` | whisper-large-v3 | Whisper model for transcription |
 | `SPEECH_TRANSLATION_MODEL` | llama-3.3-70b-versatile | LLM for translation |

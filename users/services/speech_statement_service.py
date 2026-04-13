@@ -114,7 +114,7 @@ def get_config() -> Dict[str, Any]:
         "provider": os.environ.get("SPEECH_PROVIDER", "groq"),
         "api_key": os.environ.get("GROQ_API_KEY", os.environ.get("GROK_API_KEY", "")),
         "max_file_mb": int(os.environ.get("SPEECH_MAX_FILE_MB", "15")),
-        "max_duration_seconds": int(os.environ.get("SPEECH_MAX_DURATION_SECONDS", "180")),
+        "max_duration_seconds": int(os.environ.get("SPEECH_MAX_DURATION_SECONDS", "300")),
         "request_timeout_seconds": int(os.environ.get("SPEECH_REQUEST_TIMEOUT_SECONDS", "60")),
         "stt_model": os.environ.get("SPEECH_STT_MODEL", "whisper-large-v3"),
         "translation_model": os.environ.get("SPEECH_TRANSLATION_MODEL", "llama-3.3-70b-versatile"),

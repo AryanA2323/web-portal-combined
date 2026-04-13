@@ -202,7 +202,7 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY', os.environ.get('GROK_API_KEY', '')
 # Speech Statement Service Configuration
 SPEECH_PROVIDER = os.environ.get('SPEECH_PROVIDER', 'groq')
 SPEECH_MAX_FILE_MB = int(os.environ.get('SPEECH_MAX_FILE_MB', '15'))
-SPEECH_MAX_DURATION_SECONDS = int(os.environ.get('SPEECH_MAX_DURATION_SECONDS', '180'))
+SPEECH_MAX_DURATION_SECONDS = int(os.environ.get('SPEECH_MAX_DURATION_SECONDS', '300'))
 SPEECH_REQUEST_TIMEOUT_SECONDS = int(os.environ.get('SPEECH_REQUEST_TIMEOUT_SECONDS', '60'))
 SPEECH_STT_MODEL = os.environ.get('SPEECH_STT_MODEL', 'whisper-large-v3')
 SPEECH_TRANSLATION_MODEL = os.environ.get('SPEECH_TRANSLATION_MODEL', 'llama-3.3-70b-versatile')
