@@ -1,152 +1,199 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
-  Paper,
-  Typography,
-  TextField,
   Button,
-  MenuItem,
-  Select,
-  FormControl,
+  Chip,
+  CircularProgress,
+  InputAdornment,
+  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  Checkbox,
   TablePagination,
-  InputAdornment,
-  Avatar,
+  TableRow,
+  TextField,
+  Typography,
 } from '@mui/material';
-import {
-  Search,
-  Description,
-  SearchOutlined,
-  NoteAlt,
-  FolderOpen,
-  Add,
-  ChevronRight,
-} from '@mui/icons-material';
+import { CheckCircle, FileDownload, Refresh, Search } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
-import StatCard from './components/StatCard';
+import api from '../../services/api';
+import jsPDF from 'jspdf';
 
-// Demo data for stats
-const statsData = [
-  {
-    title: 'Total Reports',
-    value: 2421,
-    change: 188,
-    icon: Description,
-    iconBgColor: '#e3f2fd',
-  },
-  {
-    title: 'Investigation Reports',
-    value: 974,
-    change: 84,
-    icon: SearchOutlined,
-    iconBgColor: '#e8f5e9',
-  },
-  {
-    title: 'Authorization Forms',
-    value: 863,
-    change: 19,
-    icon: NoteAlt,
-    iconBgColor: '#fff3e0',
-  },
-  {
-    title: 'Other Documents',
-    value: 584,
-    change: -15,
-    icon: FolderOpen,
-    iconBgColor: '#f3e5f5',
-  },
-];
+const getEvidencePhotoUrl = (photo) => {
+  if (!photo) return '';
+  if (typeof photo === 'string') return photo;
+  return photo.preview_url || photo.url || photo.photo_url || '';
+};
 
-// Demo data for reports table
-const reportsData = [
-  {
-    id: '#1250',
-    type: 'Investigation Report for Hit-and-Run Incident',
-    title: 'Dynamic Claims LLC',
-    generated: '1 hour ago',
-    vendor: 'Dynamic Claims LLC',
-  },
-  {
-    id: '#1249',
-    type: 'Authorization Form: John Smith Odynamic, CBui',
-    title: 'Apex Investigations',
-    generated: '1 day ago',
-    vendor: 'Smith Investigation',
-  },
-  {
-    id: '#1238',
-    type: 'Authorization Form: Mark Lee (Metro Detective',
-    title: 'API Security Services',
-    generated: '1 day ago',
-    vendor: 'API Security Services',
-  },
-  {
-    id: '#1184',
-    type: 'Authorization Form: Anna Miller (Miller & Asso',
-    title: 'Global Security Inc.',
-    generated: '2 days ago',
-    vendor: 'Legal Detective Agency',
-  },
-  {
-    id: '#1176',
-    type: 'Investigation Report for Two-Car Accident',
-    title: 'Legal Detective Agency',
-    generated: '6 days ago',
-    vendor: 'Apex Investigations',
-  },
-  {
-    id: '#1165',
-    type: 'Authorization Form: Robert Johnson (Global Se',
-    title: 'Global Security Inc.',
-    generated: '6 days ago',
-    vendor: 'SecureGuard Inc.',
-  },
-];
+const resolveEvidencePhotoUrl = (photoUrl) => {
+  if (!photoUrl) return '';
+  if (photoUrl.startsWith('data:')) return photoUrl;
+  if (photoUrl.startsWith('http')) {
+    try {
+      const parsedUrl = new URL(photoUrl);
+      if (parsedUrl.pathname.startsWith('/media/')) {
+        return `${parsedUrl.pathname}${parsedUrl.search || ''}`;
+      }
+    } catch {
+      return photoUrl;
+    }
+    return photoUrl;
+  }
+  if (photoUrl.startsWith('/media/')) return photoUrl;
+  if (photoUrl.startsWith('media/')) return `/${photoUrl}`;
+  return `/media/${photoUrl.replace(/^\/+/, '')}`;
+};
+
+const getEvidenceImageDataUrl = async (photo) => {
+  const imgSrc = resolveEvidencePhotoUrl(getEvidencePhotoUrl(photo));
+  if (!imgSrc) return null;
+
+  const response = await fetch(imgSrc);
+  if (!response.ok) {
+    throw new Error(`Failed to load image: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+const formatEvidenceTimestamp = (photo) => {
+  const rawValue = photo?.captured_at || photo?.uploaded_at || photo?.timestamp;
+  if (!rawValue) return '';
+
+  const parsed = new Date(rawValue);
+  if (Number.isNaN(parsed.getTime())) return String(rawValue);
+
+  return parsed.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).replace(',', '');
+};
+
+const formatEvidenceLocationForWatermark = (photo) => {
+  const locationName = typeof photo?.location_name === 'string' ? photo.location_name.trim() : '';
+  const pincodeMatch = locationName.match(/\b\d{6}\b/);
+  const pincode = pincodeMatch ? pincodeMatch[0] : '';
+  const parts = locationName.split(',').map((part) => part.trim()).filter(Boolean);
+  let city = '';
+
+  if (pincode) {
+    const pincodeIndex = parts.findIndex((part) => part.includes(pincode));
+    if (pincodeIndex > 0) {
+      city = parts[pincodeIndex - 1].replace(/\b\d{6}\b/g, '').trim();
+    }
+  }
+
+  if (!city) {
+    city = parts.find((part) => /[A-Za-z]/.test(part) && !/\b\d{6}\b/.test(part) && !/^india$/i.test(part)) || '';
+  }
+
+  if (city && pincode) return `${city}, ${pincode}`;
+  if (city) return city;
+  if (pincode) return pincode;
+  return '';
+};
+
+const getEvidenceWatermarkLines = (photo) => {
+  const lines = [];
+  const locationLine = formatEvidenceLocationForWatermark(photo);
+  const timestamp = formatEvidenceTimestamp(photo);
+
+  if (locationLine) lines.push(locationLine);
+  if (timestamp) lines.push(timestamp);
+  return lines;
+};
+
+const addImageWatermark = (doc, watermarkLines, x, imageY, width, imageHeight) => {
+  if (!watermarkLines?.length) return;
+
+  const paddingX = 4;
+  const paddingY = 2.5;
+  const lineHeight = 4;
+  const wrappedLines = watermarkLines.flatMap((line) => doc.splitTextToSize(line, width - paddingX * 2));
+  const boxHeight = paddingY * 2 + wrappedLines.length * lineHeight;
+  const boxY = imageY + imageHeight - boxHeight;
+
+  doc.setFillColor(15, 23, 42);
+  doc.rect(x, boxY, width, boxHeight, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  wrappedLines.forEach((line, index) => {
+    doc.text(line, x + paddingX, boxY + paddingY + 3 + (index * lineHeight));
+  });
+  doc.setTextColor(30, 30, 30);
+};
 
 const ReportsPage = () => {
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [reportTypeFilter, setReportTypeFilter] = useState('all');
-  const [vendorFilter, setVendorFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [selected, setSelected] = useState([]);
+  const [downloadingReportId, setDownloadingReportId] = useState(null);
 
-  const handleSelectAll = (event) => {
-    if (event.target.checked) {
-      const newSelected = reportsData.map((n) => n.id);
-      setSelected(newSelected);
-      return;
+  const fetchApprovedReports = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await api.get('/reports', {
+        params: { status: 'ACCEPTED' },
+      });
+      setReports(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch approved reports:', err);
+      setError('Failed to load approved reports.');
+      setReports([]);
+    } finally {
+      setLoading(false);
     }
-    setSelected([]);
   };
 
-  const handleSelect = (id) => {
-    const selectedIndex = selected.indexOf(id);
-    let newSelected = [];
+  useEffect(() => {
+    fetchApprovedReports();
+  }, []);
 
-    if (selectedIndex === -1) {
-      newSelected = newSelected.concat(selected, id);
-    } else if (selectedIndex === 0) {
-      newSelected = newSelected.concat(selected.slice(1));
-    } else if (selectedIndex === selected.length - 1) {
-      newSelected = newSelected.concat(selected.slice(0, -1));
-    } else if (selectedIndex > 0) {
-      newSelected = newSelected.concat(
-        selected.slice(0, selectedIndex),
-        selected.slice(selectedIndex + 1)
-      );
-    }
+  const filteredReports = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return reports;
 
-    setSelected(newSelected);
+    return reports.filter((report) => (
+      String(report.case_number || '').toLowerCase().includes(query)
+      || String(report.claim_number || '').toLowerCase().includes(query)
+      || String(report.client_name || '').toLowerCase().includes(query)
+      || String(report.case_title || '').toLowerCase().includes(query)
+      || String(report.assigned_lawyer_name || '').toLowerCase().includes(query)
+    ));
+  }, [reports, searchTerm]);
+
+  const paginatedReports = filteredReports.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
+  const formatDate = (value) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString();
   };
 
-  const handleChangePage = (event, newPage) => {
+  const handleChangePage = (_, newPage) => {
     setPage(newPage);
   };
 
@@ -155,13 +202,104 @@ const ReportsPage = () => {
     setPage(0);
   };
 
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setReportTypeFilter('all');
-    setVendorFilter('all');
+  const buildSafeFileName = (value, fallback) => {
+    const normalized = String(value || fallback || 'approved-report')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9-_]/g, '')
+      .toLowerCase();
+    return normalized || fallback;
   };
 
-  const isSelected = (id) => selected.indexOf(id) !== -1;
+  const handleDownloadReport = async (row) => {
+    if (!row?.id) return;
+
+    try {
+      setDownloadingReportId(row.id);
+      setError('');
+
+      const response = await api.get(`/reports/${row.id}`);
+      const reportContent = String(response?.data?.report_content || '').trim();
+
+      if (!reportContent) {
+        setError('Report content is empty and cannot be downloaded.');
+        return;
+      }
+
+      const doc = new jsPDF();
+      const margin = 16;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const textWidth = pageWidth - (margin * 2);
+      let y = 20;
+
+      const addLine = (text, fontSize = 11, isBold = false) => {
+        doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+        doc.setFontSize(fontSize);
+        const lines = doc.splitTextToSize(String(text), textWidth);
+
+        lines.forEach((line) => {
+          if (y > pageHeight - 14) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(line, margin, y);
+          y += fontSize * 0.55;
+        });
+      };
+
+      addLine('Approved Report', 16, true);
+      y += 2;
+      addLine(`Case Number: ${response?.data?.case_number || row.case_number || '-'}`);
+      addLine(`Claim Number: ${response?.data?.claim_number || row.claim_number || '-'}`);
+      addLine(`Client Name: ${response?.data?.client_name || row.client_name || '-'}`);
+      addLine(`Category: ${response?.data?.category || row.category || '-'}`);
+      addLine(`Assigned Lawyer: ${response?.data?.assigned_lawyer_name || row.assigned_lawyer_name || '-'}`);
+      addLine(`Reviewed On: ${formatDate(response?.data?.reviewed_at || row.reviewed_at || row.created_at)}`);
+
+      y += 3;
+      addLine('Report Content', 13, true);
+      y += 1;
+      addLine(reportContent, 11, false);
+
+      const evidencePhotos = Array.isArray(response?.data?.evidence_photos) ? response.data.evidence_photos : [];
+      if (evidencePhotos.length > 0) {
+        y += 8;
+        addLine('Vendor Evidence', 13, true);
+        y += 2;
+
+        for (const photo of evidencePhotos) {
+          try {
+            const imageDataUrl = await getEvidenceImageDataUrl(photo);
+            if (!imageDataUrl) continue;
+
+            const imageFormat = imageDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            const imageHeight = 78;
+
+            if (y > pageHeight - imageHeight - 16) {
+              doc.addPage();
+              y = 20;
+            }
+
+            const watermarkLines = getEvidenceWatermarkLines(photo);
+            doc.addImage(imageDataUrl, imageFormat, margin, y, textWidth, imageHeight);
+            addImageWatermark(doc, watermarkLines, margin, y, textWidth, imageHeight);
+            y += imageHeight + 8;
+          } catch (imageError) {
+            console.error('Failed to add evidence image to PDF:', imageError);
+          }
+        }
+      }
+
+      const caseFilePart = buildSafeFileName(row.case_number, `report-${row.id}`);
+      doc.save(`${caseFilePart}-approved-report.pdf`);
+    } catch (err) {
+      console.error('Failed to download approved report:', err);
+      setError('Failed to download approved report. Please try again.');
+    } finally {
+      setDownloadingReportId(null);
+    }
+  };
 
   return (
     <AdminLayout>
@@ -171,19 +309,12 @@ const ReportsPage = () => {
         </Typography>
       </Box>
 
-      {/* Stats Cards */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, width: '100%' }}>
-        {statsData.map((stat, index) => (
-          <Box key={index} sx={{ flex: 1, minWidth: 0 }}>
-            <StatCard 
-              {...stat} 
-              change={stat.change > 0 ? ((stat.change / stat.value) * 100).toFixed(1) : stat.change}
-            />
-          </Box>
-        ))}
-      </Box>
+      {error ? (
+        <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      ) : null}
 
-      {/* Main Content */}
       <Paper
         elevation={0}
         sx={{
@@ -192,70 +323,20 @@ const ReportsPage = () => {
           overflow: 'hidden',
         }}
       >
-        {/* Filters and Search */}
         <Box sx={{ p: 2.5, borderBottom: '1px solid #e0e0e0' }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#333' }}>
-              All Reports
+              Lawyer Approved Reports
             </Typography>
 
-            {/* Report Type Filter */}
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <Select
-                value={reportTypeFilter}
-                onChange={(e) => setReportTypeFilter(e.target.value)}
-                displayEmpty
-                sx={{
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
-                }}
-              >
-                <MenuItem value="all">All Report Types</MenuItem>
-                <MenuItem value="investigation">Investigation</MenuItem>
-                <MenuItem value="authorization">Authorization</MenuItem>
-                <MenuItem value="other">Other</MenuItem>
-              </Select>
-            </FormControl>
-
-            {/* Vendor Filter */}
-            <FormControl size="small" sx={{ minWidth: 130 }}>
-              <Select
-                value={vendorFilter}
-                onChange={(e) => setVendorFilter(e.target.value)}
-                displayEmpty
-                sx={{
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
-                }}
-              >
-                <MenuItem value="all">All Vendors</MenuItem>
-                <MenuItem value="dynamic">Dynamic Claims LLC</MenuItem>
-                <MenuItem value="apex">Apex Investigations</MenuItem>
-                <MenuItem value="smith">Smith Investigation</MenuItem>
-              </Select>
-            </FormControl>
-
-            {/* Clear Filters */}
-            <Button
-              variant="text"
-              size="small"
-              onClick={handleClearFilters}
-              sx={{
-                color: '#667eea',
-                textTransform: 'none',
-                fontWeight: 600,
-                '&:hover': { backgroundColor: '#f0f4ff' },
-              }}
-            >
-              Clear Filters
-            </Button>
-
-            {/* Search */}
             <TextField
-              placeholder="Search reports, case IDs..."
+              placeholder="Search case/client/lawyer..."
               size="small"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(0);
+              }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -265,7 +346,7 @@ const ReportsPage = () => {
               }}
               sx={{
                 ml: 'auto',
-                width: '250px',
+                width: '260px',
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
                   backgroundColor: '#f5f5f5',
@@ -274,158 +355,93 @@ const ReportsPage = () => {
               }}
             />
 
-            {/* Generate Report Button */}
             <Button
-              variant="contained"
-              startIcon={<Add />}
-              sx={{
-                backgroundColor: '#667eea',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderRadius: '8px',
-                px: 2.5,
-                '&:hover': { backgroundColor: '#5568d3' },
-              }}
+              variant="outlined"
+              size="small"
+              startIcon={<Refresh />}
+              onClick={fetchApprovedReports}
+              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px' }}
             >
-              Generate Report
+              Refresh
             </Button>
           </Box>
         </Box>
 
-        {/* Table */}
         <TableContainer>
           <Table>
             <TableHead>
               <TableRow sx={{ backgroundColor: '#f8f9fa' }}>
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    indeterminate={selected.length > 0 && selected.length < reportsData.length}
-                    checked={reportsData.length > 0 && selected.length === reportsData.length}
-                    onChange={handleSelectAll}
-                  />
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Case ID
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Type
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Title
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Generated
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Assigned Vendor
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Actions
-                </TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Case Number</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Claim Number</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Client Name</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Category</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Assigned Lawyer</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Approved On</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Download</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {reportsData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row) => {
-                const isItemSelected = isSelected(row.id);
-                return (
-                  <TableRow
-                    key={row.id}
-                    hover
-                    sx={{
-                      '&:last-child td': { border: 0 },
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={isItemSelected}
-                        onChange={() => handleSelect(row.id)}
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} sx={{ py: 4 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                      <CircularProgress size={26} />
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ) : paginatedReports.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} sx={{ py: 4, textAlign: 'center', color: '#666' }}>
+                    No approved reports found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedReports.map((row) => (
+                  <TableRow hover key={row.id} sx={{ '&:hover': { backgroundColor: '#f8f9fa' } }}>
+                    <TableCell sx={{ fontWeight: 600, color: '#1976d2' }}>{row.case_number || '-'}</TableCell>
+                    <TableCell>{row.claim_number || '-'}</TableCell>
+                    <TableCell>{row.client_name || '-'}</TableCell>
+                    <TableCell>{row.category || '-'}</TableCell>
+                    <TableCell>{row.assigned_lawyer_name || '-'}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        icon={<CheckCircle sx={{ fontSize: '14px !important' }} />}
+                        label="Approved"
+                        sx={{ backgroundColor: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }}
                       />
                     </TableCell>
-                    <TableCell>
-                      <Typography
-                        sx={{
-                          color: '#667eea',
-                          fontWeight: 600,
-                          fontSize: '14px',
-                        }}
-                      >
-                        {row.id}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px', color: '#333' }}>
-                        {row.type}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px', color: '#333' }}>
-                        {row.title}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px', color: '#666' }}>
-                        {row.generated}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px', color: '#333' }}>
-                        {row.vendor}
-                      </Typography>
-                    </TableCell>
+                    <TableCell>{formatDate(row.reviewed_at || row.created_at)}</TableCell>
                     <TableCell>
                       <Button
-                        variant="contained"
+                        variant="outlined"
                         size="small"
-                        sx={{
-                          backgroundColor: '#667eea',
-                          textTransform: 'none',
-                          fontWeight: 600,
-                          fontSize: '13px',
-                          borderRadius: '6px',
-                          minWidth: '70px',
-                          '&:hover': { backgroundColor: '#5568d3' },
-                        }}
+                        startIcon={<FileDownload />}
+                        onClick={() => handleDownloadReport(row)}
+                        disabled={downloadingReportId === row.id}
+                        sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px' }}
                       >
-                        View
+                        {downloadingReportId === row.id ? 'Downloading...' : 'Download'}
                       </Button>
                     </TableCell>
                   </TableRow>
-                );
-              })}
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
 
-        {/* Pagination */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            px: 2,
-            py: 1.5,
-            borderTop: '1px solid #e0e0e0',
-          }}
-        >
-          <Typography sx={{ fontSize: '14px', color: '#666' }}>
-            1-8 of 2,421
-          </Typography>
-          <TablePagination
-            component="div"
-            count={2421}
-            page={page}
-            onPageChange={handleChangePage}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-            rowsPerPageOptions={[10, 25, 50]}
-            sx={{
-              '& .MuiTablePagination-select': {
-                borderRadius: '6px',
-              },
-            }}
-          />
-        </Box>
+        <TablePagination
+          component="div"
+          count={filteredReports.length}
+          page={page}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={[5, 10, 25]}
+          sx={{ borderTop: '1px solid #e0e0e0' }}
+        />
       </Paper>
     </AdminLayout>
   );

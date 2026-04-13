@@ -1,5 +1,5 @@
-import { AppBar, Toolbar, Typography, IconButton, Box, InputBase } from '@mui/material';
-import { Search, Notifications } from '@mui/icons-material';
+import { AppBar, Toolbar, Typography, IconButton, Box } from '@mui/material';
+import { Notifications } from '@mui/icons-material';
 import { useAuth } from '../../../context/AuthContext';
 
 const LawyerNavbar = () => {

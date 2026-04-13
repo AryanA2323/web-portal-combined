@@ -1,15 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Grid, Paper, Typography, Box, Avatar, CircularProgress } from '@mui/material';
+import { Paper, Typography, Box, CircularProgress } from '@mui/material';
 import {
   FolderOpen,
   Schedule,
   CheckCircle,
   Warning,
-  Assignment,
-  Verified,
-  Description,
-  Inventory,
-  PersonAdd,
   AddBox as AddBoxIcon,
   Update as UpdateIcon,
   PersonAdd as PersonAddIcon,

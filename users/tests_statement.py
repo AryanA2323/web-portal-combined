@@ -363,7 +363,7 @@ class TestApplyEndpoint(VendorStatementTestCase):
                 [self.check_id]
             )
             row = cursor.fetchone()
-            self.assertEqual(row[0], "This is the translated statement.")
+            self.assertEqual(row[0], "Statement 1:\nThis is the translated statement.")
 
 
 class TestSpotCheckObservations(VendorStatementTestCase):
@@ -432,7 +432,7 @@ class TestSpotCheckObservations(VendorStatementTestCase):
                 [self.spot_check_id]
             )
             row = cursor.fetchone()
-            self.assertEqual(row[0], "Spot observation text.")
+            self.assertEqual(row[0], "Statement 1:\nSpot observation text.")
 
 
 class TestManualTextApply(VendorStatementTestCase):
@@ -465,7 +465,7 @@ class TestManualTextApply(VendorStatementTestCase):
                 [self.check_id]
             )
             row = cursor.fetchone()
-            self.assertEqual(row[0], 'This is manually edited statement text.')
+            self.assertEqual(row[0], 'Statement 1:\nThis is manually edited statement text.')
 
     def test_manual_text_apply_empty_rejected(self):
         """Test that empty text is rejected."""

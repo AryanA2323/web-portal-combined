@@ -6,7 +6,7 @@ import json
 import logging
 import os
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import unquote, urlencode, urlparse
 import urllib.request
 from ninja import Router, Schema
@@ -15,6 +15,7 @@ from ninja.pagination import paginate, PageNumberPagination
 from django.db import connection, connections
 from django.http import HttpRequest
 from django.conf import settings
+from django.utils import timezone
 
 from users.services.ai_brief_service import AIBriefGenerationError, AIBriefService
 
@@ -563,6 +564,16 @@ class RecentActivitySchema(Schema):
     time: str
 
 
+class AuditLogEntrySchema(Schema):
+    """Audit log entry for admin portal."""
+    event_time: datetime
+    event_type: str
+    actor: str
+    description: str
+    case_number: Optional[str] = None
+    source: str
+
+
 class AIBriefReportResponse(Schema):
     """AI brief generation response."""
     case_id: int
@@ -822,11 +833,11 @@ def get_cases_incident_db(
             offset = (page - 1) * page_size
             cursor.execute(f"""
                 SELECT
-                    ROW_NUMBER() OVER (ORDER BY c.id) AS seq_num,
+                    ROW_NUMBER() OVER (ORDER BY c.created_at DESC NULLS LAST, c.id DESC) AS seq_num,
                     c.*
                 FROM cases c
                 WHERE {where}
-                ORDER BY c.id
+                ORDER BY c.created_at DESC NULLS LAST, c.id DESC
                 LIMIT %s OFFSET %s
             """, params + [page_size, offset])
 
@@ -2202,6 +2213,274 @@ def get_recent_activity(request: HttpRequest):
     
     except Exception as e:
         logger.error(f"Failed to fetch recent activity: {e}")
+        return []
+
+
+@router.get(
+    "/audit-logs",
+    response=List[AuditLogEntrySchema],
+    summary="Get Audit Logs",
+    description="Get project-wide audit activity logs (case creation, assignments, AI report generation).",
+)
+def get_audit_logs(
+    request: HttpRequest,
+    event_type: Optional[str] = None,
+    actor: Optional[str] = None,
+    date_range: str = "all",
+    search: Optional[str] = None,
+    limit: int = 500,
+):
+    """Get aggregated audit logs for admin portal."""
+    if not is_admin_or_super_admin(request.user):
+        return []
+
+    safe_limit = max(1, min(int(limit or 500), 2000))
+    activities: List[dict] = []
+
+    def _normalize_event_time(event_time_value):
+        """Normalize timestamp values to timezone-aware datetimes for safe sorting."""
+        if not event_time_value:
+            return None
+
+        parsed = event_time_value
+        if isinstance(event_time_value, str):
+            iso_value = event_time_value.replace("Z", "+00:00")
+            try:
+                parsed = datetime.fromisoformat(iso_value)
+            except ValueError:
+                return None
+
+        if not isinstance(parsed, datetime):
+            return None
+
+        if timezone.is_naive(parsed):
+            parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+
+        return parsed
+
+    def _add_event(event_time, event_type_value, actor_value, description, case_number="", source="System"):
+        normalized_event_time = _normalize_event_time(event_time)
+        if not normalized_event_time:
+            return
+        activities.append(
+            {
+                "event_time": normalized_event_time,
+                "event_type": event_type_value,
+                "actor": actor_value or "System",
+                "description": description,
+                "case_number": case_number or None,
+                "source": source,
+            }
+        )
+
+    try:
+        with connections['default'].cursor() as cursor:
+            # Case creation events
+            cursor.execute(
+                """
+                SELECT
+                    ic.case_number,
+                    ic.created_at,
+                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
+                FROM insurance_case ic
+                LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
+                WHERE ic.created_at IS NOT NULL
+                ORDER BY ic.created_at DESC
+                LIMIT %s
+                """,
+                [safe_limit],
+            )
+            for case_number, created_at, actor_name in cursor.fetchall():
+                _add_event(
+                    created_at,
+                    "CASE_CREATED",
+                    actor_name,
+                    f"Case {case_number} created",
+                    case_number,
+                    "Cases",
+                )
+
+            # Vendor assignment events from check tables
+            assignment_tables = [
+                ("claimant_checks", "Claimant Check"),
+                ("insured_checks", "Insured Check"),
+                ("driver_checks", "Driver Check"),
+                ("spot_checks", "Spot Check"),
+                ("chargesheets", "Chargesheet"),
+                ("rti_checks", "RTI Check"),
+                ("rto_checks", "RTO Check"),
+            ]
+
+            for table_name, check_label in assignment_tables:
+                if not _column_exists(table_name, "assigned_vendor_id"):
+                    continue
+
+                if _column_exists(table_name, "updated_at"):
+                    event_time_column = "updated_at"
+                elif _column_exists(table_name, "created_at"):
+                    event_time_column = "created_at"
+                else:
+                    continue
+
+                try:
+                    cursor.execute(
+                        f"""
+                        SELECT
+                            c.case_number,
+                            t.{event_time_column} AS event_time,
+                            uv.company_name
+                        FROM {table_name} t
+                        JOIN cases c ON c.id = t.case_id
+                        JOIN users_vendor uv ON uv.id = t.assigned_vendor_id
+                        WHERE t.assigned_vendor_id IS NOT NULL
+                          AND t.{event_time_column} IS NOT NULL
+                        ORDER BY t.{event_time_column} DESC
+                        LIMIT %s
+                        """,
+                        [safe_limit],
+                    )
+
+                    for case_number, event_time, vendor_name in cursor.fetchall():
+                        _add_event(
+                            event_time,
+                            "VENDOR_ASSIGNED",
+                            "Admin/System",
+                            f"Vendor '{vendor_name}' assigned to {check_label}",
+                            case_number,
+                            "Vendor Assignment",
+                        )
+                except Exception as table_exc:
+                    logger.warning(f"Skipping vendor assignment logs for table {table_name}: {table_exc}")
+
+            # Lawyer assignment events
+            cursor.execute(
+                """
+                SELECT
+                    ic.case_number,
+                    r.assigned_at,
+                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'Lawyer') AS lawyer_name
+                FROM reports r
+                JOIN insurance_case ic ON ic.id = r.case_id
+                LEFT JOIN users_customuser lu ON lu.id = r.assigned_lawyer_id
+                WHERE r.assigned_at IS NOT NULL
+                ORDER BY r.assigned_at DESC
+                LIMIT %s
+                """,
+                [safe_limit],
+            )
+            for case_number, assigned_at, lawyer_name in cursor.fetchall():
+                _add_event(
+                    assigned_at,
+                    "LAWYER_ASSIGNED",
+                    "Admin/System",
+                    f"Report assigned to lawyer '{lawyer_name}'",
+                    case_number,
+                    "Legal Review",
+                )
+
+            # AI report generation events
+            cursor.execute(
+                """
+                SELECT
+                    ic.case_number,
+                    r.created_at,
+                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
+                FROM reports r
+                JOIN insurance_case ic ON ic.id = r.case_id
+                LEFT JOIN users_customuser cu ON cu.id = r.created_by_id
+                WHERE r.created_at IS NOT NULL
+                ORDER BY r.created_at DESC
+                LIMIT %s
+                """,
+                [safe_limit],
+            )
+            for case_number, created_at, actor_name in cursor.fetchall():
+                _add_event(
+                    created_at,
+                    "AI_REPORT_GENERATED",
+                    actor_name,
+                    f"AI brief report generated for case {case_number}",
+                    case_number,
+                    "Reports",
+                )
+
+            # Lawyer review decision events (accept/reject)
+            cursor.execute(
+                """
+                SELECT
+                    ic.case_number,
+                    r.reviewed_at,
+                    r.status,
+                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'Lawyer') AS lawyer_name
+                FROM reports r
+                JOIN insurance_case ic ON ic.id = r.case_id
+                LEFT JOIN users_customuser lu ON lu.id = r.assigned_lawyer_id
+                WHERE r.reviewed_at IS NOT NULL
+                  AND r.status IN ('ACCEPTED', 'REJECTED')
+                ORDER BY r.reviewed_at DESC
+                LIMIT %s
+                """,
+                [safe_limit],
+            )
+            for case_number, reviewed_at, review_status, lawyer_name in cursor.fetchall():
+                status_upper = str(review_status or "").upper()
+                is_accepted = status_upper == "ACCEPTED"
+                _add_event(
+                    reviewed_at,
+                    "LAWYER_ACCEPTED_REPORT" if is_accepted else "LAWYER_REJECTED_REPORT",
+                    lawyer_name,
+                    f"Lawyer '{lawyer_name}' {'accepted' if is_accepted else 'rejected'} report for case {case_number}",
+                    case_number,
+                    "Legal Review",
+                )
+
+        # Sort latest first globally
+        activities.sort(key=lambda item: item["event_time"], reverse=True)
+
+        # Apply optional filters
+        if event_type and event_type.lower() != "all":
+            activities = [
+                item for item in activities
+                if item["event_type"].lower() == event_type.lower()
+            ]
+
+        if actor and actor.lower() != "all":
+            actor_query = actor.lower()
+            activities = [
+                item for item in activities
+                if actor_query in (item.get("actor") or "").lower()
+            ]
+
+        if search:
+            term = search.lower()
+            activities = [
+                item for item in activities
+                if term in (item.get("description") or "").lower()
+                or term in (item.get("case_number") or "").lower()
+                or term in (item.get("actor") or "").lower()
+            ]
+
+        if date_range and date_range.lower() != "all":
+            now_date = timezone.now().date()
+            if date_range.lower() == "today":
+                min_date = now_date
+            elif date_range.lower() == "week":
+                min_date = now_date - timedelta(days=7)
+            elif date_range.lower() == "month":
+                min_date = now_date - timedelta(days=30)
+            else:
+                min_date = None
+
+            if min_date:
+                activities = [
+                    item for item in activities
+                    if item["event_time"].date() >= min_date
+                ]
+
+        return activities[:safe_limit]
+
+    except Exception as e:
+        logger.error(f"Failed to fetch audit logs: {e}")
         return []
 
 

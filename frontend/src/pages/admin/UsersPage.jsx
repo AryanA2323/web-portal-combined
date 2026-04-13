@@ -50,12 +50,10 @@ import { useAuth } from '../../context/AuthContext';
 const ADMIN_PAGES = [
   { path: '/admin/dashboard', label: 'Dashboard' },
   { path: '/admin/cases', label: 'Cases' },
-  { path: '/admin/email-intake', label: 'Email Intake' },
   { path: '/admin/users', label: 'Users' },
   { path: '/admin/clients', label: 'Clients' },
   { path: '/admin/ai-brief', label: 'AI Brief Review' },
   { path: '/admin/legal-review', label: 'Legal Review' },
-  { path: '/admin/process-document', label: 'Process Document' },
   { path: '/admin/reports', label: 'Reports' },
   { path: '/admin/audit-logs', label: 'Audit Logs' },
   { path: '/admin/settings', label: 'Settings' },
@@ -349,21 +347,6 @@ const UsersPage = () => {
   const getRoleLabel = (user) => {
     // Return role directly (no more sub_role conversion)
     return user.role;
-  };
-
-  const getSubRoleBadgeColor = (subRole) => {
-    switch (subRole?.toUpperCase()) {
-      case 'SUPER_ADMIN':
-        return 'error';
-      case 'CASE_HANDLER':
-        return 'primary';
-      case 'REPORT_MANAGER':
-        return 'secondary';
-      case 'LOG_MANAGER':
-        return 'warning';
-      default:
-        return 'default';
-    }
   };
 
   // Filter users based on selected role

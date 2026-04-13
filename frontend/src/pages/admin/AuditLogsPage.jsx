@@ -1,246 +1,137 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
-  Paper,
-  Typography,
-  TextField,
   Button,
-  MenuItem,
-  Select,
+  Chip,
+  CircularProgress,
   FormControl,
+  InputAdornment,
+  MenuItem,
+  Paper,
+  Select,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  Checkbox,
   TablePagination,
-  InputAdornment,
-  Chip,
-  IconButton,
+  TableRow,
+  TextField,
+  Typography,
 } from '@mui/material';
-import {
-  Search,
-  Description,
-  Person,
-  Settings,
-  Shield,
-  FileDownload,
-  MoreVert,
-} from '@mui/icons-material';
+import { FileDownload, Refresh, Search } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
-import StatCard from './components/StatCard';
-// Charts will be added later
+import api from '../../services/api';
 
-// Demo data for stats
-const statsData = [
-  {
-    title: 'Total Log Entries',
-    value: 3582,
-    change: -208,
-    icon: Description,
-    iconBgColor: '#e3f2fd',
-  },
-  {
-    title: '1274 User Activities',
-    value: 1274,
-    change: 96,
-    icon: Person,
-    iconBgColor: '#e8f5e9',
-  },
-  {
-    title: '854 System Events',
-    value: 854,
-    change: 33,
-    icon: Settings,
-    iconBgColor: '#fff3e0',
-  },
-  {
-    title: '187 Security Alerts',
-    value: 187,
-    change: 10,
-    icon: Shield,
-    iconBgColor: '#ffebee',
-  },
-];
+const eventTypeColor = {
+  CASE_CREATED: '#4c6ef5',
+  VENDOR_ASSIGNED: '#ff922b',
+  LAWYER_ASSIGNED: '#9c36b5',
+  AI_REPORT_GENERATED: '#2b8a3e',
+  LAWYER_ACCEPTED_REPORT: '#2f9e44',
+  LAWYER_REJECTED_REPORT: '#e03131',
+};
 
-// Bar chart data
-const barChartData = [
-  { month: 'Jan', 'User Activity': 400, 'System Event': 300, 'Security Alert': 100, Events: 150 },
-  { month: 'Feb', 'User Activity': 1000, 'System Event': 650, 'Security Alert': 600, Events: 200 },
-  { month: 'Mar', 'User Activity': 600, 'System Event': 700, 'Security Alert': 550, Events: 350 },
-  { month: 'Apr', 'User Activity': 650, 'System Event': 850, 'Security Alert': 600, Events: 500 },
-  { month: 'May', 'User Activity': 400, 'System Event': 650, 'Security Alert': 250, Events: 150 },
-  { month: 'Jun', 'User Activity': 850, 'System Event': 950, 'Security Alert': 600, Events: 650 },
-];
-
-// Demo data for audit logs table
-const auditLogsData = [
-  {
-    id: 1,
-    date: 'Apr 26, 2024',
-    type: 'User Activity',
-    typeColor: '#4c6ef5',
-    typeIcon: '⊕',
-    user: 'John Doe',
-    description: 'Case #1289 assigned to Metro Detective Agency',
-    ipAddress: '192.168.1.10',
-    entity: 'Case #1249',
-    entityLink: true,
-  },
-  {
-    id: 2,
-    date: 'Apr 26, 2024',
-    type: 'User Activity',
-    typeColor: '#4c6ef5',
-    typeIcon: '⊕',
-    user: 'John Doe',
-    description: 'Authorization form generated for Case #1249',
-    ipAddress: '192.168.1.10',
-    entity: 'Case #1249',
-    entityLink: true,
-  },
-  {
-    id: 3,
-    date: 'Apr 22, 2024',
-    type: 'System Event',
-    typeColor: '#51cf66',
-    typeIcon: '✓',
-    user: 'System',
-    description: 'Reminder email sent to Metro Detective Agency for Case #192.168.1.5',
-    ipAddress: '192.168.1.5',
-    entity: 'Case #1225',
-    entityLink: true,
-  },
-  {
-    id: 4,
-    date: 'Apr 22, 2024',
-    type: 'Security Alert',
-    typeColor: '#ff6b6b',
-    typeIcon: '⬛',
-    user: 'John Doe',
-    description: 'Suspicious login attempt detected for John Smith',
-    ipAddress: '209.0.113.45',
-    entity: 'User #252',
-    entityLink: true,
-  },
-  {
-    id: 5,
-    date: 'Apr 22, 2024',
-    type: 'User Activity',
-    typeColor: '#4c6ef5',
-    typeIcon: '⊕',
-    user: 'Jane Smith',
-    description: 'Vendor SafeGuard Security registered',
-    ipAddress: '209.0.119.56',
-    entity: 'SafeGuard Security',
-    entityLink: false,
-  },
-  {
-    id: 6,
-    date: 'Apr 21, 2024',
-    type: 'System Event',
-    typeColor: '#51cf66',
-    typeIcon: '✓',
-    user: 'System',
-    description: 'Case #1247 marked as overdue',
-    ipAddress: '192.168.1.5',
-    entity: 'Case #1217',
-    entityLink: true,
-  },
-  {
-    id: 7,
-    date: 'Apr 21, 2024',
-    type: 'System Event',
-    typeColor: '#51cf66',
-    typeIcon: '✓',
-    user: 'John Doe',
-    description: 'Investigation report generated for Case #1184',
-    ipAddress: '192.168.1.10',
-    entity: 'Case #1184',
-    entityLink: true,
-  },
-];
+const formatEventType = (value) => {
+  if (!value) return 'UNKNOWN';
+  return String(value).replaceAll('_', ' ');
+};
 
 const AuditLogsPage = () => {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [userFilter, setUserFilter] = useState('all');
   const [dateRange, setDateRange] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [selected, setSelected] = useState([]);
 
-  const handleSelectAll = (event) => {
-    if (event.target.checked) {
-      const newSelected = auditLogsData.map((n) => n.id);
-      setSelected(newSelected);
-      return;
+  const fetchAuditLogs = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await api.get('/audit-logs', { params: { limit: 1000 } });
+      setLogs(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch audit logs:', err);
+      setError('Failed to load audit logs.');
+      setLogs([]);
+    } finally {
+      setLoading(false);
     }
-    setSelected([]);
   };
 
-  const handleSelect = (id) => {
-    const selectedIndex = selected.indexOf(id);
-    let newSelected = [];
+  useEffect(() => {
+    fetchAuditLogs();
 
-    if (selectedIndex === -1) {
-      newSelected = newSelected.concat(selected, id);
-    } else if (selectedIndex === 0) {
-      newSelected = newSelected.concat(selected.slice(1));
-    } else if (selectedIndex === selected.length - 1) {
-      newSelected = newSelected.concat(selected.slice(0, -1));
-    } else if (selectedIndex > 0) {
-      newSelected = newSelected.concat(
-        selected.slice(0, selectedIndex),
-        selected.slice(selectedIndex + 1)
+    const intervalId = setInterval(() => {
+      fetchAuditLogs();
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const filteredLogs = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+
+    return logs.filter((log) => {
+      if (typeFilter !== 'all' && log.event_type !== typeFilter) return false;
+      if (userFilter !== 'all' && (log.actor || '') !== userFilter) return false;
+      if (dateRange !== 'all') {
+        const eventDate = new Date(log.event_time);
+        const now = new Date();
+        if (dateRange === 'today' && eventDate.toDateString() !== now.toDateString()) return false;
+        if (dateRange === 'week') {
+          const sevenDaysAgo = new Date(now);
+          sevenDaysAgo.setDate(now.getDate() - 7);
+          if (eventDate < sevenDaysAgo) return false;
+        }
+        if (dateRange === 'month') {
+          const thirtyDaysAgo = new Date(now);
+          thirtyDaysAgo.setDate(now.getDate() - 30);
+          if (eventDate < thirtyDaysAgo) return false;
+        }
+      }
+
+      if (!search) return true;
+
+      return (
+        String(log.description || '').toLowerCase().includes(search)
+        || String(log.case_number || '').toLowerCase().includes(search)
+        || String(log.actor || '').toLowerCase().includes(search)
+        || String(log.source || '').toLowerCase().includes(search)
       );
-    }
+    });
+  }, [logs, typeFilter, userFilter, dateRange, searchTerm]);
 
-    setSelected(newSelected);
-  };
+  const eventTypes = useMemo(() => {
+    return Array.from(new Set(logs.map((item) => item.event_type).filter(Boolean))).sort();
+  }, [logs]);
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
+  const users = useMemo(() => {
+    return Array.from(new Set(logs.map((item) => item.actor).filter(Boolean))).sort();
+  }, [logs]);
+
+  const paginatedLogs = filteredLogs.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
+  const handleChangePage = (_, newPage) => setPage(newPage);
 
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setTypeFilter('all');
-    setUserFilter('all');
-    setDateRange('all');
-  };
-
-  const isSelected = (id) => selected.indexOf(id) !== -1;
-
-  const getTypeChip = (type, typeColor, typeIcon) => {
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box
-          sx={{
-            width: 20,
-            height: 20,
-            borderRadius: '4px',
-            backgroundColor: `${typeColor}15`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '12px',
-          }}
-        >
-          {typeIcon}
-        </Box>
-        <Typography sx={{ fontSize: '14px', color: typeColor, fontWeight: 500 }}>
-          {type}
-        </Typography>
-      </Box>
-    );
+  const formatDateTime = (value) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '-';
+    return parsed.toLocaleString();
   };
 
   return (
@@ -251,43 +142,12 @@ const AuditLogsPage = () => {
         </Typography>
       </Box>
 
-      {/* Stats Cards */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, width: '100%' }}>
-        {statsData.map((stat, index) => (
-          <Box key={index} sx={{ flex: 1, minWidth: 0 }}>
-            <StatCard 
-              {...stat} 
-              change={stat.change > 0 ? ((stat.change / stat.value) * 100).toFixed(1) : ((stat.change / stat.value) * 100).toFixed(1)}
-            />
-          </Box>
-        ))}
-      </Box>
+      {error ? (
+        <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      ) : null}
 
-      {/* Chart Section */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3,
-          mb: 3,
-          borderRadius: '12px',
-          border: '1px solid #e0e0e0',
-        }}
-      >
-        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, fontSize: '16px' }}>
-          Log Activity Overview
-        </Typography>
-        <Box sx={{ width: '100%', height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-          <Typography sx={{ color: '#999' }}>Bar Chart - Log Activity Overview</Typography>
-        </Box>
-        <Typography
-          variant="caption"
-          sx={{ display: 'block', textAlign: 'center', mt: 1, color: '#666' }}
-        >
-          + 3,582 log entries
-        </Typography>
-      </Paper>
-
-      {/* Main Content */}
       <Paper
         elevation={0}
         sx={{
@@ -296,36 +156,39 @@ const AuditLogsPage = () => {
           overflow: 'hidden',
         }}
       >
-        {/* Filters and Search */}
         <Box sx={{ p: 2.5, borderBottom: '1px solid #e0e0e0' }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#333' }}>
-              All
+              Project Activity Logs
             </Typography>
 
-            {/* Type Filter */}
-            <FormControl size="small" sx={{ minWidth: 120 }}>
+            <FormControl size="small" sx={{ minWidth: 200 }}>
               <Select
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
+                onChange={(e) => {
+                  setTypeFilter(e.target.value);
+                  setPage(0);
+                }}
                 displayEmpty
                 sx={{
                   borderRadius: '8px',
                   '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
                 }}
               >
-                <MenuItem value="all">Types</MenuItem>
-                <MenuItem value="user">User Activity</MenuItem>
-                <MenuItem value="system">System Event</MenuItem>
-                <MenuItem value="security">Security Alert</MenuItem>
+                <MenuItem value="all">All Event Types</MenuItem>
+                {eventTypes.map((type) => (
+                  <MenuItem key={type} value={type}>{formatEventType(type)}</MenuItem>
+                ))}
               </Select>
             </FormControl>
 
-            {/* User Filter */}
-            <FormControl size="small" sx={{ minWidth: 120 }}>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
               <Select
                 value={userFilter}
-                onChange={(e) => setUserFilter(e.target.value)}
+                onChange={(e) => {
+                  setUserFilter(e.target.value);
+                  setPage(0);
+                }}
                 displayEmpty
                 sx={{
                   borderRadius: '8px',
@@ -333,51 +196,40 @@ const AuditLogsPage = () => {
                 }}
               >
                 <MenuItem value="all">All Users</MenuItem>
-                <MenuItem value="john">John Doe</MenuItem>
-                <MenuItem value="jane">Jane Smith</MenuItem>
-                <MenuItem value="system">System</MenuItem>
+                {users.map((user) => (
+                  <MenuItem key={user} value={user}>{user}</MenuItem>
+                ))}
               </Select>
             </FormControl>
 
-            {/* Date Range Filter */}
             <FormControl size="small" sx={{ minWidth: 130 }}>
               <Select
                 value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
+                onChange={(e) => {
+                  setDateRange(e.target.value);
+                  setPage(0);
+                }}
                 displayEmpty
                 sx={{
                   borderRadius: '8px',
                   '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
                 }}
               >
-                <MenuItem value="all">Date Range</MenuItem>
+                <MenuItem value="all">All Dates</MenuItem>
                 <MenuItem value="today">Today</MenuItem>
-                <MenuItem value="week">This Week</MenuItem>
-                <MenuItem value="month">This Month</MenuItem>
+                <MenuItem value="week">Last 7 Days</MenuItem>
+                <MenuItem value="month">Last 30 Days</MenuItem>
               </Select>
             </FormControl>
 
-            {/* Clear Filters */}
-            <Button
-              variant="text"
-              size="small"
-              onClick={handleClearFilters}
-              sx={{
-                color: '#667eea',
-                textTransform: 'none',
-                fontWeight: 600,
-                '&:hover': { backgroundColor: '#f0f4ff' },
-              }}
-            >
-              Clear Filters
-            </Button>
-
-            {/* Search */}
             <TextField
               placeholder="Search logs..."
               size="small"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(0);
+              }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -396,7 +248,16 @@ const AuditLogsPage = () => {
               }}
             />
 
-            {/* Export Logs Button */}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Refresh />}
+              onClick={fetchAuditLogs}
+              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px' }}
+            >
+              Refresh
+            </Button>
+
             <Button
               variant="contained"
               startIcon={<FileDownload />}
@@ -408,144 +269,76 @@ const AuditLogsPage = () => {
                 px: 2.5,
                 '&:hover': { backgroundColor: '#5568d3' },
               }}
+              disabled
             >
               Export Logs
             </Button>
           </Box>
         </Box>
 
-        {/* Table */}
         <TableContainer>
           <Table>
             <TableHead>
               <TableRow sx={{ backgroundColor: '#f8f9fa' }}>
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    indeterminate={selected.length > 0 && selected.length < auditLogsData.length}
-                    checked={auditLogsData.length > 0 && selected.length === auditLogsData.length}
-                    onChange={handleSelectAll}
-                  />
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Date
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Type
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  User
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Description
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  IP Address
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                  Entity
-                </TableCell>
-                <TableCell></TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Date / Time</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Event Type</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Actor</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Case</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Source</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Description</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {auditLogsData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row) => {
-                const isItemSelected = isSelected(row.id);
-                return (
-                  <TableRow
-                    key={row.id}
-                    hover
-                    sx={{
-                      '&:last-child td': { border: 0 },
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={isItemSelected}
-                        onChange={() => handleSelect(row.id)}
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} sx={{ py: 4 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                      <CircularProgress size={26} />
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ) : paginatedLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} sx={{ py: 4, textAlign: 'center', color: '#666' }}>
+                    No logs found for the selected filters.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedLogs.map((row, idx) => (
+                  <TableRow key={`${row.event_time}-${row.description}-${idx}`} hover sx={{ '&:hover': { backgroundColor: '#f8f9fa' } }}>
+                    <TableCell>{formatDateTime(row.event_time)}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={formatEventType(row.event_type)}
+                        sx={{
+                          fontWeight: 600,
+                          color: eventTypeColor[row.event_type] || '#495057',
+                          backgroundColor: `${eventTypeColor[row.event_type] || '#dee2e6'}22`,
+                        }}
                       />
                     </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px', color: '#333' }}>
-                        {row.date}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{getTypeChip(row.type, row.typeColor, row.typeIcon)}</TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px', color: '#333' }}>
-                        {row.user}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px', color: '#333' }}>
-                        {row.description}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontSize: '14px', color: '#666' }}>
-                        {row.ipAddress}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {row.entityLink ? (
-                        <Typography
-                          sx={{
-                            fontSize: '14px',
-                            color: '#667eea',
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            '&:hover': { textDecoration: 'underline' },
-                          }}
-                        >
-                          {row.entity}
-                        </Typography>
-                      ) : (
-                        <Typography sx={{ fontSize: '14px', color: '#333' }}>
-                          {row.entity}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <IconButton size="small">
-                        <MoreVert sx={{ fontSize: 20, color: '#999' }} />
-                      </IconButton>
-                    </TableCell>
+                    <TableCell>{row.actor || 'System'}</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#1976d2' }}>{row.case_number || '-'}</TableCell>
+                    <TableCell>{row.source || 'System'}</TableCell>
+                    <TableCell>{row.description || '-'}</TableCell>
                   </TableRow>
-                );
-              })}
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
 
-        {/* Pagination */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            px: 2,
-            py: 1.5,
-            borderTop: '1px solid #e0e0e0',
-          }}
-        >
-          <Typography sx={{ fontSize: '14px', color: '#666' }}>
-            1-8 of 3,532
-          </Typography>
-          <TablePagination
-            component="div"
-            count={3532}
-            page={page}
-            onPageChange={handleChangePage}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-            rowsPerPageOptions={[10, 25, 50]}
-            sx={{
-              '& .MuiTablePagination-select': {
-                borderRadius: '6px',
-              },
-            }}
-          />
-        </Box>
+        <TablePagination
+          component="div"
+          count={filteredLogs.length}
+          page={page}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={[10, 25, 50]}
+          sx={{ borderTop: '1px solid #e0e0e0' }}
+        />
       </Paper>
     </AdminLayout>
   );

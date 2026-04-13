@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Drawer,
   List,
@@ -17,7 +16,6 @@ import { getMenuItemsForUser } from '../../utils/constants';
 import {
   Dashboard,
   FolderOpen,
-  Email,
   Store,
   People,
   AutoAwesome,
@@ -26,7 +24,6 @@ import {
   History,
   Settings,
   Logout,
-  UploadFile,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -35,8 +32,6 @@ const DRAWER_WIDTH = 240;
 const allMenuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: Dashboard, path: '/admin/dashboard' },
   { id: 'cases', label: 'Cases', icon: FolderOpen, path: '/admin/cases' },
-  { id: 'email-intake', label: 'Email Intake', icon: Email, path: '/admin/email-intake' },
-  { id: 'process-document', label: 'Process Document', icon: UploadFile, path: '/admin/process-document' },
   { id: 'users', label: 'Users', icon: People, path: '/admin/users' },
   { id: 'clients', label: 'Clients', icon: Store, path: '/admin/clients' },
   { id: 'ai-brief', label: 'AI Brief Review', icon: AutoAwesome, path: '/admin/ai-brief' },

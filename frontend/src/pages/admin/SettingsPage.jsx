@@ -9,7 +9,6 @@ import {
   Switch,
   FormControlLabel,
   Grid,
-  Divider,
   InputAdornment,
 } from '@mui/material';
 import {

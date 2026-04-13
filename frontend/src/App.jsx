@@ -5,14 +5,11 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider } from './context';
 import { ProtectedRoute } from './components';
 import { LoginPage, SignupPage, ForgotPasswordPage, ResetPasswordPage, TwoFactorPage } from './pages';
-import { LawyerDashboard } from './pages/dashboards';
 import { 
   AdminDashboard,
   SuperAdminDashboard,
   CasesPage,
   NewCasePage, 
-  EmailIntakePage,
-  DocumentProcessPage,
   UsersPage, 
   AIBriefPage, 
   LegalReviewPage, 
@@ -162,22 +159,6 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <NewCasePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/email-intake"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <EmailIntakePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/process-document"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <DocumentProcessPage />
                 </ProtectedRoute>
               }
             />

@@ -2,6 +2,7 @@
 Reports API endpoints for legal review system.
 """
 
+import json
 import logging
 from typing import List, Optional
 from datetime import datetime
@@ -10,7 +11,9 @@ from ninja.errors import HttpError
 from django.http import HttpRequest
 from django.utils import timezone
 from django.db import connections
+from django.db.models import Max, Subquery
 
+from users.api.cases import _enrich_evidence_metadata
 from users.models import Report, InsuranceCase, CustomUser
 
 logger = logging.getLogger(__name__)
@@ -61,6 +64,7 @@ class ReportSchema(Schema):
     updated_at: datetime
     assigned_at: Optional[datetime] = None
     reviewed_at: Optional[datetime] = None
+    evidence_photos: Optional[List[dict]] = None
 
 
 class ReportListSchema(Schema):
@@ -123,10 +127,81 @@ class ReportStatsSchema(Schema):
 # Helper Functions
 # =============================================================================
 
-def report_to_schema(report: Report) -> dict:
+def _parse_vendor_evidence(raw_value):
+    """Parse vendor_evidence JSON values from check tables."""
+    if not raw_value:
+        return []
+
+    if isinstance(raw_value, list):
+        return raw_value
+
+    if isinstance(raw_value, str):
+        try:
+            parsed = json.loads(raw_value)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+    return []
+
+
+def _collect_report_evidence_photos(request: HttpRequest, case_id: int) -> List[dict]:
+    """Collect and normalize vendor evidence photos for a case."""
+    evidence_tables = [
+        "claimant_checks",
+        "insured_checks",
+        "driver_checks",
+        "spot_checks",
+        "chargesheets",
+        "rti_checks",
+        "rto_checks",
+    ]
+
+    evidence_photos: List[dict] = []
+    seen_keys = set()
+
+    with connections['default'].cursor() as cursor:
+        for table_name in evidence_tables:
+            try:
+                cursor.execute(
+                    f"""
+                    SELECT vendor_evidence
+                    FROM {table_name}
+                    WHERE case_id = %s
+                      AND vendor_evidence IS NOT NULL
+                    """,
+                    [case_id],
+                )
+            except Exception as exc:
+                logger.debug(f"Skipping evidence fetch from {table_name}: {exc}")
+                continue
+
+            for (raw_evidence,) in cursor.fetchall():
+                for evidence_item in _parse_vendor_evidence(raw_evidence):
+                    if not isinstance(evidence_item, (dict, str)):
+                        continue
+
+                    normalized = _enrich_evidence_metadata(request, evidence_item)
+                    dedupe_key = (
+                        normalized.get('preview_url')
+                        or normalized.get('url')
+                        or normalized.get('photo_url')
+                        or normalized.get('filename')
+                    )
+                    if not dedupe_key or dedupe_key in seen_keys:
+                        continue
+
+                    seen_keys.add(dedupe_key)
+                    evidence_photos.append(normalized)
+
+    return evidence_photos
+
+
+def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> dict:
     """Convert Report model to response dict."""
     case = report.case
     lawyer = report.assigned_lawyer
+    evidence_photos = _collect_report_evidence_photos(request, case.id) if request else []
     return {
         'id': report.id,
         'case_id': case.id,
@@ -144,6 +219,7 @@ def report_to_schema(report: Report) -> dict:
         'updated_at': report.updated_at,
         'assigned_at': report.assigned_at,
         'reviewed_at': report.reviewed_at,
+        'evidence_photos': evidence_photos if evidence_photos else None,
     }
 
 
@@ -166,6 +242,17 @@ def report_to_list_schema(report: Report) -> dict:
     }
 
 
+def _latest_reports_per_case_queryset():
+    """Return queryset with only the latest report for each case."""
+    latest_report_ids = Report.objects.values('case_id').annotate(
+        latest_id=Max('id')
+    ).values('latest_id')
+
+    return Report.objects.select_related('case', 'assigned_lawyer').filter(
+        id__in=Subquery(latest_report_ids)
+    )
+
+
 # =============================================================================
 # Admin Endpoints
 # =============================================================================
@@ -184,10 +271,12 @@ def list_reports(request: HttpRequest, status: Optional[str] = None):
     if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
         raise HttpError(403, "Access denied")
 
-    queryset = Report.objects.select_related('case', 'assigned_lawyer').all()
+    queryset = _latest_reports_per_case_queryset()
 
     if status:
         queryset = queryset.filter(status=status.upper())
+
+    queryset = queryset.order_by('-created_at', '-id')
 
     return [report_to_list_schema(r) for r in queryset]
 
@@ -205,11 +294,13 @@ def get_report_stats(request: HttpRequest):
     if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
         raise HttpError(403, "Access denied")
 
-    total = Report.objects.count()
-    pending = Report.objects.filter(status=Report.Status.PENDING).count()
-    assigned = Report.objects.filter(status=Report.Status.ASSIGNED).count()
-    accepted = Report.objects.filter(status=Report.Status.ACCEPTED).count()
-    rejected = Report.objects.filter(status=Report.Status.REJECTED).count()
+    base_queryset = _latest_reports_per_case_queryset()
+
+    total = base_queryset.count()
+    pending = base_queryset.filter(status=Report.Status.PENDING).count()
+    assigned = base_queryset.filter(status=Report.Status.ASSIGNED).count()
+    accepted = base_queryset.filter(status=Report.Status.ACCEPTED).count()
+    rejected = base_queryset.filter(status=Report.Status.REJECTED).count()
 
     return {
         'total': total,
@@ -244,7 +335,7 @@ def get_report(request: HttpRequest, report_id: int):
     else:
         raise HttpError(403, "Access denied")
 
-    return report_to_schema(report)
+    return report_to_schema(report, request)
 
 
 @router.post(
@@ -291,7 +382,7 @@ def create_report(request: HttpRequest, payload: CreateReportSchema):
 
     logger.info(f"Report {report.id} created for case {case.case_number} by {user.username}")
 
-    return report_to_schema(report)
+    return report_to_schema(report, request)
 
 
 @router.post(
@@ -409,7 +500,7 @@ def assign_lawyer(request: HttpRequest, report_id: int, payload: AssignLawyerSch
 
     logger.info(f"Report {report.id} assigned to lawyer {lawyer.username} by {user.username}")
 
-    return report_to_schema(report)
+    return report_to_schema(report, request)
 
 
 @router.put(
@@ -441,7 +532,7 @@ def update_report_content(request: HttpRequest, report_id: int, payload: UpdateR
 
     logger.info(f"Report {report.id} content updated by {user.username}")
 
-    return report_to_schema(report)
+    return report_to_schema(report, request)
 
 
 @router.post(
@@ -486,7 +577,7 @@ def reassign_report(request: HttpRequest, report_id: int, payload: ReassignRepor
 
     logger.info(f"Report {report.id} reassigned from {previous_lawyer.username if previous_lawyer else 'None'} to {lawyer.username} by {user.username}")
 
-    return report_to_schema(report)
+    return report_to_schema(report, request)
 
 
 # =============================================================================
@@ -579,7 +670,7 @@ def review_report(request: HttpRequest, report_id: int, payload: ReviewReportSch
 
     logger.info(f"Report {report.id} {action}ed by lawyer {user.username}")
 
-    return report_to_schema(report)
+    return report_to_schema(report, request)
 
 
 class LogEntrySchema(Schema):

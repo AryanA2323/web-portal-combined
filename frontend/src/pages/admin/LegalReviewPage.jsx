@@ -38,6 +38,78 @@ import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
 import api from '../../services/api';
 
+const getEvidencePhotoUrl = (photo) => {
+  if (!photo) return '';
+  if (typeof photo === 'string') return photo;
+  return photo.preview_url || photo.url || photo.photo_url || '';
+};
+
+const resolveEvidencePhotoUrl = (photoUrl) => {
+  if (!photoUrl) return '';
+  if (photoUrl.startsWith('data:')) return photoUrl;
+  if (photoUrl.startsWith('http')) {
+    try {
+      const parsedUrl = new URL(photoUrl);
+      if (parsedUrl.pathname.startsWith('/media/')) {
+        return `${parsedUrl.pathname}${parsedUrl.search || ''}`;
+      }
+    } catch {
+      return photoUrl;
+    }
+    return photoUrl;
+  }
+  if (photoUrl.startsWith('/media/')) return photoUrl;
+  if (photoUrl.startsWith('media/')) return `/${photoUrl}`;
+  return `/media/${photoUrl.replace(/^\/+/, '')}`;
+};
+
+const formatEvidenceTimestamp = (photo) => {
+  const rawValue = photo?.captured_at || photo?.uploaded_at || photo?.timestamp;
+  if (!rawValue) return '';
+
+  const parsed = new Date(rawValue);
+  if (Number.isNaN(parsed.getTime())) return String(rawValue);
+
+  return parsed.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).replace(',', '');
+};
+
+const formatEvidenceLocationForWatermark = (photo) => {
+  const locationName = typeof photo?.location_name === 'string' ? photo.location_name.trim() : '';
+  const pincodeMatch = locationName.match(/\b\d{6}\b/);
+  const pincode = pincodeMatch ? pincodeMatch[0] : '';
+  const parts = locationName.split(',').map((part) => part.trim()).filter(Boolean);
+  let city = '';
+
+  if (pincode) {
+    const pincodeIndex = parts.findIndex((part) => part.includes(pincode));
+    if (pincodeIndex > 0) {
+      city = parts[pincodeIndex - 1].replace(/\b\d{6}\b/g, '').trim();
+    }
+  }
+
+  if (!city) {
+    city = parts.find((part) => /[A-Za-z]/.test(part) && !/\b\d{6}\b/.test(part) && !/^india$/i.test(part)) || '';
+  }
+
+  if (city && pincode) return `${city}, ${pincode}`;
+  if (city) return city;
+  if (pincode) return pincode;
+  return '';
+};
+
+const getEvidenceWatermarkLines = (photo) => {
+  const locationLine = formatEvidenceLocationForWatermark(photo);
+  const timestamp = formatEvidenceTimestamp(photo);
+  return [locationLine, timestamp].filter(Boolean);
+};
+
 const LegalReviewPage = () => {
   // State for data
   const [reports, setReports] = useState([]);
@@ -95,6 +167,7 @@ const LegalReviewPage = () => {
 
   useEffect(() => {
     fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
   // Open lawyer assignment modal
@@ -729,6 +802,78 @@ const LegalReviewPage = () => {
               >
                 {selectedReport.report_content}
               </Paper>
+              {selectedReport.evidence_photos && selectedReport.evidence_photos.length > 0 && (
+                <Box sx={{ mt: 2.5 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.25 }}>
+                    Vendor Evidence:
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                      gap: 1.5,
+                      maxHeight: 420,
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {selectedReport.evidence_photos.map((photo, idx) => {
+                      const photoUrl = getEvidencePhotoUrl(photo);
+                      const watermarkLines = getEvidenceWatermarkLines(photo);
+                      return (
+                        <Box
+                          key={`legal-evidence-${idx}`}
+                          sx={{
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            border: '1px solid #e2e8f0',
+                            backgroundColor: '#0f172a',
+                            position: 'relative',
+                          }}
+                        >
+                          <img
+                            src={resolveEvidencePhotoUrl(photoUrl)}
+                            alt={`Vendor Evidence ${idx + 1}`}
+                            style={{
+                              width: '100%',
+                              height: '220px',
+                              objectFit: 'cover',
+                              display: 'block',
+                            }}
+                          />
+                          {watermarkLines.length > 0 && (
+                            <Box
+                              sx={{
+                                position: 'absolute',
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                px: 1.25,
+                                py: 0.75,
+                                background: 'linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.9) 55%, rgba(15,23,42,0.98) 100%)',
+                              }}
+                            >
+                              {watermarkLines.map((line, lineIndex) => (
+                                <Typography
+                                  key={`legal-watermark-${idx}-${lineIndex}`}
+                                  sx={{
+                                    fontSize: '11px',
+                                    lineHeight: 1.35,
+                                    color: '#fff',
+                                    fontWeight: 600,
+                                    textShadow: '0 1px 2px rgba(0,0,0,0.45)',
+                                  }}
+                                >
+                                  {line}
+                                </Typography>
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              )}
               {selectedReport.review_notes && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>

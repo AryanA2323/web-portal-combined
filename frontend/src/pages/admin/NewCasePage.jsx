@@ -24,7 +24,6 @@ import {
   ArrowBack,
   Add as AddIcon,
   Delete as DeleteIcon,
-  CloudUpload as UploadIcon,
   AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';

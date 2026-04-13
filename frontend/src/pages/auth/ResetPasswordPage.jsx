@@ -236,7 +236,7 @@ const ResetPasswordPage = () => {
                   Enter Verification Code
                 </Typography>
                 <Typography variant="body1" className="text-gray-500">
-                  We've sent a 6-digit code to <strong>{email}</strong>
+                  We&apos;ve sent a 6-digit code to <strong>{email}</strong>
                 </Typography>
               </Box>
 

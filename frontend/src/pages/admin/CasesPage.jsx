@@ -94,7 +94,6 @@ const CasesPage = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalCases, setTotalCases] = useState(0);
   const [selected, setSelected] = useState([]);
-  const [assigningVendor, setAssigningVendor] = useState(null);
   const [expandedCases, setExpandedCases] = useState({});
 
   // Vendor assignment modal state
@@ -112,6 +111,7 @@ const CasesPage = () => {
   // Fetch data on mount
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, rowsPerPage, fullCaseStatusFilter, caseTypeFilter]);
 
   const fetchData = async () => {
@@ -242,27 +242,6 @@ const CasesPage = () => {
   // Sub-items come directly from API (incident_case_db verification tables)
   const getSubCases = (caseData) => caseData.sub_items || [];
 
-  // Auto-assign vendor function
-  const handleAutoAssignVendor = async (caseId) => {
-    try {
-      setAssigningVendor(caseId);
-      const response = await api.post(`/cases/${caseId}/auto-assign-vendor`);
-      
-      if (response.data.success) {
-        // Refresh the cases list to show the updated vendor assignment
-        await fetchData();
-        alert(`Vendor assigned successfully: ${response.data.assigned_vendor.company_name} (${response.data.assigned_vendor.distance_km} km away)`);
-      } else {
-        alert(`Error: ${response.data.error}`);
-      }
-    } catch (error) {
-      console.error('Failed to auto-assign vendor:', error);
-      alert('Failed to assign vendor. Please try again.');
-    } finally {
-      setAssigningVendor(null);
-    }
-  };
-
   // Open vendor assignment modal for a sub-check
   const openVendorModal = async (caseId, checkType) => {
     setVendorModalTarget({ caseId, checkType });
@@ -354,7 +333,7 @@ const CasesPage = () => {
   // Show only the company name in the list (strip trailing "- CODE" or "– CODE").
   const displayClientName = (rawName) => {
     if (!rawName) return '—';
-    return String(rawName).replace(/\s*[\u2013\-]\s*[A-Za-z0-9]+\s*$/, '').trim() || rawName;
+    return String(rawName).replace(/\s*[\u2013-]\s*[A-Za-z0-9]+\s*$/, '').trim() || rawName;
   };
 
   if (loading && cases.length === 0) {

@@ -57,8 +57,6 @@ export const ADMIN_SUB_ROLES = {
 const DEFAULT_ADMIN_PERMISSIONS = [
   '/admin/dashboard',
   '/admin/cases',
-  '/admin/email-intake',
-  '/admin/process-document',
   '/admin/ai-brief',
   '/admin/legal-review',
   '/admin/reports',
@@ -79,7 +77,7 @@ export const SUB_ROLE_CONFIG = {
     label: 'Case Handler',
     description: 'Manage and handle cases',
     icon: 'FolderOpen',
-    permissions: ['/admin/dashboard', '/admin/cases', '/admin/process-document', '/admin/email-intake']
+    permissions: ['/admin/dashboard', '/admin/cases']
   },
   report_manager: {
     label: 'Report Manager',

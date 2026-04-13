@@ -31,7 +31,6 @@ const ForgotPasswordPage = () => {
     register,
     handleSubmit,
     formState: { errors },
-    getValues,
   } = useForm({
     resolver: yupResolver(forgotPasswordSchema),
     defaultValues: {
@@ -127,7 +126,7 @@ const ForgotPasswordPage = () => {
               Forgot Password?
             </Typography>
             <Typography variant="body1" className="text-gray-500">
-              Enter your email address and we'll send you a verification code to reset your password.
+              Enter your email address and we&apos;ll send you a verification code to reset your password.
             </Typography>
           </Box>
 
@@ -176,7 +175,7 @@ const ForgotPasswordPage = () => {
           {/* Info Box */}
           <Box className="mt-6 p-4 bg-blue-50 rounded-lg">
             <Typography variant="body2" className="text-blue-800">
-              💡 <strong>Tip:</strong> Check your spam folder if you don't receive the email within a few minutes.
+              💡 <strong>Tip:</strong> Check your spam folder if you don&apos;t receive the email within a few minutes.
             </Typography>
           </Box>
 

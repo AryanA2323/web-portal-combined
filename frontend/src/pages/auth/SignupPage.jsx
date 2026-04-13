@@ -21,14 +21,12 @@ import { FormInput, RoleSelector, LoadingButton, AlertMessage } from '../../comp
 import { signupSchema } from '../../utils/validationSchemas';
 import { getRoleDashboard } from '../../utils/constants';
 import { authService } from '../../services';
-import { useAuth } from '../../context';
 
 const SignupPage = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
-  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [alertState, setAlertState] = useState({ open: false, message: '', severity: 'error' });
   const [activeStep, setActiveStep] = useState(0);
@@ -81,7 +79,7 @@ const SignupPage = () => {
     setAlertState({ open: false, message: '', severity: 'error' });
 
     try {
-      const response = await authService.register({
+      await authService.register({
         username: data.username,
         email: data.email,
         password: data.password,

@@ -13,7 +13,7 @@ import {
   TextField,
   Button,
 } from '@mui/material';
-import { Security, Refresh, CheckCircle } from '@mui/icons-material';
+import { Security, Refresh } from '@mui/icons-material';
 
 import { LoadingButton, AlertMessage } from '../../components/common';
 import { twoFactorSchema } from '../../utils/validationSchemas';

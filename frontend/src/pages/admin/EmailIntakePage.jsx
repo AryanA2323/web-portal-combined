@@ -27,7 +27,6 @@ import {
   Email,
   Warning,
   Schedule,
-  CheckCircle,
   ChevronRight,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';

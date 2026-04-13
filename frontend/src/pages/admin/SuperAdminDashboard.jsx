@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Grid,
   Paper,
   Typography,
   Box,
@@ -13,16 +12,12 @@ import {
   TableRow,
   Chip,
   Avatar,
-  Card,
-  CardContent,
 } from '@mui/material';
 import {
   People,
   PersonAdd,
   Store,
   TrendingUp,
-  AccountCircle,
-  Business,
 } from '@mui/icons-material';
 import { Pie, Line } from 'react-chartjs-2';
 import {
@@ -39,7 +34,6 @@ import {
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
 import superAdminService from '../../services/superAdminService';
-import { useAuth } from '../../context/AuthContext';
 
 // Register ChartJS components
 ChartJS.register(
@@ -54,7 +48,6 @@ ChartJS.register(
 );
 
 const SuperAdminDashboard = () => {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
   const [error, setError] = useState(null);
@@ -146,19 +139,9 @@ const SuperAdminDashboard = () => {
     return colors[role] || 'default';
   };
 
-  const getRoleLabel = (role, subRole) => {
+  const getRoleLabel = (role) => {
     // Return role directly (no more sub_role handling)
     return role;
-  };
-
-  const getSubRoleLabel = (subRole) => {
-    const labels = {
-      SUPER_ADMIN: 'Super Admin',
-      CASE_HANDLER: 'Case Handler',
-      REPORT_MANAGER: 'Report Manager',
-      LOG_MANAGER: 'Log Manager',
-    };
-    return labels[subRole] || subRole;
   };
 
   return (

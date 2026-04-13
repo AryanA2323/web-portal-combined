@@ -22,7 +22,6 @@ import {
   LocationOn,
   TrendingUp,
   Star,
-  TrendingDown,
   Add,
   Search,
   Phone,

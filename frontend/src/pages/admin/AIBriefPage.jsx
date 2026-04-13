@@ -219,7 +219,6 @@ const AIBriefPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [deleteReportDialogOpen, setDeleteReportDialogOpen] = useState(false);
   const [deletingReport, setDeletingReport] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     saveStoredReports(reportsByCase);
@@ -258,6 +257,7 @@ const AIBriefPage = () => {
 
   useEffect(() => {
     fetchCases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, rowsPerPage, statusFilter, caseTypeFilter, vendorFilter, vendors]);
 
   const fetchLawyers = async () => {
@@ -657,7 +657,7 @@ const AIBriefPage = () => {
 
     setSubmitting(true);
     try {
-      const response = await api.put(`/reports/${activeReport.id}/content`, {
+      await api.put(`/reports/${activeReport.id}/content`, {
         report_content: editedContent,
       });
 
@@ -715,7 +715,7 @@ const AIBriefPage = () => {
     }
 
     try {
-      const response = await api.post(`/reports/${reportId}/assign`, {
+      await api.post(`/reports/${reportId}/assign`, {
         lawyer_id: selectedLawyer.id,
       });
 
@@ -769,7 +769,6 @@ const AIBriefPage = () => {
     if (!activeReportCase) return;
 
     try {
-      setRegenerating(true);
       setError('');
 
       // For now, show a message that they need to upload a new statement
@@ -780,8 +779,6 @@ const AIBriefPage = () => {
     } catch (err) {
       console.error('Failed to prepare regenerate:', err);
       setError('Failed to prepare report regeneration.');
-    } finally {
-      setRegenerating(false);
     }
   };
 
@@ -1492,3 +1489,6 @@ const AIBriefPage = () => {
 };
 
 export default AIBriefPage;
+
+
+
