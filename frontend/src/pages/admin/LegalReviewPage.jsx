@@ -4,6 +4,7 @@ import {
   Paper,
   Typography,
   Button,
+  TextField,
   MenuItem,
   Select,
   FormControl,
@@ -138,12 +139,16 @@ const LegalReviewPage = () => {
   const [selectedLawyerId, setSelectedLawyerId] = useState('');
   const [assigningLawyer, setAssigningLawyer] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState(null);
+  const [lawyerModalMode, setLawyerModalMode] = useState('assign');
   const [lawyersLoading, setLawyersLoading] = useState(false);
   const [lawyersError, setLawyersError] = useState(null);
 
   // Report detail modal state
   const [reportDetailOpen, setReportDetailOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
+  const [editableReportContent, setEditableReportContent] = useState('');
+  const [savingReportContent, setSavingReportContent] = useState(false);
+  const [reportContentError, setReportContentError] = useState(null);
 
   // Fetch reports and stats
   const fetchReports = async () => {
@@ -171,8 +176,9 @@ const LegalReviewPage = () => {
   }, [statusFilter]);
 
   // Open lawyer assignment modal
-  const openLawyerModal = async (reportId) => {
+  const openLawyerModal = async (reportId, mode = 'assign') => {
     setSelectedReportId(reportId);
+    setLawyerModalMode(mode);
     setSelectedLawyerId('');
     setLawyersLoading(true);
     setLawyersError(null);
@@ -198,15 +204,23 @@ const LegalReviewPage = () => {
     if (!selectedReportId || !selectedLawyerId) return;
     setAssigningLawyer(true);
     try {
-      await api.post(`/reports/${selectedReportId}/assign`, {
+      const endpoint = lawyerModalMode === 'reassign'
+        ? `/reports/${selectedReportId}/reassign`
+        : `/reports/${selectedReportId}/assign`;
+      const res = await api.post(endpoint, {
         lawyer_id: selectedLawyerId,
       });
+      if (selectedReport?.id === selectedReportId) {
+        setSelectedReport(res.data);
+        setEditableReportContent(res.data?.report_content || '');
+      }
       setLawyerModalOpen(false);
       setSelectedReportId(null);
+      setLawyerModalMode('assign');
       await fetchReports();
     } catch (err) {
       console.error('Failed to assign lawyer:', err);
-      alert('Failed to assign lawyer. Please try again.');
+      alert(`Failed to ${lawyerModalMode === 'reassign' ? 'reassign' : 'assign'} lawyer. Please try again.`);
     } finally {
       setAssigningLawyer(false);
     }
@@ -217,10 +231,42 @@ const LegalReviewPage = () => {
     try {
       const res = await api.get(`/reports/${reportId}`);
       setSelectedReport(res.data);
+      setEditableReportContent(res.data?.report_content || '');
+      setReportContentError(null);
       setReportDetailOpen(true);
     } catch (err) {
       console.error('Failed to fetch report:', err);
       alert('Failed to load report details.');
+    }
+  };
+
+  const handleCloseReportDetail = () => {
+    setReportDetailOpen(false);
+    setSelectedReport(null);
+    setEditableReportContent('');
+    setReportContentError(null);
+    setSavingReportContent(false);
+  };
+
+  const handleSaveReportContent = async () => {
+    if (!selectedReport || selectedReport.status !== 'REJECTED' || savingReportContent) return;
+
+    setSavingReportContent(true);
+    setReportContentError(null);
+
+    try {
+      const res = await api.put(`/reports/${selectedReport.id}/content`, {
+        report_content: editableReportContent,
+      });
+
+      setSelectedReport(res.data);
+      setEditableReportContent(res.data?.report_content || '');
+      await fetchReports();
+    } catch (err) {
+      console.error('Failed to update report content:', err);
+      setReportContentError(err.response?.data?.detail || 'Failed to save report changes.');
+    } finally {
+      setSavingReportContent(false);
     }
   };
 
@@ -685,11 +731,13 @@ const LegalReviewPage = () => {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 700, fontSize: '18px', pb: 1 }}>
-          Assign Lawyer
+          {lawyerModalMode === 'reassign' ? 'Reassign Lawyer' : 'Assign Lawyer'}
         </DialogTitle>
         <DialogContent>
           <Typography sx={{ fontSize: '13px', color: '#666', mb: 2 }}>
-            Select a lawyer to assign for legal review of this report.
+            {lawyerModalMode === 'reassign'
+              ? 'Select a lawyer to reassign this updated report for legal review.'
+              : 'Select a lawyer to assign for legal review of this report.'}
           </Typography>
           {lawyersLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
@@ -724,7 +772,10 @@ const LegalReviewPage = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
-            onClick={() => setLawyerModalOpen(false)}
+            onClick={() => {
+              setLawyerModalOpen(false);
+              setLawyerModalMode('assign');
+            }}
             sx={{ textTransform: 'none', color: '#666' }}
           >
             Cancel
@@ -741,7 +792,7 @@ const LegalReviewPage = () => {
               '&:hover': { backgroundColor: '#5568d3' },
             }}
           >
-            {assigningLawyer ? <CircularProgress size={20} color="inherit" /> : 'Assign'}
+            {assigningLawyer ? <CircularProgress size={20} color="inherit" /> : lawyerModalMode === 'reassign' ? 'Reassign' : 'Assign'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -749,7 +800,7 @@ const LegalReviewPage = () => {
       {/* Report Detail Modal */}
       <Dialog
         open={reportDetailOpen}
-        onClose={() => setReportDetailOpen(false)}
+        onClose={handleCloseReportDetail}
         maxWidth="md"
         fullWidth
       >
@@ -786,22 +837,47 @@ const LegalReviewPage = () => {
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 AI Generated Report:
               </Typography>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2,
-                  backgroundColor: '#f8f9fa',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '8px',
-                  maxHeight: 400,
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'monospace',
-                  fontSize: '13px',
-                }}
-              >
-                {selectedReport.report_content}
-              </Paper>
+              {selectedReport.status === 'REJECTED' ? (
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={12}
+                  value={editableReportContent}
+                  onChange={(e) => setEditableReportContent(e.target.value)}
+                  error={Boolean(reportContentError)}
+                  helperText={reportContentError || 'Rejected reports can be edited and saved from this modal.'}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      alignItems: 'flex-start',
+                      borderRadius: '8px',
+                      backgroundColor: '#f8f9fa',
+                      fontFamily: 'monospace',
+                      fontSize: '13px',
+                    },
+                    '& .MuiInputBase-inputMultiline': {
+                      fontFamily: 'monospace',
+                      fontSize: '13px',
+                    },
+                  }}
+                />
+              ) : (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    backgroundColor: '#f8f9fa',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '8px',
+                    maxHeight: 400,
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'monospace',
+                    fontSize: '13px',
+                  }}
+                >
+                  {selectedReport.report_content}
+                </Paper>
+              )}
               {selectedReport.evidence_photos && selectedReport.evidence_photos.length > 0 && (
                 <Box sx={{ mt: 2.5 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.25 }}>
@@ -897,16 +973,52 @@ const LegalReviewPage = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
-            onClick={() => setReportDetailOpen(false)}
+            onClick={handleCloseReportDetail}
             sx={{ textTransform: 'none', color: '#666' }}
           >
             Close
           </Button>
+          {selectedReport?.status === 'REJECTED' && (
+            <Button
+              variant="outlined"
+              onClick={() => openLawyerModal(selectedReport.id, 'reassign')}
+              disabled={savingReportContent || editableReportContent !== selectedReport.report_content}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                borderRadius: '8px',
+                borderColor: '#667eea',
+                color: '#667eea',
+                '&:hover': {
+                  borderColor: '#5568d3',
+                  backgroundColor: '#f0f4ff',
+                },
+              }}
+            >
+              Reassign Lawyer
+            </Button>
+          )}
+          {selectedReport?.status === 'REJECTED' && (
+            <Button
+              variant="contained"
+              onClick={handleSaveReportContent}
+              disabled={savingReportContent || editableReportContent === selectedReport.report_content}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                backgroundColor: '#667eea',
+                borderRadius: '8px',
+                '&:hover': { backgroundColor: '#5568d3' },
+              }}
+            >
+              {savingReportContent ? <CircularProgress size={20} color="inherit" /> : 'Save Changes'}
+            </Button>
+          )}
           {selectedReport && (selectedReport.status === 'PENDING' || selectedReport.status === 'ASSIGNED') && (
             <Button
               variant="contained"
               onClick={() => {
-                setReportDetailOpen(false);
+                handleCloseReportDetail();
                 openLawyerModal(selectedReport.id);
               }}
               sx={{
