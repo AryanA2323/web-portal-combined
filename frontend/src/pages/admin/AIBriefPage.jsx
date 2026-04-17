@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -40,6 +41,7 @@ import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
 import api from '../../services/api';
 import jsPDF from 'jspdf';
+import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
 
 const REPORT_STORAGE_KEY = 'aiBriefReports';
 
@@ -219,6 +221,7 @@ const AIBriefPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [deleteReportDialogOpen, setDeleteReportDialogOpen] = useState(false);
   const [deletingReport, setDeletingReport] = useState(false);
+  const [downloadMenuAnchorEl, setDownloadMenuAnchorEl] = useState(null);
 
   useEffect(() => {
     saveStoredReports(reportsByCase);
@@ -485,8 +488,46 @@ const AIBriefPage = () => {
     }
   };
 
-  const handleDownloadReport = async () => {
+  const handleDownloadReport = async (format = 'pdf') => {
     if (!activeReport || !activeReportCase) return;
+
+    const caseNum = activeReport.caseNumber || activeReportCase.case_number || 'N/A';
+    const metadata = [
+      { label: 'Case Number', value: caseNum },
+      { label: 'Claim Number', value: activeReportCase.claim_number || 'N/A' },
+      { label: 'Vendor', value: activeReportCase.vendorName || 'Unassigned' },
+      { label: 'Generated', value: new Date(activeReport.generatedAt).toLocaleString() },
+      { label: 'Statement Source', value: activeReport.sourceFileName || 'Stored Vendor Statements' },
+      { label: 'Vendor Statements', value: (activeReport.vendorStatements || []).length },
+    ];
+
+    const evidenceItems = [];
+    for (const [index, photo] of (activeReport.evidencePhotos || []).entries()) {
+      let imageDataUrl = null;
+      try {
+        imageDataUrl = await getImageDataUrl(photo);
+      } catch (err) {
+        console.error('Failed to load evidence image for Word export:', err);
+      }
+
+      evidenceItems.push({
+        title: `Vendor Evidence ${index + 1}`,
+        caption: getEvidenceWatermarkLines(photo).join(' | '),
+        imageDataUrl,
+      });
+    }
+
+    if (format === 'word') {
+      downloadWordDocument({
+        fileName: `${sanitizeFileName(caseNum, 'ai-brief-report')}_ai_brief_report.doc`,
+        title: 'AI Brief Report',
+        metadata,
+        contentTitle: 'Report Content',
+        content: activeReport.reportText || '',
+        evidenceItems,
+      });
+      return;
+    }
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -553,13 +594,9 @@ const AIBriefPage = () => {
     y += 4;
 
     // Meta info
-    const caseNum = activeReport.caseNumber || activeReportCase.case_number || 'N/A';
-    addText(`Case Number: ${caseNum}`, 11, true);
-    addText(`Claim Number: ${activeReportCase.claim_number || 'N/A'}`, 11, false);
-    addText(`Vendor: ${activeReportCase.vendorName || 'Unassigned'}`, 11, false);
-    addText(`Generated: ${new Date(activeReport.generatedAt).toLocaleString()}`, 11, false);
-    addText(`Statement Source: ${activeReport.sourceFileName || 'Stored Vendor Statements'}`, 11, false);
-    addText(`Vendor Statements: ${(activeReport.vendorStatements || []).length}`, 11, false);
+    metadata.forEach((item, index) => {
+      addText(`${item.label}: ${item.value}`, 11, index === 0);
+    });
     y += 4;
 
     // Divider line
@@ -602,7 +639,7 @@ const AIBriefPage = () => {
       }
     }
 
-    const fileName = `${caseNum}_AI_Brief_Report.pdf`;
+    const fileName = `${sanitizeFileName(caseNum, 'ai-brief-report')}_ai_brief_report.pdf`;
     doc.save(fileName);
   };
 
@@ -1134,6 +1171,7 @@ const AIBriefPage = () => {
           setViewReportDialogOpen(false);
           setEditMode(false);
           setSelectedLawyer(null);
+          setDownloadMenuAnchorEl(null);
         }}
         maxWidth="md"
         fullWidth
@@ -1150,7 +1188,7 @@ const AIBriefPage = () => {
           <Button
             variant="outlined"
             startIcon={<Download />}
-            onClick={handleDownloadReport}
+            onClick={(event) => setDownloadMenuAnchorEl(event.currentTarget)}
             disabled={!activeReport || editMode}
             sx={{
               textTransform: 'none',
@@ -1160,6 +1198,28 @@ const AIBriefPage = () => {
           >
             Download
           </Button>
+          <Menu
+            anchorEl={downloadMenuAnchorEl}
+            open={Boolean(downloadMenuAnchorEl)}
+            onClose={() => setDownloadMenuAnchorEl(null)}
+          >
+            <MenuItem
+              onClick={() => {
+                setDownloadMenuAnchorEl(null);
+                handleDownloadReport('pdf');
+              }}
+            >
+              Download as PDF
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                setDownloadMenuAnchorEl(null);
+                handleDownloadReport('word');
+              }}
+            >
+              Download as Word
+            </MenuItem>
+          </Menu>
         </DialogTitle>
         <DialogContent dividers>
           {activeReport && activeReportCase ? (

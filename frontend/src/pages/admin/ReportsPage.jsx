@@ -6,6 +6,8 @@ import {
   Chip,
   CircularProgress,
   InputAdornment,
+  Menu,
+  MenuItem,
   Paper,
   Table,
   TableBody,
@@ -21,6 +23,7 @@ import { CheckCircle, FileDownload, Refresh, Search } from '@mui/icons-material'
 import AdminLayout from './components/AdminLayout';
 import api from '../../services/api';
 import jsPDF from 'jspdf';
+import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
 
 const getEvidencePhotoUrl = (photo) => {
   if (!photo) return '';
@@ -146,6 +149,8 @@ const ReportsPage = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [downloadingReportId, setDownloadingReportId] = useState(null);
+  const [downloadMenuAnchorEl, setDownloadMenuAnchorEl] = useState(null);
+  const [selectedDownloadRow, setSelectedDownloadRow] = useState(null);
 
   const fetchApprovedReports = async () => {
     try {
@@ -202,16 +207,17 @@ const ReportsPage = () => {
     setPage(0);
   };
 
-  const buildSafeFileName = (value, fallback) => {
-    const normalized = String(value || fallback || 'approved-report')
-      .trim()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-zA-Z0-9-_]/g, '')
-      .toLowerCase();
-    return normalized || fallback;
+  const openDownloadMenu = (event, row) => {
+    setDownloadMenuAnchorEl(event.currentTarget);
+    setSelectedDownloadRow(row);
   };
 
-  const handleDownloadReport = async (row) => {
+  const closeDownloadMenu = () => {
+    setDownloadMenuAnchorEl(null);
+    setSelectedDownloadRow(null);
+  };
+
+  const handleDownloadReport = async (row, format = 'pdf') => {
     if (!row?.id) return;
 
     try {
@@ -223,6 +229,46 @@ const ReportsPage = () => {
 
       if (!reportContent) {
         setError('Report content is empty and cannot be downloaded.');
+        return;
+      }
+
+      const caseFilePart = sanitizeFileName(row.case_number, `report-${row.id}`);
+      const metadata = [
+        { label: 'Case Number', value: response?.data?.case_number || row.case_number || '-' },
+        { label: 'Claim Number', value: response?.data?.claim_number || row.claim_number || '-' },
+        { label: 'Client Name', value: response?.data?.client_name || row.client_name || '-' },
+        { label: 'Category', value: response?.data?.category || row.category || '-' },
+        { label: 'Assigned Lawyer', value: response?.data?.assigned_lawyer_name || row.assigned_lawyer_name || '-' },
+        { label: 'Reviewed On', value: formatDate(response?.data?.reviewed_at || row.reviewed_at || row.created_at) },
+      ];
+
+      const evidencePhotos = Array.isArray(response?.data?.evidence_photos) ? response.data.evidence_photos : [];
+      const evidenceItems = [];
+
+      for (const [index, photo] of evidencePhotos.entries()) {
+        let imageDataUrl = null;
+        try {
+          imageDataUrl = await getEvidenceImageDataUrl(photo);
+        } catch (imageError) {
+          console.error('Failed to load evidence image for download:', imageError);
+        }
+
+        evidenceItems.push({
+          title: `Vendor Evidence ${index + 1}`,
+          caption: getEvidenceWatermarkLines(photo).join(' | '),
+          imageDataUrl,
+        });
+      }
+
+      if (format === 'word') {
+        downloadWordDocument({
+          fileName: `${caseFilePart}-approved-report.doc`,
+          title: 'Approved Report',
+          metadata,
+          contentTitle: 'Report Content',
+          content: reportContent,
+          evidenceItems,
+        });
         return;
       }
 
@@ -250,27 +296,21 @@ const ReportsPage = () => {
 
       addLine('Approved Report', 16, true);
       y += 2;
-      addLine(`Case Number: ${response?.data?.case_number || row.case_number || '-'}`);
-      addLine(`Claim Number: ${response?.data?.claim_number || row.claim_number || '-'}`);
-      addLine(`Client Name: ${response?.data?.client_name || row.client_name || '-'}`);
-      addLine(`Category: ${response?.data?.category || row.category || '-'}`);
-      addLine(`Assigned Lawyer: ${response?.data?.assigned_lawyer_name || row.assigned_lawyer_name || '-'}`);
-      addLine(`Reviewed On: ${formatDate(response?.data?.reviewed_at || row.reviewed_at || row.created_at)}`);
+      metadata.forEach((item) => addLine(`${item.label}: ${item.value}`));
 
       y += 3;
       addLine('Report Content', 13, true);
       y += 1;
       addLine(reportContent, 11, false);
 
-      const evidencePhotos = Array.isArray(response?.data?.evidence_photos) ? response.data.evidence_photos : [];
-      if (evidencePhotos.length > 0) {
+      if (evidenceItems.length > 0) {
         y += 8;
         addLine('Vendor Evidence', 13, true);
         y += 2;
 
-        for (const photo of evidencePhotos) {
+        for (const evidenceItem of evidenceItems) {
           try {
-            const imageDataUrl = await getEvidenceImageDataUrl(photo);
+            const imageDataUrl = evidenceItem.imageDataUrl;
             if (!imageDataUrl) continue;
 
             const imageFormat = imageDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
@@ -281,7 +321,7 @@ const ReportsPage = () => {
               y = 20;
             }
 
-            const watermarkLines = getEvidenceWatermarkLines(photo);
+            const watermarkLines = evidenceItem.caption ? evidenceItem.caption.split(' | ') : [];
             doc.addImage(imageDataUrl, imageFormat, margin, y, textWidth, imageHeight);
             addImageWatermark(doc, watermarkLines, margin, y, textWidth, imageHeight);
             y += imageHeight + 8;
@@ -291,7 +331,6 @@ const ReportsPage = () => {
         }
       }
 
-      const caseFilePart = buildSafeFileName(row.case_number, `report-${row.id}`);
       doc.save(`${caseFilePart}-approved-report.pdf`);
     } catch (err) {
       console.error('Failed to download approved report:', err);
@@ -418,7 +457,7 @@ const ReportsPage = () => {
                         variant="outlined"
                         size="small"
                         startIcon={<FileDownload />}
-                        onClick={() => handleDownloadReport(row)}
+                        onClick={(event) => openDownloadMenu(event, row)}
                         disabled={downloadingReportId === row.id}
                         sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px' }}
                       >
@@ -442,6 +481,31 @@ const ReportsPage = () => {
           rowsPerPageOptions={[5, 10, 25]}
           sx={{ borderTop: '1px solid #e0e0e0' }}
         />
+
+        <Menu
+          anchorEl={downloadMenuAnchorEl}
+          open={Boolean(downloadMenuAnchorEl)}
+          onClose={closeDownloadMenu}
+        >
+          <MenuItem
+            onClick={() => {
+              const row = selectedDownloadRow;
+              closeDownloadMenu();
+              if (row) handleDownloadReport(row, 'pdf');
+            }}
+          >
+            Download as PDF
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              const row = selectedDownloadRow;
+              closeDownloadMenu();
+              if (row) handleDownloadReport(row, 'word');
+            }}
+          >
+            Download as Word
+          </MenuItem>
+        </Menu>
       </Paper>
     </AdminLayout>
   );

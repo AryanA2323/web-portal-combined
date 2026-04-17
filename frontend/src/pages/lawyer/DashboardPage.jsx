@@ -70,7 +70,7 @@ const DashboardPage = () => {
   const statCards = [
     { title: 'Total Reports', value: stats.total, icon: Assessment, color: '#3498db', bgColor: '#e3f2fd' },
     { title: 'Pending Review', value: stats.pending, icon: Pending, color: '#f39c12', bgColor: '#fff3e0' },
-    { title: 'Accepted', value: stats.accepted, icon: CheckCircle, color: '#27ae60', bgColor: '#e8f5e9' },
+    { title: 'Approved', value: stats.accepted, icon: CheckCircle, color: '#27ae60', bgColor: '#e8f5e9' },
     { title: 'Rejected', value: stats.rejected, icon: Cancel, color: '#e74c3c', bgColor: '#ffebee' },
   ];
 
@@ -88,7 +88,7 @@ const DashboardPage = () => {
   const getActivityText = (report) => {
     switch (report.status) {
       case 'ACCEPTED':
-        return `You accepted the report for "${report.case_title}"`;
+        return `You approved the report for "${report.case_title}"`;
       case 'REJECTED':
         return `You rejected the report for "${report.case_title}"`;
       case 'ASSIGNED':

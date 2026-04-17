@@ -111,6 +111,11 @@ const getEvidenceWatermarkLines = (photo) => {
   return [locationLine, timestamp].filter(Boolean);
 };
 
+const getStatusDisplayLabel = (status) => {
+  if (status === 'ACCEPTED') return 'APPROVED';
+  return status;
+};
+
 const LegalReviewPage = () => {
   // State for data
   const [reports, setReports] = useState([]);
@@ -450,7 +455,7 @@ const LegalReviewPage = () => {
                 <MenuItem value="all">All Statuses</MenuItem>
                 <MenuItem value="pending">Pending</MenuItem>
                 <MenuItem value="assigned">Assigned</MenuItem>
-                <MenuItem value="accepted">Accepted</MenuItem>
+                <MenuItem value="accepted">Approved</MenuItem>
                 <MenuItem value="rejected">Rejected</MenuItem>
               </Select>
             </FormControl>
@@ -624,9 +629,9 @@ const LegalReviewPage = () => {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          icon={getStatusIcon(row.status)}
-                          label={row.status}
-                          size="small"
+                              icon={getStatusIcon(row.status)}
+                              label={getStatusDisplayLabel(row.status)}
+                              size="small"
                           sx={{
                             backgroundColor: `${getStatusColor(row.status)}15`,
                             color: getStatusColor(row.status),
@@ -813,7 +818,7 @@ const LegalReviewPage = () => {
             <Box>
               <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                 <Chip
-                  label={`Status: ${selectedReport.status}`}
+                  label={`Status: ${getStatusDisplayLabel(selectedReport.status)}`}
                   sx={{
                     backgroundColor: `${getStatusColor(selectedReport.status)}15`,
                     color: getStatusColor(selectedReport.status),

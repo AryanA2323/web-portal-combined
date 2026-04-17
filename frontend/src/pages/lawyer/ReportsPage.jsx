@@ -106,6 +106,11 @@ const getEvidenceWatermarkLines = (photo) => {
   return [locationLine, timestamp].filter(Boolean);
 };
 
+const getStatusDisplayLabel = (status) => {
+  if (status === 'ACCEPTED') return 'APPROVED';
+  return status;
+};
+
 const ReportsPage = () => {
   // State for data
   const [reports, setReports] = useState([]);
@@ -128,6 +133,7 @@ const ReportsPage = () => {
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [reviewNotes, setReviewNotes] = useState('');
+  const [reviewNotesError, setReviewNotesError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Fetch reports
@@ -159,6 +165,7 @@ const ReportsPage = () => {
       const res = await api.get(`/reports/${reportId}`);
       setSelectedReport(res.data);
       setReviewNotes('');
+      setReviewNotesError('');
       setReviewDialogOpen(true);
     } catch (err) {
       console.error('Failed to fetch report:', err);
@@ -170,22 +177,27 @@ const ReportsPage = () => {
     setReviewDialogOpen(false);
     setSelectedReport(null);
     setReviewNotes('');
+    setReviewNotesError('');
   };
 
-  // Accept report
-  const handleAccept = async () => {
+  // Approve report
+  const handleApprove = async () => {
     if (!selectedReport) return;
+    if (!reviewNotes.trim()) {
+      setReviewNotesError('Review notes are mandatory to approve or reject this report.');
+      return;
+    }
     setSubmitting(true);
     try {
       await api.post(`/lawyer/reports/${selectedReport.id}/review`, {
         action: 'accept',
-        notes: reviewNotes,
+        notes: reviewNotes.trim(),
       });
       handleCloseDialog();
       await fetchReports();
     } catch (err) {
-      console.error('Failed to accept report:', err);
-      alert('Failed to accept report. Please try again.');
+      console.error('Failed to approve report:', err);
+      alert(err.response?.data?.detail || 'Failed to approve report. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -195,20 +207,20 @@ const ReportsPage = () => {
   const handleReject = async () => {
     if (!selectedReport) return;
     if (!reviewNotes.trim()) {
-      alert('Please provide a reason for rejection.');
+      setReviewNotesError('Review notes are mandatory to approve or reject this report.');
       return;
     }
     setSubmitting(true);
     try {
       await api.post(`/lawyer/reports/${selectedReport.id}/review`, {
         action: 'reject',
-        notes: reviewNotes,
+        notes: reviewNotes.trim(),
       });
       handleCloseDialog();
       await fetchReports();
     } catch (err) {
       console.error('Failed to reject report:', err);
-      alert('Failed to reject report. Please try again.');
+      alert(err.response?.data?.detail || 'Failed to reject report. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -310,7 +322,7 @@ const ReportsPage = () => {
             <Typography variant="h4" fontWeight={700} sx={{ color: '#51cf66' }}>
               {stats.accepted}
             </Typography>
-            <Typography color="text.secondary">Accepted</Typography>
+            <Typography color="text.secondary">Approved</Typography>
           </Paper>
           <Paper sx={{ p: 2, flex: 1, textAlign: 'center' }}>
             <Typography variant="h4" fontWeight={700} sx={{ color: '#ff6b6b' }}>
@@ -391,7 +403,7 @@ const ReportsPage = () => {
                           <TableCell>
                             <Chip
                               icon={getStatusIcon(report.status)}
-                              label={report.status}
+                              label={getStatusDisplayLabel(report.status)}
                               size="small"
                               sx={{
                                 backgroundColor: `${getStatusColor(report.status)}15`,
@@ -465,7 +477,7 @@ const ReportsPage = () => {
                 {/* Report info */}
                 <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Chip
-                    label={`Status: ${selectedReport.status}`}
+                    label={`Status: ${getStatusDisplayLabel(selectedReport.status)}`}
                     sx={{
                       backgroundColor: `${getStatusColor(selectedReport.status)}15`,
                       color: getStatusColor(selectedReport.status),
@@ -586,11 +598,27 @@ const ReportsPage = () => {
                     fullWidth
                     multiline
                     rows={3}
+                    required
                     label="Review Notes"
-                    placeholder="Add your review notes here (required for rejection)"
+                    placeholder="Add your review notes here"
                     value={reviewNotes}
-                    onChange={(e) => setReviewNotes(e.target.value)}
-                    sx={{ mb: 2 }}
+                    onChange={(e) => {
+                      setReviewNotes(e.target.value);
+                      if (e.target.value.trim()) {
+                        setReviewNotesError('');
+                      }
+                    }}
+                    error={Boolean(reviewNotesError)}
+                    helperText={reviewNotesError || 'Note section is mandatory.'}
+                    FormHelperTextProps={{
+                      sx: { color: '#d32f2f' },
+                    }}
+                    sx={{
+                      mb: 2,
+                      '& .MuiFormHelperText-root': {
+                        color: '#d32f2f',
+                      },
+                    }}
                   />
                 )}
 
@@ -625,7 +653,7 @@ const ReportsPage = () => {
                 <Button
                   onClick={handleReject}
                   variant="contained"
-                  disabled={submitting}
+                  disabled={submitting || !reviewNotes.trim()}
                   sx={{
                     backgroundColor: '#e74c3c',
                     '&:hover': { backgroundColor: '#c0392b' },
@@ -634,15 +662,15 @@ const ReportsPage = () => {
                   {submitting ? <CircularProgress size={20} color="inherit" /> : 'Reject Report'}
                 </Button>
                 <Button
-                  onClick={handleAccept}
+                  onClick={handleApprove}
                   variant="contained"
-                  disabled={submitting}
+                  disabled={submitting || !reviewNotes.trim()}
                   sx={{
                     backgroundColor: '#27ae60',
                     '&:hover': { backgroundColor: '#229954' },
                   }}
                 >
-                  {submitting ? <CircularProgress size={20} color="inherit" /> : 'Accept Report'}
+                  {submitting ? <CircularProgress size={20} color="inherit" /> : 'Approve Report'}
                 </Button>
               </>
             )}

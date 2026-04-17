@@ -644,7 +644,7 @@ def get_lawyer_report_stats(request: HttpRequest):
     description="Accept or reject an assigned report."
 )
 def review_report(request: HttpRequest, report_id: int, payload: ReviewReportSchema):
-    """Accept or reject a report."""
+    """Approve or reject a report."""
     user = request.auth
 
     if user.role != CustomUser.Role.LAWYER:
@@ -661,14 +661,18 @@ def review_report(request: HttpRequest, report_id: int, payload: ReviewReportSch
     action = payload.action.lower()
     if action not in ['accept', 'reject']:
         raise HttpError(400, "Invalid action. Use 'accept' or 'reject'")
+    notes = str(payload.notes or '').strip()
+    if not notes:
+        raise HttpError(400, "Review notes are mandatory")
 
     # Update report
     report.status = Report.Status.ACCEPTED if action == 'accept' else Report.Status.REJECTED
     report.reviewed_at = timezone.now()
-    report.review_notes = payload.notes
+    report.review_notes = notes
     report.save()
 
-    logger.info(f"Report {report.id} {action}ed by lawyer {user.username}")
+    action_label = "approved" if action == 'accept' else 'rejected'
+    logger.info(f"Report {report.id} {action_label} by lawyer {user.username}")
 
     return report_to_schema(report, request)
 
@@ -710,7 +714,7 @@ def get_lawyer_logs(request: HttpRequest):
 
         # Determine action text based on status
         if report.status == Report.Status.ACCEPTED:
-            action = 'Accepted'
+            action = 'Approved'
         elif report.status == Report.Status.REJECTED:
             action = 'Rejected'
         elif report.status == Report.Status.ASSIGNED:

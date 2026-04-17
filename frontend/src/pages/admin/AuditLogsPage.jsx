@@ -35,7 +35,9 @@ const eventTypeColor = {
 
 const formatEventType = (value) => {
   if (!value) return 'UNKNOWN';
-  return String(value).replaceAll('_', ' ');
+  return String(value)
+    .replace('ACCEPTED', 'APPROVED')
+    .replaceAll('_', ' ');
 };
 
 const AuditLogsPage = () => {
@@ -159,7 +161,7 @@ const AuditLogsPage = () => {
         <Box sx={{ p: 2.5, borderBottom: '1px solid #e0e0e0' }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#333' }}>
-              Project Activity Logs
+              Project Activity Logs (Last 90 Days)
             </Typography>
 
             <FormControl size="small" sx={{ minWidth: 200 }}>

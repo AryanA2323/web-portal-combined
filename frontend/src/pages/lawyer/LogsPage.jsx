@@ -58,7 +58,7 @@ const LogsPage = () => {
 
   const getStatusColor = (action) => {
     switch (action.toLowerCase()) {
-      case 'accepted':
+      case 'approved':
         return { bg: '#27ae60', color: '#fff' };
       case 'rejected':
         return { bg: '#e74c3c', color: '#fff' };

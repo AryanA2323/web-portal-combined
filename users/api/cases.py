@@ -2236,6 +2236,7 @@ def get_audit_logs(
 
     safe_limit = max(1, min(int(limit or 500), 2000))
     activities: List[dict] = []
+    ninety_day_cutoff = timezone.now() - timedelta(days=90)
 
     def _normalize_event_time(event_time_value):
         """Normalize timestamp values to timezone-aware datetimes for safe sorting."""
@@ -2261,6 +2262,8 @@ def get_audit_logs(
     def _add_event(event_time, event_type_value, actor_value, description, case_number="", source="System"):
         normalized_event_time = _normalize_event_time(event_time)
         if not normalized_event_time:
+            return
+        if normalized_event_time < ninety_day_cutoff:
             return
         activities.append(
             {
@@ -2429,7 +2432,7 @@ def get_audit_logs(
                     reviewed_at,
                     "LAWYER_ACCEPTED_REPORT" if is_accepted else "LAWYER_REJECTED_REPORT",
                     lawyer_name,
-                    f"Lawyer '{lawyer_name}' {'accepted' if is_accepted else 'rejected'} report for case {case_number}",
+                    f"Lawyer '{lawyer_name}' {'approved' if is_accepted else 'rejected'} report for case {case_number}",
                     case_number,
                     "Legal Review",
                 )
