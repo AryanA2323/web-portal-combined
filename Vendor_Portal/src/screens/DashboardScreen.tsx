@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store';
 import { fetchCases, clearAllCases } from '@/store/casesSlice';
@@ -15,24 +18,33 @@ import { logoutUser } from '@/store/authSlice';
 import { theme } from '@/config/theme';
 import { useRouter } from 'expo-router';
 
-const checkStatusColors: Record<string, string> = {
-  'WIP': '#FF9800',
-  'Completed': '#4CAF50',
-  'Not Initiated': '#9E9E9E',
-  'Stop': '#f44336',
+const checkStatusColors: Record<string, { solid: string; soft: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
+  WIP: { solid: '#D9822B', soft: '#FFF3E3', icon: 'progress-clock' },
+  Completed: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
+  'Not Initiated': { solid: '#71839A', soft: '#EEF3F8', icon: 'clock-outline' },
+  Stop: { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
 };
 
 const checkTypeColors: Record<string, string> = {
-  'Claimant Check': '#667eea',
-  'Insured Check': '#9f7aea',
-  'Driver Check': '#4299e1',
-  'Spot Check': '#48bb78',
-  'Chargesheet': '#ed8936',
+  'Claimant Check': '#0F5FA8',
+  'Insured Check': '#6E59CF',
+  'Driver Check': '#2F7A8E',
+  'Spot Check': '#2E9B62',
+  Chargesheet: '#C56B1F',
+};
+
+const typeToSlug: Record<string, string> = {
+  'Claimant Check': 'claimant',
+  'Insured Check': 'insured',
+  'Driver Check': 'driver',
+  'Spot Check': 'spot',
+  Chargesheet: 'chargesheet',
 };
 
 export default function DashboardScreen() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
+  const introAnim = useRef(new Animated.Value(0)).current;
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { cases: checks, isLoading } = useSelector((state: RootState) => state.cases);
 
@@ -41,6 +53,22 @@ export default function DashboardScreen() {
       dispatch(fetchCases());
     }
   }, [dispatch, isAuthenticated, user]);
+
+  useEffect(() => {
+    Animated.timing(introAnim, {
+      toValue: 1,
+      duration: 420,
+      useNativeDriver: true,
+    }).start();
+  }, [introAnim]);
+
+  const summary = useMemo(() => {
+    const totalChecks = checks.length;
+    const wipChecks = checks.filter((c: any) => c.check_status === 'WIP').length;
+    const completedChecks = checks.filter((c: any) => c.check_status === 'Completed').length;
+    const notInitiated = checks.filter((c: any) => c.check_status === 'Not Initiated').length;
+    return { totalChecks, wipChecks, completedChecks, notInitiated };
+  }, [checks]);
 
   if (!isAuthenticated || !user) {
     return null;
@@ -61,32 +89,31 @@ export default function DashboardScreen() {
     }
   };
 
-  const totalChecks = checks.length;
-  const wipChecks = checks.filter((c: any) => c.check_status === 'WIP').length;
-  const completedChecks = checks.filter((c: any) => c.check_status === 'Completed').length;
-  const notInitiated = checks.filter((c: any) => c.check_status === 'Not Initiated').length;
-
-  const StatCard = ({ title, value, icon, color }: any) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <View style={styles.statHeader}>
-        <Text style={styles.statIcon}>{icon}</Text>
-        <Text style={styles.statTitle}>{title}</Text>
+  const StatCard = ({
+    title,
+    value,
+    icon,
+    color,
+    tint,
+  }: {
+    title: string;
+    value: number;
+    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    color: string;
+    tint: string;
+  }) => (
+    <View style={styles.statCard}>
+      <View style={[styles.statIconWrap, { backgroundColor: tint }]}>
+        <MaterialCommunityIcons name={icon} size={20} color={color} />
       </View>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statTitle}>{title}</Text>
     </View>
   );
 
   const CheckCard = ({ item }: { item: any }) => {
-    const statusColor = checkStatusColors[item.check_status] || '#999';
-    const typeColor = checkTypeColors[item.check_type] || '#667eea';
-
-    const typeToSlug: Record<string, string> = {
-      'Claimant Check': 'claimant',
-      'Insured Check': 'insured',
-      'Driver Check': 'driver',
-      'Spot Check': 'spot',
-      'Chargesheet': 'chargesheet',
-    };
+    const statusConfig = checkStatusColors[item.check_status] || checkStatusColors['Not Initiated'];
+    const typeColor = checkTypeColors[item.check_type] || theme.colors.primary;
 
     const handlePress = () => {
       const slug = typeToSlug[item.check_type] || '';
@@ -100,108 +127,119 @@ export default function DashboardScreen() {
       <TouchableOpacity
         style={styles.checkCard}
         onPress={handlePress}
-        activeOpacity={0.7}
+        activeOpacity={0.88}
       >
         <View style={styles.checkHeader}>
-          <View style={[styles.typeBadge, { backgroundColor: `${typeColor}20` }]}>
-            <Text style={[styles.typeBadgeText, { color: typeColor }]}>
-              {item.check_type}
-            </Text>
+          <View style={[styles.typeBadge, { backgroundColor: `${typeColor}14` }]}>
+            <View style={[styles.typeDot, { backgroundColor: typeColor }]} />
+            <Text style={[styles.typeBadgeText, { color: typeColor }]}>{item.check_type}</Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{item.check_status}</Text>
-          </View>
-        </View>
-
-        <View style={styles.checkDetails}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>📋 Claim:</Text>
-            <Text style={styles.detailValue} numberOfLines={1}>
-              {item.claim_number || 'N/A'}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>👤 Client:</Text>
-            <Text style={styles.detailValue} numberOfLines={1}>
-              {item.client_name || 'N/A'}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>📁 Category:</Text>
-            <Text style={styles.detailValue} numberOfLines={1}>
-              {item.category || 'N/A'}
-            </Text>
+          <View style={[styles.statusBadge, { backgroundColor: statusConfig.soft }]}>
+            <MaterialCommunityIcons name={statusConfig.icon} size={14} color={statusConfig.solid} />
+            <Text style={[styles.statusText, { color: statusConfig.solid }]}>{item.check_status}</Text>
           </View>
         </View>
 
-        <View style={styles.viewDetailsContainer}>
-          <Text style={styles.viewDetailsText}>Tap to view details →</Text>
+        <View style={styles.claimRow}>
+          <Text style={styles.claimNumber}>{item.claim_number || 'No claim number'}</Text>
+          <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.textMuted} />
         </View>
+
+        <View style={styles.infoGrid}>
+          <View style={styles.infoPill}>
+            <MaterialCommunityIcons name="account-outline" size={16} color={theme.colors.primaryDark} />
+            <Text style={styles.infoText} numberOfLines={1}>{item.client_name || 'Client not available'}</Text>
+          </View>
+          <View style={styles.infoPill}>
+            <MaterialCommunityIcons name="folder-outline" size={16} color={theme.colors.primaryDark} />
+            <Text style={styles.infoText} numberOfLines={1}>{item.category || 'Category not set'}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.tapHint}>Open check details, statements, and evidence</Text>
       </TouchableOpacity>
     );
   };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.userInfoContainer}>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
-            <Text style={styles.userEmail} numberOfLines={1}>{user.email}</Text>
+      <LinearGradient colors={['#0F5FA8', '#0A4274']} style={styles.hero}>
+        <Animated.View
+          style={[
+            styles.heroContent,
+            {
+              opacity: introAnim,
+              transform: [
+                {
+                  translateY: introAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [18, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.heroTopRow}>
+            <View style={styles.userBlock}>
+              <Text style={styles.welcomeText}>Welcome back</Text>
+              <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
+              <Text style={styles.userEmail} numberOfLines={1}>{user.email}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="logout" size={18} color="#FFFFFF" />
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleLogout}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.logoutIcon}>🚪</Text>
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+
+          <View style={styles.heroSummary}>
+            <Text style={styles.heroSummaryLabel}>Today&apos;s workload</Text>
+            <Text style={styles.heroSummaryValue}>{summary.totalChecks} assigned checks</Text>
+            <Text style={styles.heroSummaryHint}>Prioritize work in progress and upload updates quickly from site.</Text>
+          </View>
+        </Animated.View>
+      </LinearGradient>
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={handleRefresh} tintColor={theme.colors.primary} />}
       >
-        {/* Statistics */}
         <View style={styles.statsContainer}>
-          <Text style={styles.sectionTitle}>Assigned Checks</Text>
-          <View style={styles.statsGrid}>
-            <StatCard title="Total" value={totalChecks} icon="📊" color="#2196F3" />
-            <StatCard title="WIP" value={wipChecks} icon="⚡" color="#FF9800" />
-            <StatCard title="Not Started" value={notInitiated} icon="⏳" color="#9E9E9E" />
-            <StatCard title="Completed" value={completedChecks} icon="✅" color="#4CAF50" />
+          <StatCard title="Total" value={summary.totalChecks} icon="clipboard-text-outline" color={theme.colors.primary} tint={theme.colors.primarySoft} />
+          <StatCard title="In Progress" value={summary.wipChecks} icon="progress-clock" color={theme.colors.warning} tint={theme.colors.warningSoft} />
+          <StatCard title="Not Started" value={summary.notInitiated} icon="clock-outline" color="#71839A" tint="#EEF3F8" />
+          <StatCard title="Completed" value={summary.completedChecks} icon="check-decagram-outline" color={theme.colors.success} tint={theme.colors.successSoft} />
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Assigned checks</Text>
+            <Text style={styles.sectionHint}>Tap a card to record statements or upload evidence.</Text>
           </View>
         </View>
 
-        {/* Checks List */}
-        <View style={styles.checksContainer}>
-          <Text style={styles.sectionTitle}>Your Assigned Checks</Text>
-          {isLoading && checks.length === 0 ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.loadingText}>Loading checks...</Text>
-            </View>
-          ) : checks.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📋</Text>
-              <Text style={styles.emptyText}>No checks assigned yet</Text>
-              <Text style={styles.emptySubtext}>
-                Checks will appear here when assigned by admin
-              </Text>
-            </View>
-          ) : (
-            checks.map((item: any) => (
-              <CheckCard key={`${item.case_id}-${item.check_type}`} item={item} />
-            ))
-          )}
-        </View>
+        {isLoading && checks.length === 0 ? (
+          <View style={styles.stateCard}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.stateTitle}>Loading assigned checks</Text>
+            <Text style={styles.stateHint}>Your latest assignments will appear here shortly.</Text>
+          </View>
+        ) : checks.length === 0 ? (
+          <View style={styles.stateCard}>
+            <MaterialCommunityIcons name="clipboard-search-outline" size={42} color={theme.colors.textMuted} />
+            <Text style={styles.stateTitle}>No checks assigned yet</Text>
+            <Text style={styles.stateHint}>Once work is assigned by admin, it will show here automatically.</Text>
+          </View>
+        ) : (
+          checks.map((item: any) => (
+            <CheckCard key={`${item.case_id}-${item.check_type}`} item={item} />
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -210,231 +248,243 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f7fa',
+    backgroundColor: theme.colors.background,
   },
-  header: {
-    backgroundColor: '#1976D2',
-    paddingTop: 60,
-    paddingBottom: 24,
+  hero: {
+    paddingTop: 58,
+    paddingBottom: 34,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
-  headerContent: {
+  heroContent: {
+    gap: 20,
+  },
+  heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 12,
   },
-  userInfoContainer: {
+  userBlock: {
     flex: 1,
-    marginRight: 12,
   },
   welcomeText: {
+    color: '#D9ECFF',
     fontSize: 14,
-    color: '#fff',
-    opacity: 0.9,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 27,
+    fontWeight: '800',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   userEmail: {
-    fontSize: 12,
-    color: '#fff',
-    opacity: 0.8,
+    fontSize: 13,
+    color: '#D9ECFF',
   },
   logoutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    flexShrink: 0,
-  },
-  logoutIcon: {
-    fontSize: 18,
-    marginRight: 6,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   logoutText: {
-    color: '#fff',
+    color: '#FFFFFF',
+    fontWeight: '700',
     fontSize: 14,
-    fontWeight: '600',
+  },
+  heroSummary: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  heroSummaryLabel: {
+    fontSize: 13,
+    color: '#D9ECFF',
+    marginBottom: 6,
+  },
+  heroSummaryValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  heroSummaryHint: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#DCEEFF',
   },
   content: {
     flex: 1,
+    marginTop: -18,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   statsContainer: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 16,
-  },
-  statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginBottom: 18,
   },
   statCard: {
-    width: '48%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    width: '48.3%',
     padding: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: theme.colors.divider,
     marginBottom: 12,
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    ...theme.shadows.card,
   },
-  statHeader: {
-    flexDirection: 'row',
+  statIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  statIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  statTitle: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   statValue: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    color: theme.colors.text,
+    marginBottom: 4,
   },
-  checksContainer: {
-    marginBottom: 24,
+  statTitle: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
+  },
+  sectionHeader: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  sectionHint: {
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
   },
   checkCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 22,
     padding: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.divider,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    ...theme.shadows.card,
   },
   checkHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    gap: 8,
+    marginBottom: 14,
   },
   typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: 999,
+    flexShrink: 1,
+  },
+  typeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   typeBadgeText: {
     fontSize: 13,
     fontWeight: '700',
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
   statusText: {
-    color: '#fff',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
   },
-  checkDetails: {
-    gap: 8,
-  },
-  detailRow: {
+  claimRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  detailLabel: {
-    fontSize: 13,
-    color: '#666',
-    fontWeight: '500',
-    minWidth: 100,
-  },
-  detailValue: {
+  claimNumber: {
     flex: 1,
-    fontSize: 13,
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '800',
+    color: theme.colors.text,
+    marginRight: 8,
   },
-  loadingContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 40,
+  infoGrid: {
+    gap: 10,
+  },
+  infoPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surfaceMuted,
   },
-  loadingText: {
-    marginTop: 16,
+  infoText: {
+    flex: 1,
+    color: theme.colors.textSecondary,
     fontSize: 14,
-    color: '#666',
-  },
-  emptyContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 40,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyText: {
-    fontSize: 18,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#666',
+  tapHint: {
+    marginTop: 14,
+    color: theme.colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  stateCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 22,
+    paddingHorizontal: 24,
+    paddingVertical: 34,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.divider,
+    ...theme.shadows.card,
+  },
+  stateTitle: {
+    marginTop: 14,
+    fontSize: 19,
+    fontWeight: '800',
+    color: theme.colors.text,
     textAlign: 'center',
   },
-  viewDetailsContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    alignItems: 'center',
-  },
-  viewDetailsText: {
-    fontSize: 13,
-    color: theme.colors.primary,
-    fontWeight: '600',
+  stateHint: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    color: theme.colors.textSecondary,
   },
 });

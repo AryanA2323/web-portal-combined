@@ -1,33 +1,54 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Text } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { theme } from '@/config/theme';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#007AFF',
-      }}>
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.textMuted,
+        tabBarStyle: {
+          height: 74,
+          paddingTop: 8,
+          paddingBottom: 10,
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.divider,
+          backgroundColor: theme.colors.surface,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '700',
+        },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>🏠</Text>,
+          title: 'Dashboard',
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons name={focused ? 'view-grid' : 'view-grid-outline'} color={color} size={size} />
+          ),
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>✈️</Text>,
+          title: 'Guide',
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons name={focused ? 'compass' : 'compass-outline'} color={color} size={size} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>👤</Text>,
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons name={focused ? 'account-circle' : 'account-circle-outline'} color={color} size={size} />
+          ),
         }}
       />
     </Tabs>

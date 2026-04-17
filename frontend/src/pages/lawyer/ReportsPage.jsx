@@ -599,7 +599,7 @@ const ReportsPage = () => {
                     multiline
                     rows={3}
                     required
-                    label="Review Notes"
+                    label="Review Note"
                     placeholder="Add your review notes here"
                     value={reviewNotes}
                     onChange={(e) => {

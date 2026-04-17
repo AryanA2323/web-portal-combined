@@ -15,6 +15,9 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/config/theme';
 import apiService from '@/services/api';
 import { API_BASE_URL } from '@/config/constants';
@@ -22,6 +25,7 @@ import { API_BASE_URL } from '@/config/constants';
 const PRIMARY_BLUE = theme.colors.primary;
 const RECORDING_RED = '#E53935';
 const SUCCESS_GREEN = '#4CAF50';
+const HEADER_TOP_PADDING = 14;
 
 // Optimized recording settings for speech recognition
 // Whisper works best with 16kHz mono audio
@@ -154,6 +158,7 @@ const getEvidencePhotoUri = (photo: any, apiHost: string): string => {
 
 export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [data, setData] = useState<any>(null);
@@ -167,7 +172,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [transcriptMr, setTranscriptMr] = useState('');
-  const [translationEn, setTranslationEn] = useState('');
   const [editedTranslation, setEditedTranslation] = useState('');
   const [statementTitle, setStatementTitle] = useState('');
   const [isApplying, setIsApplying] = useState(false);
@@ -244,7 +248,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       setRecordingUri(null);
       setShowPreview(false);
       setTranscriptMr('');
-      setTranslationEn('');
       setEditedTranslation('');
 
       // Start duration timer
@@ -296,7 +299,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     setRecordingDuration(0);
     setShowPreview(false);
     setTranscriptMr('');
-    setTranslationEn('');
     setEditedTranslation('');
     setStatementTitle('');
   };
@@ -323,7 +325,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
       if (result.success) {
         setTranscriptMr(result.transcript_mr);
-        setTranslationEn(result.translation_en);
         setEditedTranslation(result.translation_en);
         setShowPreview(true);
 
@@ -515,12 +516,12 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+        <LinearGradient colors={['#0F5FA8', '#0A4274']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Check Details</Text>
-        </View>
+        </LinearGradient>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PRIMARY_BLUE} />
           <Text style={styles.loadingText}>Loading...</Text>
@@ -532,12 +533,12 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   if (error || !data) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+        <LinearGradient colors={['#0F5FA8', '#0A4274']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Check Details</Text>
-        </View>
+        </LinearGradient>
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>{error || 'No data available'}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadData}>
@@ -569,23 +570,29 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+      <LinearGradient
+        colors={['#0F5FA8', '#0A4274']}
+        style={[
+          styles.header,
+          Platform.OS === 'android' ? { paddingTop: HEADER_TOP_PADDING + insets.top } : null,
+        ]}
+      >
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backIcon}>←</Text>
+          <MaterialCommunityIcons name="arrow-left" size={22} color="#FFFFFF" />
         </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 15 }}>
+        <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>{checkTypeLabels[checkType] || checkType}</Text>
-          <Text style={styles.headerSubtitle}>
-            Claim: {caseInfo.claim_number || 'N/A'}
-          </Text>
+          <Text style={styles.headerSubtitle}>Claim: {caseInfo.claim_number || 'N/A'}</Text>
         </View>
-      </View>
+        <View style={styles.headerBadge}>
+          <Text style={styles.headerBadgeText}>{checkInfo.check_status || 'Pending'}</Text>
+        </View>
+      </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Case Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Case Information</Text>
+          <Text style={styles.sectionEyebrow}>Case</Text>
+          <Text style={styles.sectionTitle}>Case information</Text>
           <DetailRow label="Claim Number" value={caseInfo.claim_number} />
           <DetailRow label="Client Name" value={caseInfo.client_name} />
           <DetailRow label="Category" value={caseInfo.category} />
@@ -599,26 +606,27 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           <DetailRow label="IR Status" value={caseInfo.investigation_report_status} />
         </View>
 
-        {/* Check Details */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            {checkTypeLabels[checkType] || 'Check'} Details
-          </Text>
+          <Text style={styles.sectionEyebrow}>Check</Text>
+          <Text style={styles.sectionTitle}>{checkTypeLabels[checkType] || 'Check'} details</Text>
           <DetailRow label="Status" value={checkInfo.check_status} />
           {Object.entries(fieldLabels).map(([field, label]) => (
             <DetailRow key={field} label={label} value={checkInfo[field]} />
           ))}
         </View>
 
-        {/* Statement Recording Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Record Statement (Marathi)</Text>
+          <Text style={styles.sectionEyebrow}>Statement</Text>
+          <Text style={styles.sectionTitle}>Record statement in Marathi</Text>
           <Text style={styles.sectionSubtitle}>
-            Speak in Marathi - it will be automatically translated to English
+            Speak in Marathi. The app will translate it to English for review before saving.
           </Text>
-          <Text style={styles.statementCounterText}>
-            Stored Statements: {statementCount}/{maxStatementsPerCheck}
-          </Text>
+          <View style={styles.counterPill}>
+            <MaterialCommunityIcons name="microphone-outline" size={15} color={theme.colors.primary} />
+            <Text style={styles.statementCounterText}>
+              Stored Statements: {statementCount}/{maxStatementsPerCheck}
+            </Text>
+          </View>
 
           {statementEntries.length > 0 && (
             <View style={styles.savedStatementsList}>
@@ -773,9 +781,9 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           )}
         </View>
 
-        {/* Evidence Photos */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Evidence Photos ({evidencePhotos.length})</Text>
+          <Text style={styles.sectionEyebrow}>Evidence</Text>
+          <Text style={styles.sectionTitle}>Evidence photos ({evidencePhotos.length})</Text>
 
           {evidencePhotos.length === 0 ? (
             <Text style={styles.noEvidenceText}>No evidence uploaded yet</Text>
@@ -824,7 +832,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           )}
         </View>
 
-        {/* Upload Buttons */}
         <View style={styles.uploadSection}>
           <TouchableOpacity
             style={styles.uploadButton}
@@ -835,7 +842,10 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             {uploading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.uploadButtonText}>Upload from Gallery</Text>
+              <View style={styles.uploadButtonContent}>
+                <MaterialCommunityIcons name="image-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.uploadButtonText}>Upload from Gallery</Text>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -848,7 +858,10 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             {uploading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.uploadButtonText}>Take Photo</Text>
+              <View style={styles.uploadButtonContent}>
+                <MaterialCommunityIcons name="camera-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.uploadButtonText}>Take Photo</Text>
+              </View>
             )}
           </TouchableOpacity>
         </View>
@@ -860,38 +873,48 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    paddingTop: HEADER_TOP_PADDING,
+    paddingBottom: 16,
+    gap: 12,
   },
   backButton: {
-    padding: 8,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  backIcon: {
-    fontSize: 24,
-    color: PRIMARY_BLUE,
+  headerTextWrap: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 2,
+    color: '#DCEEFF',
+    marginTop: 4,
+  },
+  headerBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignSelf: 'flex-start',
+  },
+  headerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   content: {
     padding: 16,
@@ -916,40 +939,58 @@ const styles = StyleSheet.create({
   retryButton: {
     backgroundColor: PRIMARY_BLUE,
     paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 12,
+    borderRadius: 14,
+    ...theme.shadows.card,
   },
   retryText: {
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   section: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 22,
+    padding: 18,
     marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: theme.colors.divider,
+    ...theme.shadows.card,
+  },
+  sectionEyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.colors.primary,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 8,
+    fontSize: 22,
+    fontWeight: '800',
+    color: theme.colors.text,
+    marginBottom: 10,
   },
   sectionSubtitle: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: 14,
+    color: theme.colors.textSecondary,
     marginBottom: 16,
+    lineHeight: 20,
+  },
+  counterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primarySoft,
+    marginBottom: 12,
   },
   statementCounterText: {
     fontSize: 13,
-    color: '#1a1a1a',
-    fontWeight: '600',
-    marginBottom: 12,
+    color: theme.colors.primary,
+    fontWeight: '700',
   },
   savedStatementsList: {
     gap: 8,
@@ -995,20 +1036,20 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.colors.divider,
   },
   detailLabel: {
     fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
     flex: 1,
   },
   detailValue: {
     fontSize: 14,
-    color: '#1a1a1a',
-    fontWeight: '400',
+    color: theme.colors.text,
+    fontWeight: '600',
     flex: 2,
     textAlign: 'right',
   },
@@ -1018,26 +1059,24 @@ const styles = StyleSheet.create({
   },
   recordButton: {
     backgroundColor: PRIMARY_BLUE,
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 18,
+    padding: 18,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 10,
-  },
-  recordButtonIcon: {
-    fontSize: 24,
+    ...theme.shadows.card,
   },
   recordButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
   recordingActive: {
     alignItems: 'center',
-    padding: 20,
+    padding: 22,
     backgroundColor: '#FFF3F3',
-    borderRadius: 12,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: RECORDING_RED,
   },
@@ -1067,7 +1106,7 @@ const styles = StyleSheet.create({
   },
   stopButton: {
     backgroundColor: RECORDING_RED,
-    borderRadius: 10,
+    borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 28,
   },
@@ -1079,7 +1118,7 @@ const styles = StyleSheet.create({
   recordingComplete: {
     padding: 16,
     backgroundColor: '#F0FFF0',
-    borderRadius: 12,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: SUCCESS_GREEN,
   },
@@ -1096,22 +1135,22 @@ const styles = StyleSheet.create({
   },
   reRecordButton: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.colors.border,
   },
   reRecordButtonText: {
-    color: '#666',
+    color: theme.colors.textSecondary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   processButton: {
     flex: 2,
     backgroundColor: PRIMARY_BLUE,
-    borderRadius: 10,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
@@ -1129,7 +1168,7 @@ const styles = StyleSheet.create({
   },
   transcriptBox: {
     backgroundColor: '#FFF8E1',
-    borderRadius: 8,
+    borderRadius: 16,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
@@ -1152,22 +1191,22 @@ const styles = StyleSheet.create({
   },
   titleInput: {
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     fontSize: 14,
-    color: '#1a1a1a',
+    color: theme.colors.text,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.colors.border,
     height: 44,
   },
   translationInput: {
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     fontSize: 15,
-    color: '#1a1a1a',
+    color: theme.colors.text,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.colors.border,
     minHeight: 120,
     maxHeight: 200,
     textAlignVertical: 'top',
@@ -1178,22 +1217,22 @@ const styles = StyleSheet.create({
   },
   discardButton: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.colors.border,
   },
   discardButtonText: {
-    color: '#666',
+    color: theme.colors.textSecondary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   applyButton: {
     flex: 2,
     backgroundColor: SUCCESS_GREEN,
-    borderRadius: 10,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
@@ -1205,10 +1244,11 @@ const styles = StyleSheet.create({
   // Evidence photo styles
   noEvidenceText: {
     fontSize: 14,
-    color: '#999',
-    fontStyle: 'italic',
+    color: theme.colors.textSecondary,
     textAlign: 'center',
-    paddingVertical: 20,
+    paddingVertical: 24,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: 16,
   },
   photosGrid: {
     flexDirection: 'row',
@@ -1218,10 +1258,10 @@ const styles = StyleSheet.create({
   photoCard: {
     width: '47%',
     backgroundColor: '#f9f9f9',
-    borderRadius: 8,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: theme.colors.divider,
   },
   photoImageWrapper: {
     position: 'relative',
@@ -1235,9 +1275,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     right: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1253,16 +1293,17 @@ const styles = StyleSheet.create({
     marginTop: -1,
   },
   photoName: {
-    fontSize: 11,
-    color: '#333',
-    paddingHorizontal: 8,
-    paddingTop: 6,
+    fontSize: 12,
+    color: theme.colors.text,
+    fontWeight: '600',
+    paddingHorizontal: 10,
+    paddingTop: 8,
   },
   photoDate: {
-    fontSize: 10,
-    color: '#999',
-    paddingHorizontal: 8,
-    paddingBottom: 6,
+    fontSize: 11,
+    color: theme.colors.textMuted,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
   },
   uploadSection: {
     gap: 12,
@@ -1270,17 +1311,18 @@ const styles = StyleSheet.create({
   },
   uploadButton: {
     backgroundColor: PRIMARY_BLUE,
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 16,
     alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    ...theme.shadows.card,
   },
   cameraButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#2E9B62',
+  },
+  uploadButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   uploadButtonText: {
     color: '#fff',
