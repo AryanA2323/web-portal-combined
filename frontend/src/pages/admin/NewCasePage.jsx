@@ -35,6 +35,12 @@ const NewCasePage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const getCaseTypeTatDays = (caseType) => {
+    if (caseType === 'Full Case') return 30;
+    if (caseType === 'Partial Case') return 15;
+    return null;
+  };
+
   // ===================== Common Case Fields (top section) =====================
   const [commonFields, setCommonFields] = useState({
     claim_number: '',
@@ -62,15 +68,25 @@ const NewCasePage = () => {
     }
   }, [commonFields.case_receive_date]);
 
-  // Auto-compute case_due_date = receive_date + 30 days
+  // Auto-compute case_due_date = receive_date + TAT days
   useEffect(() => {
     if (commonFields.case_receive_date) {
+      const tatDays = getCaseTypeTatDays(commonFields.case_type) || 30;
       const d = new Date(commonFields.case_receive_date);
-      d.setDate(d.getDate() + 30);
+      d.setDate(d.getDate() + tatDays);
       const due = d.toISOString().split('T')[0];
       setCommonFields(prev => ({ ...prev, case_due_date: due }));
     }
-  }, [commonFields.case_receive_date]);
+  }, [commonFields.case_receive_date, commonFields.case_type]);
+
+  // Auto-populate TAT days based on case type when no completion date
+  useEffect(() => {
+    const tatDays = getCaseTypeTatDays(commonFields.case_type);
+    if (!tatDays || commonFields.completion_date) {
+      return;
+    }
+    setCommonFields(prev => ({ ...prev, tat_days: tatDays.toString() }));
+  }, [commonFields.case_type, commonFields.completion_date]);
 
   // Auto-compute SLA: AT (Above TAT) if past due date, else WT (Within TAT)
   useEffect(() => {
@@ -339,11 +355,178 @@ const NewCasePage = () => {
     setLoading(true);
 
     try {
+      const isBlank = (value) => value === null || value === undefined || String(value).trim() === '';
+
       // Validate required common fields
-      if (!commonFields.claim_number.trim()) {
+      if (isBlank(commonFields.claim_number)) {
         setError('Claim Number is required');
         setLoading(false);
         return;
+      }
+      if (isBlank(commonFields.client_name)) {
+        setError('Client Name is required');
+        setLoading(false);
+        return;
+      }
+      if (isBlank(commonFields.case_receive_date)) {
+        setError('Receive Date is required');
+        setLoading(false);
+        return;
+      }
+      if (isBlank(commonFields.case_type)) {
+        setError('Case Type is required');
+        setLoading(false);
+        return;
+      }
+      if (isBlank(commonFields.scope_of_work)) {
+        setError('Scope of Work is required');
+        setLoading(false);
+        return;
+      }
+
+      if (selectedVerifications.claimant) {
+        if (isBlank(verificationData.claimant_name)) {
+          setError('Claimant Name is required for Claimant Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.claimant_address)) {
+          setError('Claimant Address is required for Claimant Check');
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (selectedVerifications.insured) {
+        if (isBlank(verificationData.insured_name)) {
+          setError('Insured Name is required for Insured Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.insured_address)) {
+          setError('Insured Address is required for Insured Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.policy_number)) {
+          setError('Policy Number is required for Insured Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.policy_period)) {
+          setError('Policy Period is required for Insured Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.rc_number)) {
+          setError('RC Number is required for Insured Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.permit_insured)) {
+          setError('Permit is required for Insured Check');
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (selectedVerifications.driver) {
+        if (isBlank(verificationData.driver_name)) {
+          setError('Driver Name is required for Driver Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.driver_address)) {
+          setError('Driver Address is required for Driver Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.dl_number)) {
+          setError('DL is required for Driver Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.permit_driver)) {
+          setError('Permit is required for Driver Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.occupation)) {
+          setError('Occupation is required for Driver Check');
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (selectedVerifications.spot) {
+        if (isBlank(verificationData.time_of_accident)) {
+          setError('Time of Accident is required for Spot Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.place_of_accident)) {
+          setError('Place of Accident is required for Spot Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.district)) {
+          setError('District is required for Spot Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.fir_number_spot)) {
+          setError('FIR Number is required for Spot Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.spot_city)) {
+          setError('City is required for Spot Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.police_station)) {
+          setError('Police Station is required for Spot Check');
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (selectedVerifications.chargesheet) {
+        if (isBlank(verificationData.fir_number_claimant)) {
+          setError('FIR Number is required for Chargesheet Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.chargesheet_city)) {
+          setError('City is required for Chargesheet Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.court_name)) {
+          setError('Court Name is required for Chargesheet Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.mv_act)) {
+          setError('MV Act is required for Chargesheet Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.fir_delay_in_days)) {
+          setError('FIR Delay Days is required for Chargesheet Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.bsn_sections)) {
+          setError('BSN Section is required for Chargesheet Check');
+          setLoading(false);
+          return;
+        }
+        if (isBlank(verificationData.ipc_sections)) {
+          setError('IPC Section is required for Chargesheet Check');
+          setLoading(false);
+          return;
+        }
       }
 
       // Build the case payload from common fields
@@ -615,7 +798,14 @@ const NewCasePage = () => {
         )}
 
         {/* Form */}
-        <Paper sx={{ p: 3 }}>
+        <Paper sx={{
+          p: 3,
+          '& .MuiInputLabel-root.Mui-required': { color: '#d32f2f' },
+          '& .MuiInputLabel-root.Mui-focused.Mui-required': { color: '#d32f2f' },
+          '& .MuiInputLabel-asterisk': { color: '#d32f2f' },
+          '& .MuiInputBase-input::placeholder, & .MuiInputBase-inputMultiline::placeholder, & textarea::placeholder': { color: '#d32f2f', opacity: 1 },
+          '& .required-placeholder': { color: '#d32f2f' },
+        }}>
           <form onSubmit={handleSubmit}>
             {/* ========== COMMON CASE FIELDS (TOP SECTION) ========== */}
             <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
@@ -637,7 +827,7 @@ const NewCasePage = () => {
                   </Typography>
                 </Box>
                 <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                  <Grid item xs={12} sm={5}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       fullWidth
                       size="small"
@@ -649,14 +839,20 @@ const NewCasePage = () => {
                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                     />
                   </Grid>
-                  <Grid item xs={12} sm={5}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Client Name</InputLabel>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth size="small" required>
+                      {commonFields.client_name && (
+                        <InputLabel id="client-name-label">Client Name</InputLabel>
+                      )}
                       <Select
                         name="client_name"
                         value={commonFields.client_name}
                         onChange={handleCommonFieldChange}
-                        label="Client Name"
+                        displayEmpty
+                        renderValue={(selected) => selected || <span className="required-placeholder">Client Name</span>}
+                        labelId={commonFields.client_name ? 'client-name-label' : undefined}
+                        label={commonFields.client_name ? 'Client Name' : undefined}
+                        inputProps={{ 'aria-label': 'Client Name' }}
                         sx={{ borderRadius: '8px' }}
                       >
                         {clientsList.map((client) => (
@@ -706,6 +902,7 @@ const NewCasePage = () => {
                       type="date"
                       value={commonFields.case_receive_date}
                       onChange={handleCommonFieldChange}
+                      required
                       InputLabelProps={{ shrink: true }}
                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                     />
@@ -758,7 +955,7 @@ const NewCasePage = () => {
                       type="date"
                       value={commonFields.case_due_date}
                       onChange={handleCommonFieldChange}
-                      helperText="Auto: receive date + 30 days"
+                      helperText="Auto: receive date + TAT days"
                       InputLabelProps={{ shrink: true }}
                       InputProps={{ readOnly: !!commonFields.case_receive_date }}
                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: commonFields.case_receive_date ? '#f5f5f5' : undefined } }}
@@ -802,7 +999,7 @@ const NewCasePage = () => {
                     />
                   </Grid>
                   <Grid item xs={6} sm={3}>
-                    <FormControl fullWidth size="small">
+                    <FormControl fullWidth size="small" required>
                       <InputLabel>Case Type</InputLabel>
                       <Select
                         name="case_type"
@@ -878,6 +1075,7 @@ const NewCasePage = () => {
                       onChange={handleCommonFieldChange}
                       multiline
                       rows={2}
+                      required
                       placeholder="Describe the scope of investigation work for this case..."
                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                     />
@@ -1147,6 +1345,7 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Claimant Name" name="claimant_name"
                             value={verificationData.claimant_name} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
@@ -1157,6 +1356,7 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Claimant Address" name="claimant_address"
                             value={verificationData.claimant_address} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1281,6 +1481,7 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Insured Name" name="insured_name"
                             value={verificationData.insured_name} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
@@ -1291,6 +1492,7 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Insured Address" name="insured_address"
                             value={verificationData.insured_address} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1306,21 +1508,25 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={3}>
                           <TextField fullWidth size="small" label="Policy Number" name="policy_number"
                             value={verificationData.policy_number} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={3}>
                           <TextField fullWidth size="small" label="Policy Period" name="policy_period"
                             value={verificationData.policy_period} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={3}>
                           <TextField fullWidth size="small" label="RC Number" name="rc_number"
                             value={verificationData.rc_number} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={3}>
                           <TextField fullWidth size="small" label="Permit" name="permit_insured"
                             value={verificationData.permit_insured} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1402,6 +1608,7 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Driver Name" name="driver_name"
                             value={verificationData.driver_name} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
@@ -1412,6 +1619,7 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Driver Address" name="driver_address"
                             value={verificationData.driver_address} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1427,16 +1635,19 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Driving License (DL)" name="dl_number"
                             value={verificationData.dl_number} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Permit" name="permit_driver"
                             value={verificationData.permit_driver} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Occupation" name="occupation"
                             value={verificationData.occupation} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12}>
@@ -1528,16 +1739,19 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Time of Accident" name="time_of_accident"
                             value={verificationData.time_of_accident} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Place of Accident" name="place_of_accident"
                             value={verificationData.place_of_accident} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="District" name="district"
                             value={verificationData.district} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1553,13 +1767,14 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={6}>
                           <TextField fullWidth size="small" label="FIR Number" name="fir_number_spot"
                             value={verificationData.fir_number_spot} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth size="small">
+                          <FormControl fullWidth size="small" required>
                             <Select name="spot_city" value={verificationData.spot_city}
                               displayEmpty
-                              renderValue={(selected) => selected || <span style={{ color: '#aaa' }}>Select City</span>}
+                              renderValue={(selected) => selected || <span className="required-placeholder">Select City</span>}
                               onChange={(e) => {
                                 handleVerificationChange(e);
                                 setVerificationData(prev => ({ ...prev, police_station: '' }));
@@ -1571,10 +1786,10 @@ const NewCasePage = () => {
                           </FormControl>
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth size="small">
+                          <FormControl fullWidth size="small" required>
                             <Select name="police_station" value={verificationData.police_station}
                               displayEmpty
-                              renderValue={(selected) => selected || <span style={{ color: '#aaa' }}>Select Police Station</span>}
+                              renderValue={(selected) => selected || <span className="required-placeholder">Select Police Station</span>}
                               onChange={handleVerificationChange}
                               sx={{ borderRadius: '8px' }}
                               disabled={!verificationData.spot_city}>
@@ -1667,13 +1882,14 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={6}>
                           <TextField fullWidth size="small" label="FIR Number" name="fir_number_claimant"
                             value={verificationData.fir_number_claimant} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth size="small">
+                          <FormControl fullWidth size="small" required>
                             <Select name="chargesheet_city" value={verificationData.chargesheet_city}
                               displayEmpty
-                              renderValue={(selected) => selected || <span style={{ color: '#aaa' }}>Select City</span>}
+                              renderValue={(selected) => selected || <span className="required-placeholder">Select City</span>}
                               onChange={(e) => {
                                 handleVerificationChange(e);
                                 setVerificationData(prev => ({ ...prev, court_name: '' }));
@@ -1685,10 +1901,10 @@ const NewCasePage = () => {
                           </FormControl>
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth size="small">
+                          <FormControl fullWidth size="small" required>
                             <Select name="court_name" value={verificationData.court_name}
                               displayEmpty
-                              renderValue={(selected) => selected || <span style={{ color: '#aaa' }}>Select Court Name</span>}
+                              renderValue={(selected) => selected || <span className="required-placeholder">Select Court Name</span>}
                               onChange={handleVerificationChange}
                               sx={{ borderRadius: '8px' }}
                               disabled={!verificationData.chargesheet_city}>
@@ -1700,6 +1916,7 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={6}>
                           <TextField fullWidth size="small" label="MV Act" name="mv_act"
                             value={verificationData.mv_act} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1715,16 +1932,19 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="FIR Delay (Days)" name="fir_delay_in_days" type="number"
                             value={verificationData.fir_delay_in_days} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="BSN Sections" name="bsn_sections"
                             value={verificationData.bsn_sections} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="IPC Sections" name="ipc_sections"
                             value={verificationData.ipc_sections} onChange={handleVerificationChange}
+                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
