@@ -97,13 +97,13 @@ const formatEvidenceLocationForWatermark = (photo) => {
   if (city && pincode) return `${city}, ${pincode}`;
   if (city) return city;
   if (pincode) return pincode;
-  return '';
+  return locationName;
 };
 
 const getEvidenceWatermarkLines = (photo) => {
-  const locationLine = formatEvidenceLocationForWatermark(photo);
+  const locationName = typeof photo?.location_name === 'string' ? photo.location_name.trim() : '';
   const timestamp = formatEvidenceTimestamp(photo);
-  return [locationLine, timestamp].filter(Boolean);
+  return [locationName, timestamp].filter(Boolean);
 };
 
 const getStatusDisplayLabel = (status) => {

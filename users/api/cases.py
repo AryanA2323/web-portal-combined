@@ -195,6 +195,8 @@ def _enrich_evidence_metadata(
         normalized["filename"] = _extract_evidence_filename(normalized)
 
     existing_location_name = str(normalized.get("location_name") or "").strip()
+    if existing_location_name.lower() in {"india"}:
+        existing_location_name = ""
     captured_at = normalized.get("captured_at") or normalized.get("timestamp") or normalized.get("uploaded_at")
     latitude = normalized.get("latitude")
     longitude = normalized.get("longitude")

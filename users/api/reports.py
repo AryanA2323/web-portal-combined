@@ -145,7 +145,11 @@ def _parse_vendor_evidence(raw_value):
     return []
 
 
-def _collect_report_evidence_photos(request: HttpRequest, case_id: int) -> List[dict]:
+def _collect_report_evidence_photos(
+    request: HttpRequest,
+    case_id: int,
+    fallback_location_name: str = "",
+) -> List[dict]:
     """Collect and normalize vendor evidence photos for a case."""
     evidence_tables = [
         "claimant_checks",
@@ -181,7 +185,11 @@ def _collect_report_evidence_photos(request: HttpRequest, case_id: int) -> List[
                     if not isinstance(evidence_item, (dict, str)):
                         continue
 
-                    normalized = _enrich_evidence_metadata(request, evidence_item)
+                    normalized = _enrich_evidence_metadata(
+                        request,
+                        evidence_item,
+                        fallback_location_name=fallback_location_name,
+                    )
                     dedupe_key = (
                         normalized.get('preview_url')
                         or normalized.get('url')
@@ -197,11 +205,168 @@ def _collect_report_evidence_photos(request: HttpRequest, case_id: int) -> List[
     return evidence_photos
 
 
+def _resolve_incident_case_id(case: InsuranceCase) -> Optional[int]:
+    """Resolve incident-db case id using case_number when ORM id differs."""
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("SELECT id FROM cases WHERE case_number = %s", [case.case_number])
+            row = cursor.fetchone()
+            return row[0] if row else None
+    except Exception as exc:
+        logger.debug(f"Failed to resolve incident case id for {case.case_number}: {exc}")
+        return None
+
+
+def _get_fallback_location_name(
+    case: InsuranceCase,
+    incident_case_id: Optional[int],
+) -> str:
+    """Fetch a fallback location string from incident-db or ORM fields."""
+    def _clean_location(value: Optional[str]) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        if text.lower() == "india":
+            return ""
+        return text
+
+    row = None
+    try:
+        with connections['default'].cursor() as cursor:
+            if incident_case_id:
+                cursor.execute(
+                    """
+                    SELECT incident_location, claimant_address, insured_address
+                    FROM cases
+                    WHERE id = %s
+                    """,
+                    [incident_case_id],
+                )
+                row = cursor.fetchone()
+
+            if not row:
+                cursor.execute(
+                    """
+                    SELECT incident_location, claimant_address, insured_address
+                    FROM cases
+                    WHERE case_number = %s
+                    """,
+                    [case.case_number],
+                )
+                row = cursor.fetchone()
+    except Exception as exc:
+        logger.debug(f"Failed to load fallback location for {case.case_number}: {exc}")
+        row = None
+
+    if row:
+        for value in row:
+            text = _clean_location(value)
+            if text:
+                return text
+
+    if incident_case_id:
+        try:
+            with connections['default'].cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT place_of_accident, district, spot_city, police_station
+                    FROM spot_checks
+                    WHERE case_id = %s
+                    ORDER BY id
+                    LIMIT 1
+                    """,
+                    [incident_case_id],
+                )
+                spot_row = cursor.fetchone()
+        except Exception as exc:
+            logger.debug(f"Failed to load spot location for {case.case_number}: {exc}")
+            spot_row = None
+
+        if spot_row:
+            parts = [_clean_location(value) for value in spot_row if _clean_location(value)]
+            if parts:
+                return ', '.join(parts)
+
+        try:
+            with connections['default'].cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT claimant_address
+                    FROM claimant_checks
+                    WHERE case_id = %s
+                      AND claimant_address IS NOT NULL
+                    ORDER BY id
+                    LIMIT 1
+                    """,
+                    [incident_case_id],
+                )
+                claimant_row = cursor.fetchone()
+        except Exception as exc:
+            logger.debug(f"Failed to load claimant address for {case.case_number}: {exc}")
+            claimant_row = None
+
+        if claimant_row:
+            claimant_address = _clean_location(claimant_row[0])
+            if claimant_address:
+                return claimant_address
+
+        try:
+            with connections['default'].cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT insured_address
+                    FROM insured_checks
+                    WHERE case_id = %s
+                      AND insured_address IS NOT NULL
+                    ORDER BY id
+                    LIMIT 1
+                    """,
+                    [incident_case_id],
+                )
+                insured_row = cursor.fetchone()
+        except Exception as exc:
+            logger.debug(f"Failed to load insured address for {case.case_number}: {exc}")
+            insured_row = None
+
+        if insured_row:
+            insured_address = _clean_location(insured_row[0])
+            if insured_address:
+                return insured_address
+
+    incident_parts = [
+        str(case.incident_city or '').strip(),
+        str(case.incident_state or '').strip(),
+        str(case.incident_postal_code or '').strip(),
+    ]
+    incident_compact = ', '.join([part for part in incident_parts if part])
+
+    orm_candidates = [
+        case.formatted_address,
+        case.incident_address,
+        incident_compact,
+    ]
+    for value in orm_candidates:
+        text = _clean_location(value)
+        if text:
+            return text
+    return ""
+
+
 def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> dict:
     """Convert Report model to response dict."""
     case = report.case
     lawyer = report.assigned_lawyer
-    evidence_photos = _collect_report_evidence_photos(request, case.id) if request else []
+    incident_case_id = _resolve_incident_case_id(case) or case.id
+    fallback_location_name = _get_fallback_location_name(case, incident_case_id)
+    evidence_photos = (
+        _collect_report_evidence_photos(
+            request,
+            incident_case_id,
+            fallback_location_name=fallback_location_name,
+        )
+        if request
+        else []
+    )
     return {
         'id': report.id,
         'case_id': case.id,

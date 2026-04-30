@@ -106,17 +106,13 @@ const formatEvidenceLocationForWatermark = (photo) => {
   if (city && pincode) return `${city}, ${pincode}`;
   if (city) return city;
   if (pincode) return pincode;
-  return '';
+  return locationName;
 };
 
 const getEvidenceWatermarkLines = (photo) => {
-  const lines = [];
-  const locationLine = formatEvidenceLocationForWatermark(photo);
+  const locationName = typeof photo?.location_name === 'string' ? photo.location_name.trim() : '';
   const timestamp = formatEvidenceTimestamp(photo);
-
-  if (locationLine) lines.push(locationLine);
-  if (timestamp) lines.push(timestamp);
-  return lines;
+  return [locationName, timestamp].filter(Boolean);
 };
 
 const addImageWatermark = (doc, watermarkLines, x, imageY, width, imageHeight) => {
