@@ -38,11 +38,9 @@ export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   try {
     // Call backend logout endpoint
     await apiService.logout();
-  } catch (error) {
-    // Even if backend call fails, we still want to clear local state
-    console.log('Backend logout call failed, clearing local state');
+  } catch {
+    console.warn('Backend logout call failed, clearing local state');
   } finally {
-    // Always clear tokens from storage
     await apiService.clearTokens();
   }
   return { success: true };

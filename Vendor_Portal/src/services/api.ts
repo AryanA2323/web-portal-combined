@@ -1,18 +1,18 @@
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { create, AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL, API_TIMEOUT, STORAGE_KEYS } from '@/config/constants';
-import { ApiError, AuthResponse } from '@/types';
+import { ApiError, AuthResponse, VendorNotification, VendorNotificationsResponse } from '@/types';
 
 class ApiService {
   private api: AxiosInstance;
   private isRefreshing = false;
-  private failedQueue: Array<{
+  private failedQueue: {
     onSuccess: (token: string) => void;
     onFailed: (error: AxiosError) => void;
-  }> = [];
+  }[] = [];
 
   constructor() {
-    this.api = axios.create({
+    this.api = create({
       baseURL: API_BASE_URL,
       timeout: API_TIMEOUT,
       headers: {
@@ -20,17 +20,12 @@ class ApiService {
       },
     });
 
-    // Request interceptor
     this.api.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
         try {
           const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
           if (token && token.length > 0) {
             config.headers.Authorization = `Bearer ${token}`;
-            // Debug log for troubleshooting (only log token length, not the actual token)
-            console.log(`[API] Request to ${config.url}, token attached (length: ${token.length})`);
-          } else {
-            console.log(`[API] Request to ${config.url}, no token available`);
           }
         } catch (error) {
           console.error('Error retrieving token:', error);
@@ -40,13 +35,11 @@ class ApiService {
       (error) => Promise.reject(error)
     );
 
-    // Response interceptor
     this.api.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-        // Don't try to refresh token for logout endpoint or if already retried
         if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/logout')) {
           originalRequest._retry = true;
 
@@ -66,7 +59,6 @@ class ApiService {
           try {
             const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
             if (!refreshToken) {
-              // No refresh token available, silently clear tokens and reject
               await Promise.all([
                 SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
                 SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
@@ -93,7 +85,6 @@ class ApiService {
             return this.api(originalRequest);
           } catch (refreshError) {
             this.processQueue(refreshError as AxiosError, null);
-            // Clear stored tokens on refresh failure
             await Promise.all([
               SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
               SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
@@ -134,7 +125,6 @@ class ApiService {
     return apiError;
   }
 
-  // Auth endpoints
   async login(email: string, password: string): Promise<AuthResponse> {
     try {
       const response = await this.api.post<any>('/auth/login', {
@@ -142,7 +132,6 @@ class ApiService {
         password,
       });
 
-      // Check if 2FA is required (202 response)
       if (response.status === 202 || response.data.requires_2fa) {
         throw {
           message: response.data.message || 'Two-factor authentication required',
@@ -150,11 +139,9 @@ class ApiService {
         };
       }
 
-      // Extract the token from the response
       const { token, user } = response.data;
       const accessToken = token?.token || token;
 
-      // Validate token before storing
       if (!accessToken || typeof accessToken !== 'string' || accessToken.length < 10) {
         console.error('Invalid token received:', accessToken);
         throw {
@@ -163,11 +150,8 @@ class ApiService {
         };
       }
 
-      // Store the access token (refresh token not available from this endpoint)
       await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-      console.log('Token stored successfully, length:', accessToken.length);
 
-      // Transform backend user data to match VendorUser interface
       const vendorUser = {
         id: user.id,
         email: user.email,
@@ -177,7 +161,6 @@ class ApiService {
         role: user.role,
       };
 
-      // Return formatted response matching AuthResponse type
       return {
         user: vendorUser,
         access: accessToken,
@@ -190,12 +173,9 @@ class ApiService {
 
   async logout(): Promise<void> {
     try {
-      // Try to call logout endpoint, but don't fail if it errors
       await this.api.post('/auth/logout');
-    } catch (error) {
-      // Silently ignore logout endpoint errors - we'll clear tokens anyway
+    } catch {
     } finally {
-      // Always clear tokens regardless of API call result
       await Promise.all([
         SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
         SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
@@ -204,10 +184,8 @@ class ApiService {
     }
   }
 
-  // Vendor endpoints
   async getVendorCases(vendorId?: number): Promise<any> {
     try {
-      // Get cases for authenticated vendor (vendorId is optional now)
       const response = await this.api.get('/vendor-cases');
       return response.data;
     } catch (error) {
@@ -215,7 +193,6 @@ class ApiService {
     }
   }
 
-  // Vendor assigned checks (sub-check level)
   async getVendorAssignedChecks(): Promise<any> {
     try {
       const response = await this.api.get('/vendor-assigned-checks');
@@ -237,7 +214,7 @@ class ApiService {
   async uploadCheckEvidence(
     caseId: number,
     checkType: string,
-    photos: Array<{ uri: string; name: string }>
+    photos: { uri: string; name: string }[]
   ): Promise<any> {
     try {
       const formData = new FormData();
@@ -303,37 +280,68 @@ class ApiService {
     }
   }
 
+  async getVendorNotifications(): Promise<VendorNotificationsResponse> {
+    try {
+      const response = await this.api.get('/vendor/notifications');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async markVendorNotificationRead(notificationId: number): Promise<VendorNotification> {
+    try {
+      const response = await this.api.post(`/vendor/notifications/${notificationId}/read`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async registerVendorPushToken(expoPushToken: string, platform: string, deviceName = ''): Promise<any> {
+    try {
+      const response = await this.api.post('/vendor/notifications/push-token', {
+        expo_push_token: expoPushToken,
+        platform,
+        device_name: deviceName,
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
   async uploadEvidence(
-    caseId: number, 
-    photos: Array<{ uri: string; name: string; lat?: string; long?: string }>
+    caseId: number,
+    photos: { uri: string; name: string; lat?: string; long?: string }[]
   ): Promise<any> {
     try {
       const formData = new FormData();
-      
+
       // Add each photo to form data with GPS validation
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         const fileUri = photo.uri;
         const fileName = photo.name;
         const fileType = fileName.split('.').pop()?.toLowerCase() || 'jpg';
-        
+
         // Create file object for upload
         const file: any = {
           uri: fileUri,
           name: fileName,
           type: `image/${fileType === 'jpg' ? 'jpeg' : fileType}`,
         };
-        
+
         formData.append('photos', file);
       }
-      
+
       const response = await this.api.post(`/cases/${caseId}/upload-evidence`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
         timeout: 60000, // 60 seconds for file upload
       });
-      
+
       return response.data;
     } catch (error) {
       throw this.handleError(error as AxiosError);

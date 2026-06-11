@@ -85,30 +85,6 @@ const formatEvidenceTimestamp = (photo) => {
   }).replace(',', '');
 };
 
-const formatEvidenceLocationForWatermark = (photo) => {
-  const locationName = typeof photo?.location_name === 'string' ? photo.location_name.trim() : '';
-  const pincodeMatch = locationName.match(/\b\d{6}\b/);
-  const pincode = pincodeMatch ? pincodeMatch[0] : '';
-  const parts = locationName.split(',').map((part) => part.trim()).filter(Boolean);
-  let city = '';
-
-  if (pincode) {
-    const pincodeIndex = parts.findIndex((part) => part.includes(pincode));
-    if (pincodeIndex > 0) {
-      city = parts[pincodeIndex - 1].replace(/\b\d{6}\b/g, '').trim();
-    }
-  }
-
-  if (!city) {
-    city = parts.find((part) => /[A-Za-z]/.test(part) && !/\b\d{6}\b/.test(part) && !/^india$/i.test(part)) || '';
-  }
-
-  if (city && pincode) return `${city}, ${pincode}`;
-  if (city) return city;
-  if (pincode) return pincode;
-  return locationName;
-};
-
 const getEvidenceWatermarkLines = (photo) => {
   const locationName = typeof photo?.location_name === 'string' ? photo.location_name.trim() : '';
   const timestamp = formatEvidenceTimestamp(photo);

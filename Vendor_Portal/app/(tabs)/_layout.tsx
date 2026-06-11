@@ -34,11 +34,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="notifications"
         options={{
-          title: 'Guide',
+          title: 'Alerts',
           tabBarIcon: ({ color, size, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'compass' : 'compass-outline'} color={color} size={size} />
+            <MaterialCommunityIcons name={focused ? 'bell' : 'bell-outline'} color={color} size={size} />
           ),
         }}
       />

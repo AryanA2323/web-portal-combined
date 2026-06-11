@@ -34,7 +34,7 @@ export default function LoginScreen() {
         loginUser({ email, password })
       ).unwrap();
       router.replace('/(tabs)');
-    } catch (err) {
+    } catch {
       Alert.alert('Login Failed', error || 'Invalid credentials');
     }
   };

@@ -45,30 +45,30 @@ import api from '../../services/api';
 // ─── Theme tokens ────────────────────────────────────────────────────────────
 
 const CHECK_META = {
-  claimant:    { label: 'Claimant Check',  color: '#e53935', bg: '#fce4ec', gradient: 'linear-gradient(135deg,#f5576c 0%,#e53935 100%)', icon: <Person /> },
-  insured:     { label: 'Insured Check',   color: '#1565c0', bg: '#e3f2fd', gradient: 'linear-gradient(135deg,#4facfe 0%,#1565c0 100%)', icon: <AssignmentInd /> },
-  driver:      { label: 'Driver Check',    color: '#2e7d32', bg: '#e8f5e9', gradient: 'linear-gradient(135deg,#43e97b 0%,#2e7d32 100%)', icon: <DirectionsCar /> },
-  spot:        { label: 'Spot Check',      color: '#e65100', bg: '#fff3e0', gradient: 'linear-gradient(135deg,#fa709a 0%,#e65100 100%)', icon: <LocationOn /> },
-  chargesheet: { label: 'Chargesheet',     color: '#6a1b9a', bg: '#f3e5f5', gradient: 'linear-gradient(135deg,#a18cd1 0%,#6a1b9a 100%)', icon: <Gavel /> },
-  rti:          { label: 'RTI Check',      color: '#00695c', bg: '#e0f2f1', gradient: 'linear-gradient(135deg,#43e97b 0%,#00695c 100%)', icon: <ArticleOutlined /> },
-  rto:          { label: 'RTO Check',      color: '#4527a0', bg: '#ede7f6', gradient: 'linear-gradient(135deg,#a18cd1 0%,#4527a0 100%)', icon: <DirectionsCar /> },
+  claimant: { label: 'Claimant Check', color: '#e53935', bg: '#fce4ec', gradient: 'linear-gradient(135deg,#f5576c 0%,#e53935 100%)', icon: <Person /> },
+  insured: { label: 'Insured Check', color: '#1565c0', bg: '#e3f2fd', gradient: 'linear-gradient(135deg,#4facfe 0%,#1565c0 100%)', icon: <AssignmentInd /> },
+  driver: { label: 'Driver Check', color: '#2e7d32', bg: '#e8f5e9', gradient: 'linear-gradient(135deg,#43e97b 0%,#2e7d32 100%)', icon: <DirectionsCar /> },
+  spot: { label: 'Spot Check', color: '#e65100', bg: '#fff3e0', gradient: 'linear-gradient(135deg,#fa709a 0%,#e65100 100%)', icon: <LocationOn /> },
+  chargesheet: { label: 'Chargesheet', color: '#6a1b9a', bg: '#f3e5f5', gradient: 'linear-gradient(135deg,#a18cd1 0%,#6a1b9a 100%)', icon: <Gavel /> },
+  rti: { label: 'RTI Check', color: '#00695c', bg: '#e0f2f1', gradient: 'linear-gradient(135deg,#43e97b 0%,#00695c 100%)', icon: <ArticleOutlined /> },
+  rto: { label: 'RTO Check', color: '#4527a0', bg: '#ede7f6', gradient: 'linear-gradient(135deg,#a18cd1 0%,#4527a0 100%)', icon: <DirectionsCar /> },
 };
 
 const STATUS_CFG = {
-  Pending:        { color: '#e65100', bg: '#fff3e0' },
-  'In Progress':  { color: '#1565c0', bg: '#e3f2fd' },
-  Completed:      { color: '#2e7d32', bg: '#e8f5e9' },
-  Done:           { color: '#2e7d32', bg: '#e8f5e9' },
-  Open:           { color: '#1565c0', bg: '#e3f2fd' },
-  Closed:         { color: '#37474f', bg: '#eceff1' },
-  WIP:            { color: '#1565c0', bg: '#e3f2fd' },
-  Submitted:      { color: '#6a1b9a', bg: '#f3e5f5' },
-  Approved:       { color: '#2e7d32', bg: '#e8f5e9' },
-  Rejected:       { color: '#c62828', bg: '#ffebee' },
+  Pending: { color: '#e65100', bg: '#fff3e0' },
+  'In Progress': { color: '#1565c0', bg: '#e3f2fd' },
+  Completed: { color: '#2e7d32', bg: '#e8f5e9' },
+  Done: { color: '#2e7d32', bg: '#e8f5e9' },
+  Open: { color: '#1565c0', bg: '#e3f2fd' },
+  Closed: { color: '#37474f', bg: '#eceff1' },
+  WIP: { color: '#1565c0', bg: '#e3f2fd' },
+  Submitted: { color: '#6a1b9a', bg: '#f3e5f5' },
+  Approved: { color: '#2e7d32', bg: '#e8f5e9' },
+  Rejected: { color: '#c62828', bg: '#ffebee' },
   'Under Review': { color: '#e65100', bg: '#fff3e0' },
-  Cancelled:      { color: '#37474f', bg: '#eceff1' },
-  'On Hold':      { color: '#6a1b9a', bg: '#f3e5f5' },
-  'Not Started':  { color: '#78909c', bg: '#eceff1' },
+  Cancelled: { color: '#37474f', bg: '#eceff1' },
+  'On Hold': { color: '#6a1b9a', bg: '#f3e5f5' },
+  'Not Started': { color: '#78909c', bg: '#eceff1' },
 };
 
 const pill = (val) => {
@@ -94,126 +94,126 @@ const LONG_FIELDS = new Set(['statement', 'observation', 'observations', 'accide
 // ─── Field definitions ────────────────────────────────────────────────────────
 
 const CASE_FIELDS_DEF = [
-  { name: 'claim_number',               label: 'Claim Number',    group: 'identity' },
-  { name: 'client_name',                label: 'Client Name',     group: 'identity' },
-  { name: 'category',                   label: 'Category',        group: 'identity', options: ['MACT','GPA','PA','Health','Fire','Marine','Misc'] },
-  { name: 'case_type',                  label: 'Case Type',       group: 'identity', options: ['Full Case','Partial','Reinvestigation'] },
-  { name: 'case_receive_date',          label: 'Receive Date',    group: 'dates',    type: 'date' },
-  { name: 'case_due_date',              label: 'Due Date',        group: 'dates',    type: 'date' },
-  { name: 'completion_date',            label: 'Completion Date', group: 'dates',    type: 'date' },
-  { name: 'tat_days',                   label: 'TAT Days',        group: 'dates',    type: 'number' },
-  { name: 'sla',                        label: 'SLA',             group: 'status',   options: ['AT','WT'] },
-  { name: 'investigation_report_status',label: 'IR Status',       group: 'status',   options: ['Open','Submitted','Approved','Rejected','Under Review','Closed'] },
-  { name: 'full_case_status',           label: 'Case Status',     group: 'status',   options: ['WIP','Completed','Pending','On Hold','Cancelled'] },
-  { name: 'scope_of_work',              label: 'Scope of Work',   group: 'notes' },
+  { name: 'claim_number', label: 'Claim Number', group: 'identity' },
+  { name: 'client_name', label: 'Client Name', group: 'identity' },
+  { name: 'category', label: 'Category', group: 'identity', options: ['MACT', 'GPA', 'PA', 'Health', 'Fire', 'Marine', 'Misc'] },
+  { name: 'case_type', label: 'Case Type', group: 'identity', options: ['Full Case', 'Partial', 'Reinvestigation'] },
+  { name: 'case_receive_date', label: 'Receive Date', group: 'dates', type: 'date' },
+  { name: 'case_due_date', label: 'Due Date', group: 'dates', type: 'date' },
+  { name: 'completion_date', label: 'Completion Date', group: 'dates', type: 'date' },
+  { name: 'tat_days', label: 'TAT Days', group: 'dates', type: 'number' },
+  { name: 'sla', label: 'SLA', group: 'status', options: ['AT', 'WT'] },
+  { name: 'investigation_report_status', label: 'IR Status', group: 'status', options: ['Open', 'Submitted', 'Approved', 'Rejected', 'Under Review', 'Closed'] },
+  { name: 'full_case_status', label: 'Case Status', group: 'status', options: ['WIP', 'Completed', 'Pending', 'On Hold', 'Cancelled'] },
+  { name: 'scope_of_work', label: 'Scope of Work', group: 'notes' },
 ];
 
 const CHECK_FIELDS_DEF = {
   claimant: [
-    { name: 'claimant_name',    label: 'Claimant Name', group: 'identity' },
-    { name: 'claimant_contact', label: 'Contact',       group: 'identity' },
-    { name: 'claimant_address', label: 'Address',       group: 'identity' },
-    { name: 'claimant_income',  label: 'Income (₹)',    group: 'identity', type: 'number' },
-    { name: 'check_status',     label: 'Check Status',  group: 'status',   options: ['Pending','In Progress','Completed','Done'] },
-    { name: 'statement',        label: 'Statement',     group: 'notes' },
-    { name: 'observation',      label: 'Observation',   group: 'notes' },
+    { name: 'claimant_name', label: 'Claimant Name', group: 'identity' },
+    { name: 'claimant_contact', label: 'Contact', group: 'identity' },
+    { name: 'claimant_address', label: 'Address', group: 'identity' },
+    { name: 'claimant_income', label: 'Income (₹)', group: 'identity', type: 'number' },
+    { name: 'check_status', label: 'Check Status', group: 'status', options: ['Pending', 'In Progress', 'Completed', 'Done'] },
+    { name: 'statement', label: 'Statement', group: 'notes' },
+    { name: 'observation', label: 'Observation', group: 'notes' },
   ],
   insured: [
-    { name: 'insured_name',    label: 'Insured Name',  group: 'identity' },
-    { name: 'insured_contact', label: 'Contact',       group: 'identity' },
-    { name: 'insured_address', label: 'Address',       group: 'identity' },
-    { name: 'policy_number',   label: 'Policy Number', group: 'policy' },
-    { name: 'policy_period',   label: 'Policy Period', group: 'policy' },
-    { name: 'rc',              label: 'RC',            group: 'policy' },
-    { name: 'permit',          label: 'Permit',        group: 'policy' },
-    { name: 'check_status',    label: 'Check Status',  group: 'status',   options: ['Pending','In Progress','Completed','Done'] },
-    { name: 'statement',       label: 'Statement',     group: 'notes' },
-    { name: 'observation',     label: 'Observation',   group: 'notes' },
+    { name: 'insured_name', label: 'Insured Name', group: 'identity' },
+    { name: 'insured_contact', label: 'Contact', group: 'identity' },
+    { name: 'insured_address', label: 'Address', group: 'identity' },
+    { name: 'policy_number', label: 'Policy Number', group: 'policy' },
+    { name: 'policy_period', label: 'Policy Period', group: 'policy' },
+    { name: 'rc', label: 'RC', group: 'policy' },
+    { name: 'permit', label: 'Permit', group: 'policy' },
+    { name: 'check_status', label: 'Check Status', group: 'status', options: ['Pending', 'In Progress', 'Completed', 'Done'] },
+    { name: 'statement', label: 'Statement', group: 'notes' },
+    { name: 'observation', label: 'Observation', group: 'notes' },
   ],
   driver: [
-    { name: 'driver_name',    label: 'Driver Name',    group: 'identity' },
-    { name: 'driver_contact', label: 'Contact',        group: 'identity' },
-    { name: 'driver_address', label: 'Address',        group: 'identity' },
-    { name: 'dl',             label: 'Driving Licence',group: 'licence' },
-    { name: 'permit',         label: 'Permit',         group: 'licence' },
-    { name: 'occupation',     label: 'Occupation',     group: 'licence' },
-    { name: 'check_status',   label: 'Check Status',   group: 'status',   options: ['Pending','In Progress','Completed','Done'] },
-    { name: 'statement',      label: 'Statement',      group: 'notes' },
-    { name: 'observation',    label: 'Observation',    group: 'notes' },
+    { name: 'driver_name', label: 'Driver Name', group: 'identity' },
+    { name: 'driver_contact', label: 'Contact', group: 'identity' },
+    { name: 'driver_address', label: 'Address', group: 'identity' },
+    { name: 'dl', label: 'Driving Licence', group: 'licence' },
+    { name: 'permit', label: 'Permit', group: 'licence' },
+    { name: 'occupation', label: 'Occupation', group: 'licence' },
+    { name: 'check_status', label: 'Check Status', group: 'status', options: ['Pending', 'In Progress', 'Completed', 'Done'] },
+    { name: 'statement', label: 'Statement', group: 'notes' },
+    { name: 'observation', label: 'Observation', group: 'notes' },
   ],
   spot: [
-    { name: 'time_of_accident',  label: 'Time of Accident',  group: 'accident' },
+    { name: 'time_of_accident', label: 'Time of Accident', group: 'accident' },
     { name: 'place_of_accident', label: 'Place of Accident', group: 'accident' },
-    { name: 'district',          label: 'District',          group: 'accident' },
-    { name: 'fir_number',        label: 'FIR Number',        group: 'fir' },
-    { name: 'police_station',    label: 'Police Station',    group: 'fir' },
-    { name: 'check_status',      label: 'Check Status',      group: 'status',  options: ['Pending','In Progress','Completed','Done'] },
-    { name: 'accident_brief',    label: 'Accident Brief',    group: 'notes' },
-    { name: 'observations',      label: 'Observations',      group: 'notes' },
+    { name: 'district', label: 'District', group: 'accident' },
+    { name: 'fir_number', label: 'FIR Number', group: 'fir' },
+    { name: 'police_station', label: 'Police Station', group: 'fir' },
+    { name: 'check_status', label: 'Check Status', group: 'status', options: ['Pending', 'In Progress', 'Completed', 'Done'] },
+    { name: 'accident_brief', label: 'Accident Brief', group: 'notes' },
+    { name: 'observations', label: 'Observations', group: 'notes' },
   ],
   chargesheet: [
-    { name: 'fir_number',     label: 'FIR Number',     group: 'legal' },
-    { name: 'court_name',     label: 'Court Name',     group: 'legal' },
-    { name: 'mv_act',         label: 'MV Act',         group: 'legal' },
+    { name: 'fir_number', label: 'FIR Number', group: 'legal' },
+    { name: 'court_name', label: 'Court Name', group: 'legal' },
+    { name: 'mv_act', label: 'MV Act', group: 'legal' },
     { name: 'fir_delay_days', label: 'FIR Delay Days', group: 'legal', type: 'number' },
-    { name: 'bsn_section',    label: 'BSN Section',    group: 'legal' },
-    { name: 'ipc',            label: 'IPC',            group: 'legal' },
-    { name: 'check_status',   label: 'Check Status',   group: 'status', options: ['Pending','In Progress','Completed','Done'] },
-    { name: 'statement',      label: 'Statement',      group: 'notes' },
-    { name: 'observations',   label: 'Observations',   group: 'notes' },
+    { name: 'bsn_section', label: 'BSN Section', group: 'legal' },
+    { name: 'ipc', label: 'IPC', group: 'legal' },
+    { name: 'check_status', label: 'Check Status', group: 'status', options: ['Pending', 'In Progress', 'Completed', 'Done'] },
+    { name: 'statement', label: 'Statement', group: 'notes' },
+    { name: 'observations', label: 'Observations', group: 'notes' },
   ],
   rti: [
     { name: 'chargesheet_checked', label: 'Chargesheet / FIR', group: 'checklist', type: 'boolean' },
-    { name: 'fir_number',          label: 'FIR Number',        group: 'checklist' },
-    { name: 'dl_checked',          label: 'Driving Licence',   group: 'checklist', type: 'boolean' },
-    { name: 'dl_number',           label: 'DL Number',         group: 'checklist' },
-    { name: 'permit_checked',      label: 'Permit',            group: 'checklist', type: 'boolean' },
-    { name: 'permit_number',       label: 'Permit Number',     group: 'checklist' },
-    { name: 'rc_checked',          label: 'RC',                group: 'checklist', type: 'boolean' },
-    { name: 'rc_number',           label: 'RC Number',         group: 'checklist' },
-    { name: 'check_status',        label: 'Check Status',      group: 'status', options: ['Pending','In Progress','Completed','Done','WIP'] },
-    { name: 'remarks',             label: 'Remarks',           group: 'notes' },
+    { name: 'fir_number', label: 'FIR Number', group: 'checklist' },
+    { name: 'dl_checked', label: 'Driving Licence', group: 'checklist', type: 'boolean' },
+    { name: 'dl_number', label: 'DL Number', group: 'checklist' },
+    { name: 'permit_checked', label: 'Permit', group: 'checklist', type: 'boolean' },
+    { name: 'permit_number', label: 'Permit Number', group: 'checklist' },
+    { name: 'rc_checked', label: 'RC', group: 'checklist', type: 'boolean' },
+    { name: 'rc_number', label: 'RC Number', group: 'checklist' },
+    { name: 'check_status', label: 'Check Status', group: 'status', options: ['Pending', 'In Progress', 'Completed', 'Done', 'WIP'] },
+    { name: 'remarks', label: 'Remarks', group: 'notes' },
   ],
   rto: [
-    { name: 'rto_name',            label: 'RTO Name',          group: 'rto_info' },
-    { name: 'rto_address',         label: 'RTO Address',       group: 'rto_info' },
-    { name: 'dl_checked',          label: 'Driving Licence',   group: 'checklist', type: 'boolean' },
-    { name: 'dl_number',           label: 'DL Number',         group: 'checklist' },
-    { name: 'permit_checked',      label: 'Permit',            group: 'checklist', type: 'boolean' },
-    { name: 'permit_number',       label: 'Permit Number',     group: 'checklist' },
-    { name: 'rc_checked',          label: 'RC',                group: 'checklist', type: 'boolean' },
-    { name: 'rc_number',           label: 'RC Number',         group: 'checklist' },
-    { name: 'check_status',        label: 'Check Status',      group: 'status', options: ['Pending','In Progress','Completed','Done','WIP'] },
-    { name: 'remarks',             label: 'Remarks',           group: 'notes' },
+    { name: 'rto_name', label: 'RTO Name', group: 'rto_info' },
+    { name: 'rto_address', label: 'RTO Address', group: 'rto_info' },
+    { name: 'dl_checked', label: 'Driving Licence', group: 'checklist', type: 'boolean' },
+    { name: 'dl_number', label: 'DL Number', group: 'checklist' },
+    { name: 'permit_checked', label: 'Permit', group: 'checklist', type: 'boolean' },
+    { name: 'permit_number', label: 'Permit Number', group: 'checklist' },
+    { name: 'rc_checked', label: 'RC', group: 'checklist', type: 'boolean' },
+    { name: 'rc_number', label: 'RC Number', group: 'checklist' },
+    { name: 'check_status', label: 'Check Status', group: 'status', options: ['Pending', 'In Progress', 'Completed', 'Done', 'WIP'] },
+    { name: 'remarks', label: 'Remarks', group: 'notes' },
   ],
 };
 
 const GROUP_ICONS = {
   identity: <BadgeOutlined sx={{ fontSize: 14 }} />,
-  policy:   <VerifiedUser sx={{ fontSize: 14 }} />,
-  licence:  <ArticleOutlined sx={{ fontSize: 14 }} />,
+  policy: <VerifiedUser sx={{ fontSize: 14 }} />,
+  licence: <ArticleOutlined sx={{ fontSize: 14 }} />,
   accident: <LocationOn sx={{ fontSize: 14 }} />,
-  fir:      <GavelOutlined sx={{ fontSize: 14 }} />,
-  legal:     <GavelOutlined sx={{ fontSize: 14 }} />,
-  dates:     <CalendarToday sx={{ fontSize: 14 }} />,
-  status:    <CheckCircleOutline sx={{ fontSize: 14 }} />,
-  notes:     <ArticleOutlined sx={{ fontSize: 14 }} />,
+  fir: <GavelOutlined sx={{ fontSize: 14 }} />,
+  legal: <GavelOutlined sx={{ fontSize: 14 }} />,
+  dates: <CalendarToday sx={{ fontSize: 14 }} />,
+  status: <CheckCircleOutline sx={{ fontSize: 14 }} />,
+  notes: <ArticleOutlined sx={{ fontSize: 14 }} />,
   checklist: <CheckCircleOutline sx={{ fontSize: 14 }} />,
-  rto_info:  <LocationOn sx={{ fontSize: 14 }} />,
+  rto_info: <LocationOn sx={{ fontSize: 14 }} />,
 };
 
 const GROUP_LABELS = {
   identity: 'Identity & Contact',
-  policy:   'Policy Details',
-  licence:  'Licence & Permit',
+  policy: 'Policy Details',
+  licence: 'Licence & Permit',
   accident: 'Accident Details',
-  fir:      'FIR & Police',
-  legal:    'Legal Information',
-  dates:    'Timeline & Dates',
-  status:   'Status',
-  notes:     'Notes & Findings',
+  fir: 'FIR & Police',
+  legal: 'Legal Information',
+  dates: 'Timeline & Dates',
+  status: 'Status',
+  notes: 'Notes & Findings',
   checklist: 'Verification Checklist',
-  rto_info:  'RTO Information',
+  rto_info: 'RTO Information',
 };
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -236,8 +236,8 @@ const ViewField = ({ label, value, isStatus = false, isDate = false }) => (
     {isStatus
       ? pill(value)
       : <Typography sx={{ fontSize: '13.5px', color: value ? '#1a1a2e' : '#c0c0c0', fontStyle: value ? 'normal' : 'italic', wordBreak: 'break-word', lineHeight: 1.5 }}>
-          {isDate ? fmtDateDisplay(value) : (value || '—')}
-        </Typography>
+        {isDate ? fmtDateDisplay(value) : (value || '—')}
+      </Typography>
     }
   </Box>
 );
@@ -266,7 +266,7 @@ const EditField = ({ label, name, value, onChange, type = 'text', options, multi
 };
 
 const FieldBlock = ({ fd, value, editing, onChange }) => {
-  const isLong   = LONG_FIELDS.has(fd.name);
+  const isLong = LONG_FIELDS.has(fd.name);
   const isStatus = fd.name === 'check_status' || fd.name === 'full_case_status' || fd.name === 'investigation_report_status' || fd.name === 'sla';
 
   // Boolean checklist fields
@@ -376,14 +376,14 @@ const CheckDetailPage = () => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [editing, setEditing] = useState(false);
 
-  const [caseData,   setCaseData]   = useState({});
-  const [checkData,  setCheckData]  = useState({});
-  const [caseDraft,  setCaseDraft]  = useState({});
+  const [caseData, setCaseData] = useState({});
+  const [checkData, setCheckData] = useState({});
+  const [caseDraft, setCaseDraft] = useState({});
   const [checkDraft, setCheckDraft] = useState({});
 
   const meta = CHECK_META[checkType] || { label: checkType, color: '#667eea', bg: '#f0f0ff', gradient: 'linear-gradient(135deg,#667eea,#764ba2)', icon: <FolderOpen /> };
@@ -401,9 +401,9 @@ const CheckDetailPage = () => {
 
   useEffect(() => { fetchDetail(); }, [fetchDetail]);
 
-  const handleStartEdit  = () => { setCaseDraft({ ...caseData }); setCheckDraft({ ...checkData }); setEditing(true); setSuccess(''); setError(''); };
+  const handleStartEdit = () => { setCaseDraft({ ...caseData }); setCheckDraft({ ...checkData }); setEditing(true); setSuccess(''); setError(''); };
   const handleCancelEdit = () => { setEditing(false); setCaseDraft({}); setCheckDraft({}); setSuccess(''); setError(''); };
-  const handleCaseChange  = (n, v) => setCaseDraft((p) => ({ ...p, [n]: v }));
+  const handleCaseChange = (n, v) => setCaseDraft((p) => ({ ...p, [n]: v }));
   const handleCheckChange = (n, v) => setCheckDraft((p) => ({ ...p, [n]: v }));
 
   const handleSave = async () => {
@@ -420,11 +420,11 @@ const CheckDetailPage = () => {
     } finally { setSaving(false); }
   };
 
-  const caseVal  = (n) => (editing ? caseDraft[n]  ?? '' : caseData[n]  ?? '');
+  const caseVal = (n) => (editing ? caseDraft[n] ?? '' : caseData[n] ?? '');
   const checkVal = (n) => (editing ? checkDraft[n] ?? '' : checkData[n] ?? '');
 
-  const irCfg  = STATUS_CFG[caseData.investigation_report_status] || { color: '#78909c', bg: '#eceff1' };
-  const staCfg = STATUS_CFG[caseData.full_case_status]            || { color: '#78909c', bg: '#eceff1' };
+  const irCfg = STATUS_CFG[caseData.investigation_report_status] || { color: '#78909c', bg: '#eceff1' };
+  const staCfg = STATUS_CFG[caseData.full_case_status] || { color: '#78909c', bg: '#eceff1' };
   const checkFieldsDef = CHECK_FIELDS_DEF[checkType] || [];
   const latKey = checkType === 'spot' ? 'spot_lat' : `${checkType}_lat`;
   const lngKey = checkType === 'spot' ? 'spot_lng' : `${checkType}_lng`;
@@ -530,7 +530,7 @@ const CheckDetailPage = () => {
         {/* ── CONTENT (overlaps banner) ──────────────────────────────────── */}
         <Box sx={{ px: { xs: 2, md: 4 }, mt: 2, pb: 5, maxWidth: 1280, mx: 'auto' }}>
 
-          {error   && <Alert severity="error"   onClose={() => setError('')}   sx={{ mb: 2, borderRadius: '10px' }}>{error}</Alert>}
+          {error && <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2, borderRadius: '10px' }}>{error}</Alert>}
           {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 2, borderRadius: '10px' }}>{success}</Alert>}
 
           {/* ── Stat strip ── */}
@@ -541,12 +541,12 @@ const CheckDetailPage = () => {
               gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
               gap: 1.5,
             }}>
-              <StatBadge icon={<FolderOpen sx={{ fontSize: 18 }} />}         label="Claim Number"  value={caseData.claim_number}                         color="#667eea" />
-              <StatBadge icon={<CalendarToday sx={{ fontSize: 18 }} />}      label="Receive Date"  value={fmtDateDisplay(caseData.case_receive_date)}     color="#06b6d4" />
-              <StatBadge icon={<Speed sx={{ fontSize: 18 }} />}              label="TAT Days"      value={caseData.tat_days != null ? `${caseData.tat_days} days` : null} color="#f59e0b" />
-              <StatBadge icon={<CheckCircleOutline sx={{ fontSize: 18 }} />} label="IR Status"     value={caseData.investigation_report_status}           color={irCfg.color} />
-              <StatBadge icon={<VerifiedUser sx={{ fontSize: 18 }} />}       label="Case Status"   value={caseData.full_case_status}                      color={staCfg.color} />
-              <StatBadge icon={<PinDrop sx={{ fontSize: 18 }} />}            label="Check Status"  value={checkData.check_status}                         color={meta.color} />
+              <StatBadge icon={<FolderOpen sx={{ fontSize: 18 }} />} label="Claim Number" value={caseData.claim_number} color="#667eea" />
+              <StatBadge icon={<CalendarToday sx={{ fontSize: 18 }} />} label="Receive Date" value={fmtDateDisplay(caseData.case_receive_date)} color="#06b6d4" />
+              <StatBadge icon={<Speed sx={{ fontSize: 18 }} />} label="TAT Days" value={caseData.tat_days != null ? `${caseData.tat_days} days` : null} color="#f59e0b" />
+              <StatBadge icon={<CheckCircleOutline sx={{ fontSize: 18 }} />} label="IR Status" value={caseData.investigation_report_status} color={irCfg.color} />
+              <StatBadge icon={<VerifiedUser sx={{ fontSize: 18 }} />} label="Case Status" value={caseData.full_case_status} color={staCfg.color} />
+              <StatBadge icon={<PinDrop sx={{ fontSize: 18 }} />} label="Check Status" value={checkData.check_status} color={meta.color} />
             </Paper>
           )}
 

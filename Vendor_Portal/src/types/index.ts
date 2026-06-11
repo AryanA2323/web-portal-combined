@@ -66,3 +66,20 @@ export interface ApiError {
   status: number;
   details?: Record<string, any>;
 }
+
+export interface VendorNotification {
+  id: number;
+  notification_type: 'CHECK_ASSIGNED' | 'CHECK_REMOVED' | string;
+  check_type: string;
+  case_id: number;
+  case_number: string;
+  claim_number?: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface VendorNotificationsResponse {
+  notifications: VendorNotification[];
+  unread_count: number;
+}

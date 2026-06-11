@@ -89,10 +89,7 @@ const SettingsPage = () => {
     });
   };
 
-  const handleSave = (section) => {
-    console.log('Saving settings for:', section);
-    // API call would go here
-  };
+  const handleSave = () => {};
 
   return (
     <AdminLayout>

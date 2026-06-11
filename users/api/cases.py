@@ -667,6 +667,20 @@ class ErrorResponse(Schema):
     detail: Optional[str] = None
 
 
+class ReassignVendorSchema(Schema):
+    """Request schema for reassigning a vendor to a check."""
+    vendor_id: Optional[int] = None
+
+
+class ReassignVendorResponse(Schema):
+    """Response schema for vendor reassignment."""
+    case_id: int
+    check_type: str
+    previous_vendor_id: Optional[int]
+    new_vendor_id: Optional[int]
+    message: str
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -1703,10 +1717,11 @@ def assign_vendor_to_check(request: HttpRequest, case_id: int, check_type: str):
     try:
         with connections['default'].cursor() as cursor:
             # Verify the check row exists
-            cursor.execute(f"SELECT id FROM {table} WHERE case_id = %s", [case_id])
+            cursor.execute(f"SELECT id, assigned_vendor_id FROM {table} WHERE case_id = %s", [case_id])
             check_row = cursor.fetchone()
             if not check_row:
                 raise HttpError(404, f"No {check_type} check found for case {case_id}")
+            previous_vendor_id = check_row[1]
 
             if vendor_id:
                 # Verify vendor exists
@@ -1723,6 +1738,21 @@ def assign_vendor_to_check(request: HttpRequest, case_id: int, check_type: str):
                 f"UPDATE {table} SET assigned_vendor_id = %s, updated_at = NOW() WHERE case_id = %s",
                 [vendor_id if vendor_id else None, case_id]
             )
+
+            cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+            case_row = cursor.fetchone()
+            case_number = case_row[0] if case_row and case_row[0] else str(case_id)
+
+            normalized_vendor_id = vendor_id if vendor_id else None
+            if previous_vendor_id != normalized_vendor_id:
+                from users.services.notification_service import notify_reassignment
+                notify_reassignment(
+                    case_id=case_id,
+                    check_type=check_type.lower(),
+                    old_vendor_id=previous_vendor_id,
+                    new_vendor_id=normalized_vendor_id,
+                    case_number=case_number,
+                )
 
             return {
                 "success": True,
@@ -2019,8 +2049,20 @@ def get_dashboard_stats(request: HttpRequest):
             cursor.execute("SELECT COUNT(*) FROM cases WHERE full_case_status = 'WIP'")
             active_investigations = cursor.fetchone()[0]
             
-            # Completed cases
-            cursor.execute("SELECT COUNT(*) FROM cases WHERE full_case_status = 'Completed'")
+            # Completed cases card should mirror the final approved reports page:
+            # latest report per case with ACCEPTED status.
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM reports r
+                INNER JOIN (
+                    SELECT case_id, MAX(id) AS latest_id
+                    FROM reports
+                    GROUP BY case_id
+                ) latest_reports ON latest_reports.latest_id = r.id
+                WHERE r.status = 'ACCEPTED'
+                """
+            )
             completed_cases = cursor.fetchone()[0]
             
             # Overdue: past due date and not completed/withdrawn
@@ -2084,15 +2126,12 @@ def get_case_volume(request: HttpRequest):
             
             results = dict_fetchall(cursor)
             
-            # If no data, return dummy data for last 6 months
             if not results:
-                from datetime import timedelta
                 from calendar import month_abbr
                 
                 now = datetime.now()
                 months = []
                 for i in range(5, -1, -1):
-                    # Calculate month offset
                     month_offset = now.month - i - 1
                     year_offset = now.year
                     if month_offset <= 0:
@@ -2922,3 +2961,140 @@ def get_court_names(request: HttpRequest, city: str):
     except Exception as e:
         logger.error(f"Failed to fetch courts for city={city}: {e}")
         return {"courts": []}
+def get_police_stations(request: HttpRequest, city: str):
+    """Return police stations for a given city."""
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                "SELECT DISTINCT jurisdiction_police_station FROM court_details "
+                "WHERE city = %s AND jurisdiction_police_station IS NOT NULL "
+                "ORDER BY jurisdiction_police_station",
+                [city],
+            )
+            stations = [r[0] for r in cursor.fetchall()]
+        return {"police_stations": stations}
+    except Exception as e:
+        logger.error(f"Failed to fetch police stations for city={city}: {e}")
+        return {"police_stations": []}
+
+
+@router.get(
+    "/court-details/courts",
+    summary="Get court names by city",
+    description="Returns taluka court names filtered by city.",
+)
+def get_court_names(request: HttpRequest, city: str):
+    """Return court names for a given city."""
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                "SELECT DISTINCT taluka_court FROM court_details "
+                "WHERE city = %s AND taluka_court IS NOT NULL "
+                "ORDER BY taluka_court",
+                [city],
+            )
+            courts = [r[0] for r in cursor.fetchall()]
+        return {"courts": courts}
+    except Exception as e:
+        logger.error(f"Failed to fetch courts for city={city}: {e}")
+        return {"courts": []}
+
+
+# =============================================================================
+# Vendor Reassignment Endpoint
+# =============================================================================
+
+# Maps each check_type string to its corresponding raw-SQL table name.
+_REASSIGN_CHECK_TABLE_MAP: dict = {
+    "claimant": "claimant_checks",
+    "insured": "insured_checks",
+    "driver": "driver_checks",
+    "spot": "spot_checks",
+    "chargesheet": "chargesheets",
+    "rti": "rti_checks",
+    "rto": "rto_checks",
+}
+
+
+@router.patch(
+    "/cases/incident-db/{case_id}/check/{check_type}/reassign",
+    response={
+        200: ReassignVendorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+    summary="Reassign vendor for a check",
+    description="Update assigned_vendor_id on a specific check row. Admin access required.",
+    tags=["Cases"],
+)
+def reassign_check_vendor(
+    request: HttpRequest,
+    case_id: int,
+    check_type: str,
+    payload: ReassignVendorSchema,
+):
+    """Reassign (or unassign) a vendor on a check row and fire notifications."""
+    # 1. Admin-only guard
+    if not is_admin_or_super_admin(request.user):
+        return 403, {"error": "Admin access required"}
+
+    # 2. Validate check_type
+    table = _REASSIGN_CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 404, {"error": f"Unknown check_type '{check_type}'"}
+
+    new_vendor_id = payload.vendor_id
+
+    # 3. Validate vendor_id if provided
+    if new_vendor_id is not None:
+        with connections["default"].cursor() as cursor:
+            cursor.execute(
+                "SELECT id FROM users_vendor WHERE id = %s AND is_active = TRUE",
+                [new_vendor_id],
+            )
+            if not cursor.fetchone():
+                return 404, {"error": f"Vendor {new_vendor_id} not found or not active"}
+
+    with connections["default"].cursor() as cursor:
+        # 4. Fetch existing check row (validates case_id + check_type combo)
+        cursor.execute(
+            f"SELECT assigned_vendor_id FROM {table} WHERE case_id = %s",
+            [case_id],
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return 404, {"error": f"No {check_type} check found for case {case_id}"}
+        previous_vendor_id = row[0]
+
+        # 5. Fetch case_number for notification messages
+        cursor.execute(
+            "SELECT case_number FROM insurance_case WHERE id = %s",
+            [case_id],
+        )
+        case_row = cursor.fetchone()
+        case_number = case_row[0] if case_row and case_row[0] else str(case_id)
+
+        # 6. Update assigned_vendor_id
+        cursor.execute(
+            f"UPDATE {table} SET assigned_vendor_id = %s, updated_at = NOW() WHERE case_id = %s",
+            [new_vendor_id, case_id],
+        )
+
+    # 7. Fire-and-forget notifications (errors are swallowed inside notify_reassignment)
+    if previous_vendor_id != new_vendor_id:
+        from users.services.notification_service import notify_reassignment
+        notify_reassignment(
+            case_id=case_id,
+            check_type=check_type.lower(),
+            old_vendor_id=previous_vendor_id,
+            new_vendor_id=new_vendor_id,
+            case_number=case_number,
+        )
+
+    return 200, {
+        "case_id": case_id,
+        "check_type": check_type,
+        "previous_vendor_id": previous_vendor_id,
+        "new_vendor_id": new_vendor_id,
+        "message": "Vendor reassignment successful",
+    }

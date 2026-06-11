@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -27,25 +27,23 @@ const RECORDING_RED = '#E53935';
 const SUCCESS_GREEN = '#4CAF50';
 const HEADER_TOP_PADDING = 14;
 
-// Optimized recording settings for speech recognition
-// Whisper works best with 16kHz mono audio
 const SPEECH_RECORDING_OPTIONS: Audio.RecordingOptions = {
   isMeteringEnabled: false,
   android: {
     extension: '.m4a',
     outputFormat: Audio.AndroidOutputFormat.MPEG_4,
     audioEncoder: Audio.AndroidAudioEncoder.AAC,
-    sampleRate: 16000,  // Whisper is trained on 16kHz
-    numberOfChannels: 1,  // Mono for speech
-    bitRate: 64000,  // Good quality for speech
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 64000,
   },
   ios: {
     extension: '.m4a',
     outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
     audioQuality: Audio.IOSAudioQuality.HIGH,
-    sampleRate: 16000,  // Whisper is trained on 16kHz
-    numberOfChannels: 1,  // Mono for speech
-    bitRate: 64000,  // Good quality for speech
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 64000,
     linearPCMBitDepth: 16,
     linearPCMIsBigEndian: false,
     linearPCMIsFloat: false,
@@ -62,9 +60,10 @@ const checkTypeLabels: Record<string, string> = {
   driver: 'Driver Check',
   spot: 'Spot Check',
   chargesheet: 'Chargesheet',
+  rti: 'RTI Check',
+  rto: 'RTO Check',
 };
 
-// Fields to display per check type (human-readable labels)
 const checkFieldLabels: Record<string, Record<string, string>> = {
   claimant: {
     claimant_name: 'Claimant Name',
@@ -165,7 +164,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const [error, setError] = useState<string | null>(null);
   const [deletingPhotoName, setDeletingPhotoName] = useState<string | null>(null);
 
-  // Statement Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
@@ -178,11 +176,61 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const assignmentAlertShownRef = useRef(false);
+
+  const isAssignmentLoadError = useCallback((err: any) => {
+    const apiMessage = String(err?.details?.error || err?.message || '').trim();
+    return (
+      err?.status === 403 ||
+      err?.status === 404 ||
+      /not assigned|removed|access denied|permission/i.test(apiMessage)
+    );
+  }, []);
+
+  const getFriendlyLoadError = useCallback((err: any) => {
+    const apiMessage = String(err?.details?.error || err?.message || '').trim();
+
+    if (isAssignmentLoadError(err)) {
+      return 'This check is not currently assigned to you. It may have been removed or reassigned by the admin.';
+    }
+
+    return apiMessage || 'Failed to load check details. Please try again.';
+  }, [isAssignmentLoadError]);
+
+  const isAssignmentError = (message: string | null) =>
+    !!message && /not currently assigned|removed|reassigned/i.test(message);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiService.getVendorCheckDetail(caseId, checkType);
+      setData(response);
+    } catch (err: any) {
+      const friendlyError = getFriendlyLoadError(err);
+      setError(friendlyError);
+
+      if (isAssignmentLoadError(err)) {
+        if (!assignmentAlertShownRef.current) {
+          assignmentAlertShownRef.current = true;
+          Alert.alert(
+            'Check not assigned',
+            'This case is not assigned to you or has been removed from you.',
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        console.error('Failed to load check detail:', err);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [caseId, checkType, getFriendlyLoadError, isAssignmentLoadError]);
 
   useEffect(() => {
+    assignmentAlertShownRef.current = false;
     loadData();
     return () => {
-      // Cleanup recording on unmount
       if (recordingRef.current) {
         recordingRef.current.stopAndUnloadAsync().catch(() => {});
       }
@@ -190,23 +238,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         clearInterval(durationIntervalRef.current);
       }
     };
-  }, [caseId, checkType]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await apiService.getVendorCheckDetail(caseId, checkType);
-      setData(response);
-    } catch (err: any) {
-      console.error('Failed to load check detail:', err);
-      setError(err.message || 'Failed to load details');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ============== Audio Recording Functions ==============
+  }, [loadData]);
 
   const requestMicrophonePermission = async (): Promise<boolean> => {
     try {
@@ -231,13 +263,11 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     if (!hasPermission) return;
 
     try {
-      // Configure audio mode
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
 
-      // Create and start recording with optimized speech settings
       const { recording } = await Audio.Recording.createAsync(
         SPEECH_RECORDING_OPTIONS
       );
@@ -250,12 +280,9 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       setTranscriptMr('');
       setEditedTranslation('');
 
-      // Start duration timer
       durationIntervalRef.current = setInterval(() => {
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
-
-      console.log('[Recording] Started');
     } catch (err) {
       console.error('Failed to start recording:', err);
       Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
@@ -266,22 +293,17 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     if (!recordingRef.current) return;
 
     try {
-      // Stop duration timer
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
         durationIntervalRef.current = null;
       }
 
-      // Stop recording
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
 
       setIsRecording(false);
       setRecordingUri(uri);
 
-      console.log('[Recording] Stopped, URI:', uri);
-
-      // Reset audio mode
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
       });
@@ -319,19 +341,12 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         mimeType: 'audio/m4a',
       };
 
-      console.log('[Recording] Processing audio:', audioFile);
-
       const result = await apiService.previewStatementAudio(caseId, checkType, audioFile);
 
       if (result.success) {
         setTranscriptMr(result.transcript_mr);
         setEditedTranslation(result.translation_en);
         setShowPreview(true);
-
-        console.log('[Recording] Preview success:', {
-          mrLength: result.transcript_mr.length,
-          enLength: result.translation_en.length,
-        });
       }
     } catch (err: any) {
       console.error('Failed to process recording:', err);
@@ -350,7 +365,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
     setIsApplying(true);
 
-    // Prepend title to statement if provided
     const trimmedTitle = statementTitle.trim();
     const trimmedStatement = editedTranslation.trim();
     const finalStatement = trimmedTitle
@@ -375,7 +389,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             {
               text: 'OK',
               onPress: () => {
-                // Reset state and reload data
                 discardRecording();
                 loadData();
               },
@@ -404,8 +417,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     if (Number.isNaN(parsed.getTime())) return '';
     return parsed.toLocaleString();
   };
-
-  // ============== Photo Upload Functions ==============
 
   const pickAndUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -531,6 +542,8 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   }
 
   if (error || !data) {
+    const assignmentError = isAssignmentError(error);
+
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient colors={['#0F5FA8', '#0A4274']} style={styles.header}>
@@ -539,11 +552,37 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Check Details</Text>
         </LinearGradient>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.errorText}>{error || 'No data available'}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadData}>
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
+        <View style={styles.errorContainer}>
+          <View style={[
+            styles.errorIconWrap,
+            assignmentError ? styles.assignmentErrorIconWrap : styles.genericErrorIconWrap,
+          ]}>
+            <MaterialCommunityIcons
+              name={assignmentError ? 'clipboard-remove-outline' : 'alert-circle-outline'}
+              size={34}
+              color={assignmentError ? theme.colors.warning : theme.colors.error}
+            />
+          </View>
+          <Text style={styles.errorTitle}>
+            {assignmentError ? 'Check not assigned' : 'Unable to open check'}
+          </Text>
+          <Text style={styles.errorText}>
+            {error || 'No data available'}
+          </Text>
+          <View style={styles.errorActions}>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()}>
+              <Text style={styles.secondaryButtonText}>Go Back</Text>
+            </TouchableOpacity>
+            {assignmentError ? (
+              <TouchableOpacity style={styles.retryButton} onPress={() => router.replace('/(tabs)')}>
+                <Text style={styles.retryText}>Assigned Checks</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.retryButton} onPress={loadData}>
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -565,7 +604,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const nextStatementIndex = checkInfo.next_statement_index || (canAddStatement ? statementCount + 1 : null);
   const fieldLabels = checkFieldLabels[checkType] || {};
 
-  // Build the base URL for media files
   const apiHost = API_BASE_URL.replace('/api', '');
 
   return (
@@ -652,7 +690,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             </View>
           )}
 
-          {/* Recording Controls */}
           {!showPreview && canAddStatement && (
             <View style={styles.recordingSection}>
               {!isRecording && !recordingUri && (
@@ -718,10 +755,8 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             </View>
           )}
 
-          {/* Preview Section */}
           {showPreview && canAddStatement && (
             <View style={styles.previewSection}>
-              {/* Statement Title */}
               <View style={styles.translationBox}>
                 <Text style={styles.transcriptLabel}>Statement Title (who is giving the statement):</Text>
                 <TextInput
@@ -733,13 +768,11 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 />
               </View>
 
-              {/* Marathi Transcript */}
               <View style={styles.transcriptBox}>
                 <Text style={styles.transcriptLabel}>Marathi Transcript:</Text>
                 <Text style={styles.marathiText}>{transcriptMr}</Text>
               </View>
 
-              {/* Editable English Translation */}
               <View style={styles.translationBox}>
                 <Text style={styles.transcriptLabel}>English Translation (editable):</Text>
                 <TextInput
@@ -752,7 +785,6 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 />
               </View>
 
-              {/* Action Buttons */}
               <View style={styles.previewActions}>
                 <TouchableOpacity
                   style={styles.discardButton}
@@ -797,7 +829,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                       style={styles.photoImage}
                       resizeMode="cover"
                       onError={(event) => {
-                        console.log('Evidence image failed to load:', {
+                        console.warn('Evidence image failed to load:', {
                           photo,
                           resolvedUri: getEvidencePhotoUri(photo, apiHost),
                           error: event.nativeEvent.error,
@@ -930,11 +962,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  errorText: {
-    fontSize: 16,
-    color: '#f44336',
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  assignmentErrorIconWrap: {
+    backgroundColor: theme.colors.warningSoft,
+  },
+  genericErrorIconWrap: {
+    backgroundColor: theme.colors.errorSoft,
+  },
+  errorTitle: {
+    fontSize: 21,
+    color: theme.colors.text,
+    fontWeight: '800',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  errorActions: {
+    flexDirection: 'row',
+    gap: 12,
   },
   retryButton: {
     backgroundColor: PRIMARY_BLUE,
@@ -945,6 +1009,18 @@ const styles = StyleSheet.create({
   },
   retryText: {
     color: '#fff',
+    fontWeight: '700',
+  },
+  secondaryButton: {
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  secondaryButtonText: {
+    color: theme.colors.textSecondary,
     fontWeight: '700',
   },
   section: {
@@ -1071,6 +1147,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  recordButtonIcon: {
+    fontSize: 20,
   },
   recordingActive: {
     alignItems: 'center',

@@ -243,8 +243,7 @@ const AIBriefPage = () => {
       if (reportsToMigrate.length === 0) return;
 
       try {
-        const result = await api.post('/reports/bulk', { reports: reportsToMigrate });
-        console.log('Reports migration result:', result.data);
+        await api.post('/reports/bulk', { reports: reportsToMigrate });
       } catch (err) {
         console.error('Failed to migrate reports to database:', err);
       }

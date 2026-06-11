@@ -15,6 +15,7 @@ from users.api.super_admin import router as super_admin_router
 from users.api.cases import router as cases_router
 from users.api.verifications import router as verifications_router
 from users.api.reports import router as reports_router
+from users.api.notifications import router as notifications_router
 from users.auth import SessionOrTokenAuth
 
 
@@ -120,3 +121,4 @@ api.add_router("/", super_admin_router, auth=SessionOrTokenAuth())
 api.add_router("/", cases_router, auth=SessionOrTokenAuth())
 api.add_router("/", verifications_router, auth=SessionOrTokenAuth())
 api.add_router("/", reports_router, auth=SessionOrTokenAuth())
+api.add_router("/", notifications_router, auth=SessionOrTokenAuth())

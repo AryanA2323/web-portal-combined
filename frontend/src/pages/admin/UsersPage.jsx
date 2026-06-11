@@ -279,10 +279,7 @@ const UsersPage = () => {
         payload.permissions = Array.isArray(formData.permissions) ? formData.permissions : [];
       }
       
-      console.log('Sending payload:', payload);
-      
-      const response = await api.put(`/users/${selectedUser.id}`, payload);
-      console.log('Update response:', response.data);
+      await api.put(`/users/${selectedUser.id}`, payload);
       
       await fetchUsers();
       

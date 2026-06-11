@@ -37,6 +37,7 @@ import {
   ExpandMore,
   ChevronRight,
   Delete,
+  Edit,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
@@ -101,7 +102,7 @@ const CasesPage = () => {
   const [vendorList, setVendorList] = useState([]);
   const [selectedVendorId, setSelectedVendorId] = useState('');
   const [vendorAssigning, setVendorAssigning] = useState(false);
-  const [vendorModalTarget, setVendorModalTarget] = useState(null); // { caseId, checkType }
+  const [vendorModalTarget, setVendorModalTarget] = useState(null); // { caseId, checkType, vendorName }
 
   // Delete case modal state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -243,9 +244,9 @@ const CasesPage = () => {
   const getSubCases = (caseData) => caseData.sub_items || [];
 
   // Open vendor assignment modal for a sub-check
-  const openVendorModal = async (caseId, checkType) => {
+  const openVendorModal = async (caseId, checkType, currentVendorId = '') => {
     setVendorModalTarget({ caseId, checkType });
-    setSelectedVendorId('');
+    setSelectedVendorId(currentVendorId ? String(currentVendorId) : '');
     setVendorModalOpen(true);
     try {
       const res = await api.get('/check-vendors');
@@ -258,7 +259,7 @@ const CasesPage = () => {
 
   // Assign vendor to sub-check
   const handleAssignVendorToCheck = async () => {
-    if (!vendorModalTarget || !selectedVendorId) return;
+    if (!vendorModalTarget) return;
     const { caseId, checkType } = vendorModalTarget;
     const typeToSlug = {
       'Claimant Check': 'claimant',
@@ -272,15 +273,16 @@ const CasesPage = () => {
     const slug = typeToSlug[checkType] || checkType;
     try {
       setVendorAssigning(true);
-      await api.post(`/cases/incident-db/${caseId}/check/${slug}/assign-vendor`, {
-        vendor_id: parseInt(selectedVendorId, 10),
+      await api.patch(`/cases/incident-db/${caseId}/check/${slug}/reassign`, {
+        vendor_id: selectedVendorId ? parseInt(selectedVendorId, 10) : null,
       });
       setVendorModalOpen(false);
       setVendorModalTarget(null);
+      setSelectedVendorId('');
       await fetchData();
     } catch (err) {
-      console.error('Failed to assign vendor:', err);
-      alert('Failed to assign vendor. Please try again.');
+      console.error('Failed to update vendor:', err);
+      alert('Failed to update vendor. Please try again.');
     } finally {
       setVendorAssigning(false);
     }
@@ -749,27 +751,38 @@ const CasesPage = () => {
                                     <Typography sx={{ fontSize: '11px', color: '#777', fontStyle: sub.statement ? 'normal' : 'italic' }} noWrap title={sub.statement}>
                                       {sub.statement || '—'}
                                     </Typography>
-                                    <Box onClick={(e) => e.stopPropagation()}>
-                                      {sub.assigned_vendor_name ? (
-                                        <Chip
-                                          label={sub.assigned_vendor_name}
-                                          size="small"
-                                          sx={{
-                                            backgroundColor: '#e8f5e920',
-                                            color: '#2e7d32',
-                                            fontWeight: 600,
-                                            fontSize: '11px',
-                                            height: '22px',
-                                            borderRadius: '6px',
-                                            maxWidth: '140px',
-                                          }}
-                                          title={sub.assigned_vendor_name}
-                                        />
-                                      ) : (
-                                        <Button
-                                          size="small"
-                                          variant="outlined"
-                                          onClick={() => openVendorModal(row.id, sub.type)}
+                                <Box onClick={(e) => e.stopPropagation()}>
+                                  {sub.assigned_vendor_name ? (
+                                    <Button
+                                      size="small"
+                                      variant="text"
+                                      startIcon={<Edit sx={{ fontSize: 14 }} />}
+                                      onClick={() => openVendorModal(row.id, sub.type, sub.assigned_vendor_id)}
+                                      sx={{
+                                        textTransform: 'none',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        color: '#2e7d32',
+                                        borderRadius: '6px',
+                                        py: 0.2,
+                                        px: 0.8,
+                                        minWidth: 0,
+                                        maxWidth: '150px',
+                                        justifyContent: 'flex-start',
+                                        '& .MuiButton-startIcon': { mr: 0.5 },
+                                        '&:hover': { backgroundColor: '#e8f5e9' },
+                                      }}
+                                      title={`Change vendor from ${sub.assigned_vendor_name}`}
+                                    >
+                                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {sub.assigned_vendor_name}
+                                      </Box>
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => openVendorModal(row.id, sub.type)}
                                           sx={{
                                             textTransform: 'none',
                                             fontSize: '11px',
@@ -850,11 +863,11 @@ const CasesPage = () => {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 700, fontSize: '18px', pb: 1 }}>
-          Assign Vendor
+          {selectedVendorId ? 'Change Vendor' : 'Assign Vendor'}
         </DialogTitle>
         <DialogContent>
           <Typography sx={{ fontSize: '13px', color: '#666', mb: 2 }}>
-            Select a vendor to assign to this check.
+            Select a vendor for this check, or clear the assignment to remove it from the current vendor.
           </Typography>
           <FormControl fullWidth size="small">
             <Select
@@ -863,7 +876,7 @@ const CasesPage = () => {
               displayEmpty
               sx={{ borderRadius: '8px' }}
             >
-              <MenuItem value="" disabled>Select a vendor</MenuItem>
+              <MenuItem value="">Unassigned</MenuItem>
               {vendorList.map((v) => (
                 <MenuItem key={v.id} value={v.id}>
                   {v.company_name}
@@ -881,7 +894,7 @@ const CasesPage = () => {
           </Button>
           <Button
             variant="contained"
-            disabled={!selectedVendorId || vendorAssigning}
+            disabled={vendorAssigning}
             onClick={handleAssignVendorToCheck}
             sx={{
               textTransform: 'none',
@@ -891,7 +904,7 @@ const CasesPage = () => {
               '&:hover': { backgroundColor: '#5568d3' },
             }}
           >
-            {vendorAssigning ? <CircularProgress size={20} color="inherit" /> : 'Assign'}
+            {vendorAssigning ? <CircularProgress size={20} color="inherit" /> : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>

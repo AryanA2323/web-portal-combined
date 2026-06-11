@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
-import { Case, CasesResponse } from '@/types';
+import { Case } from '@/types';
 import apiService from '@/services/api';
 
 interface CasesState {
@@ -22,7 +22,6 @@ export const fetchCases = createAsyncThunk(
   'cases/fetchCases',
   async (_arg: undefined, { rejectWithValue }) => {
     try {
-      // Fetch vendor assigned checks (sub-check level assignments)
       const response = await apiService.getVendorAssignedChecks();
       return response;
     } catch (error: any) {
