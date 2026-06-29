@@ -1,6 +1,6 @@
 import axios, { create, AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL, API_TIMEOUT, STORAGE_KEYS } from '@/config/constants';
+import storage from '@/services/storage';
 import { ApiError, AuthResponse, VendorNotification, VendorNotificationsResponse } from '@/types';
 
 class ApiService {
@@ -23,7 +23,7 @@ class ApiService {
     this.api.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
         try {
-          const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+          const token = await storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
           if (token && token.length > 0) {
             config.headers.Authorization = `Bearer ${token}`;
           }
@@ -40,7 +40,9 @@ class ApiService {
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-        if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/logout')) {
+        const isAuthEndpoint = originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/logout');
+
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
           originalRequest._retry = true;
 
           if (this.isRefreshing) {
@@ -57,12 +59,12 @@ class ApiService {
           this.isRefreshing = true;
 
           try {
-            const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
+            const refreshToken = await storage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
             if (!refreshToken) {
               await Promise.all([
-                SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
-                SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
-                SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA).catch(() => {})
+                storage.deleteItem(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
+                storage.deleteItem(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
+                storage.deleteItem(STORAGE_KEYS.USER_DATA).catch(() => {})
               ]);
               this.isRefreshing = false;
               this.processQueue(error, null);
@@ -76,7 +78,7 @@ class ApiService {
             );
 
             const { access } = response.data;
-            await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, access);
+            await storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access);
 
             this.api.defaults.headers.common.Authorization = `Bearer ${access}`;
             originalRequest.headers.Authorization = `Bearer ${access}`;
@@ -86,9 +88,9 @@ class ApiService {
           } catch (refreshError) {
             this.processQueue(refreshError as AxiosError, null);
             await Promise.all([
-              SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
-              SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
-              SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA).catch(() => {})
+              storage.deleteItem(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
+              storage.deleteItem(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
+              storage.deleteItem(STORAGE_KEYS.USER_DATA).catch(() => {})
             ]);
             return Promise.reject(error);
           } finally {
@@ -150,7 +152,7 @@ class ApiService {
         };
       }
 
-      await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+      await storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
 
       const vendorUser = {
         id: user.id,
@@ -177,9 +179,9 @@ class ApiService {
     } catch {
     } finally {
       await Promise.all([
-        SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
-        SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
-        SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA).catch(() => {})
+        storage.deleteItem(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
+        storage.deleteItem(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
+        storage.deleteItem(STORAGE_KEYS.USER_DATA).catch(() => {})
       ]);
     }
   }
@@ -368,20 +370,20 @@ class ApiService {
 
   // Utility methods
   async setTokens(accessToken: string, refreshToken: string | null): Promise<void> {
-    await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+    await storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
     if (refreshToken) {
-      await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+      await storage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
     }
   }
 
   async clearTokens(): Promise<void> {
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
+    await storage.deleteItem(STORAGE_KEYS.ACCESS_TOKEN);
+    await storage.deleteItem(STORAGE_KEYS.REFRESH_TOKEN);
   }
 
   async getAccessToken(): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+      return await storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     } catch (error) {
       console.error('Error retrieving access token:', error);
       return null;

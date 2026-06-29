@@ -32,7 +32,11 @@ class AIBriefService:
     api_url = "https://api.groq.com/openai/v1/chat/completions"
 
     def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or os.environ.get("GROK_API_KEY", "").strip()
+        self.api_key = (
+            api_key
+            or os.environ.get("GROQ_API_KEY", "").strip()
+            or os.environ.get("GROK_API_KEY", "").strip()
+        )
 
     def extract_pdf_text(self, pdf_bytes: bytes) -> str:
         """Extract text from a PDF using PyMuPDF. Returns empty string if none found."""
@@ -201,7 +205,7 @@ class AIBriefService:
     ) -> Dict[str, str]:
         """Generate a structured AI brief report from stored vendor statements."""
         if not self.api_key:
-            raise AIBriefGenerationError("GROK_API_KEY is not configured on the backend.")
+            raise AIBriefGenerationError("GROQ_API_KEY is not configured on the backend.")
 
         normalized_text = (statement_text or "").strip()
         if not normalized_text:
@@ -292,7 +296,7 @@ class AIBriefService:
     def generate_report(self, case_context: Dict[str, Any], pdf_bytes: bytes) -> Dict[str, str]:
         """Generate a structured AI brief report from case context and PDF."""
         if not self.api_key:
-            raise AIBriefGenerationError("GROK_API_KEY is not configured on the backend.")
+            raise AIBriefGenerationError("GROQ_API_KEY is not configured on the backend.")
 
         # Try text extraction first (fast path)
         statement_text = self.extract_pdf_text(pdf_bytes)

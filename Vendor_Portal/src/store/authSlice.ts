@@ -1,7 +1,7 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { VendorUser, AuthResponse } from '@/types';
 import apiService from '@/services/api';
-import * as SecureStore from 'expo-secure-store';
+import storage from '@/services/storage';
 import { STORAGE_KEYS } from '@/config/constants';
 
 interface AuthState {
@@ -48,9 +48,9 @@ export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
 
 export const restoreToken = createAsyncThunk('auth/restoreToken', async (_, { rejectWithValue }) => {
   try {
-    const accessToken = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-    const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
-    const userDataJson = await SecureStore.getItemAsync(STORAGE_KEYS.USER_DATA);
+    const accessToken = await storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    const refreshToken = await storage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+    const userDataJson = await storage.getItem(STORAGE_KEYS.USER_DATA);
     
     if (accessToken && userDataJson) {
       return {
@@ -88,7 +88,7 @@ const authSlice = createSlice({
         state.refreshToken = action.payload.refresh;
         state.error = null;
         // Store user data
-        SecureStore.setItemAsync(STORAGE_KEYS.USER_DATA, JSON.stringify(action.payload.user)).catch(() => {});
+        storage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(action.payload.user)).catch(() => {});
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -108,7 +108,7 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.error = null;
         state.isLoading = false;
-        SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA).catch(() => {});
+        storage.deleteItem(STORAGE_KEYS.USER_DATA).catch(() => {});
       })
       .addCase(logoutUser.rejected, (state) => {
         state.user = null;
