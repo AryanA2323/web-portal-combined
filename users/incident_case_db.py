@@ -48,6 +48,23 @@ def _get_cursor():
     return connections[DB_ALIAS].cursor()
 
 
+def _arcgis_query(query: str):
+    """
+    Single ArcGIS API call via geopy. Returns (lat, lng) or (None, None).
+    """
+    if not query or not query.strip():
+        return None, None
+    try:
+        from geopy.geocoders import ArcGIS
+        geolocator = ArcGIS(timeout=10)
+        location = geolocator.geocode(query.strip())
+        if location:
+            return location.latitude, location.longitude
+    except Exception as e:
+        logger.debug(f'[geocode] ArcGIS call failed for "{query[:60]}": {e}')
+    return None, None
+
+
 def _nominatim_query(query: str):
     """
     Single Nominatim API call. Returns (lat, lng) or (None, None).
@@ -75,31 +92,25 @@ def _nominatim_query(query: str):
 
 def _geocode(address: str):
     """
-    Convert an address string to (latitude, longitude) using the
-    OpenStreetMap Nominatim API (free, no key required).
+    Convert an address string to (latitude, longitude) using ArcGIS and
+    OpenStreetMap Nominatim API.
 
-    Uses a progressive fallback strategy to handle verbose Indian addresses
-    that contain noise words like "near X", "opp. X", "Octroi Naka" etc.
-    which Nominatim cannot resolve directly.
-
-    Fallback order:
-      1. Full address as given
-      2. Address with Indian noise phrases stripped
-      3. Last 4 comma-separated parts
-      4. Last 3 comma-separated parts
-      5. 6-digit PIN code if present (highly accurate for India)
-      6. Last 2 comma-separated parts
-
-    Returns (None, None) only if ALL strategies fail, so it never
-    blocks the database save.
+    ArcGIS is used as the primary high-accuracy geocoder. Nominatim is used as
+    a fallback with progressive simplification to handle verbose Indian addresses.
     """
     if not address or not address.strip():
         return None, None
 
-    # --- Strategy 1: full address ----------------------------------------------
+    # --- Strategy 0: ArcGIS High-Accuracy --------------------------------------
+    lat, lng = _arcgis_query(address)
+    if lat is not None:
+        logger.info(f'[geocode] Strategy-ArcGIS success: ({lat},{lng}) for "{address[:60]}"')
+        return lat, lng
+
+    # --- Strategy 1: Nominatim full address ------------------------------------
     lat, lng = _nominatim_query(address)
     if lat is not None:
-        logger.info(f'[geocode] Strategy-1 success: ({lat},{lng}) for "{address[:60]}"')
+        logger.info(f'[geocode] Strategy-1 (Nominatim) success: ({lat},{lng}) for "{address[:60]}"')
         return lat, lng
 
     # --- Strategy 2: strip Indian address noise --------------------------------
@@ -189,7 +200,9 @@ def insert_case(claim_number, client_name, category,
                 investigation_report_status='Open',
                 full_case_status='WIP',
                 scope_of_work='',
-                case_number=''):
+                case_number='',
+                policy_document='',
+                petition_document=''):
     """
     Insert a row into incident_case_db.cases.
     Lets Postgres auto-generate the id.
@@ -214,14 +227,14 @@ def insert_case(claim_number, client_name, category,
                      completion_date, completion_month,
                      case_due_date, tat_days, sla, case_type,
                      investigation_report_status, full_case_status,
-                     scope_of_work, case_number, created_at, updated_at)
+                     scope_of_work, case_number, policy_document, petition_document, created_at, updated_at)
                 VALUES
                     (%s, %s, %s,
                      %s, %s,
                      %s, %s,
                      %s, %s, %s, %s,
                      %s, %s,
-                     %s, %s, NOW(), NOW())
+                     %s, %s, %s, %s, NOW(), NOW())
                 RETURNING id
             """, [
                 claim_number, client_name or '', category or '',
@@ -230,6 +243,7 @@ def insert_case(claim_number, client_name, category,
                 case_due_date, tat_days, sla_val, case_type,
                 investigation_report_status, full_case_status,
                 scope_of_work or '', case_number or '',
+                policy_document or '', petition_document or '',
             ])
             new_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted case id={new_id} claim={claim_number}")
@@ -248,8 +262,8 @@ def insert_claimant_check(case_id,
                           claimant_address='', claimant_income=None,
                           dependants=None, case_documents=None,
                           vendor_documents=None,
-                          check_status='PENDING',
-                          statement='', observation=''):
+                          check_status='Not Initiated',
+                          statement='', triggers=''):
     """Insert into incident_case_db.claimant_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
     dependants: list of dicts [{dependent_name, dependent_contact, dependent_address, relationship, age}, ...]
@@ -265,7 +279,7 @@ def insert_claimant_check(case_id,
                     (case_id, claimant_name, claimant_contact,
                      claimant_address, claimant_income,
                      dependants, case_documents, vendor_documents,
-                     check_status, statement, observation,
+                     check_status, statement, triggers,
                      claimant_lat, claimant_lng,
                      created_at, updated_at)
                 VALUES
@@ -281,7 +295,7 @@ def insert_claimant_check(case_id,
                 claimant_address, claimant_income,
                 json.dumps(dependants or []), json.dumps(case_documents or []),
                 json.dumps(vendor_documents or []),
-                check_status, statement, observation,
+                check_status, statement, triggers,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted claimant_check id={row_id} for case={case_id}")
@@ -303,8 +317,8 @@ def insert_insured_check(case_id,
                          policy_number='', policy_period='',
                          rc='', permit='',
                          case_documents=None, vendor_documents=None,
-                         check_status='PENDING',
-                         statement='', observation=''):
+                         check_status='Not Initiated',
+                         statement='', triggers=''):
     """Insert into incident_case_db.insured_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
     case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
@@ -321,7 +335,7 @@ def insert_insured_check(case_id,
                      policy_number, policy_period,
                      rc, permit,
                      case_documents, vendor_documents,
-                     check_status, statement, observation,
+                     check_status, statement, triggers,
                      insured_lat, insured_lng,
                      created_at, updated_at)
                 VALUES
@@ -340,7 +354,7 @@ def insert_insured_check(case_id,
                 policy_number, policy_period,
                 rc, permit,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
-                check_status, statement, observation,
+                check_status, statement, triggers,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted insured_check id={row_id} for case={case_id}")
@@ -361,8 +375,8 @@ def insert_driver_check(case_id,
                         driver_address='',
                         dl='', permit='', occupation='',
                         case_documents=None, vendor_documents=None,
-                        check_status='PENDING',
-                        statement='', observation=''):
+                        check_status='Not Initiated',
+                        statement='', triggers=''):
     """Insert into incident_case_db.driver_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
     case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
@@ -378,7 +392,7 @@ def insert_driver_check(case_id,
                      driver_address,
                      dl, permit, occupation,
                      case_documents, vendor_documents,
-                     check_status, statement, observation,
+                     check_status, statement, triggers,
                      driver_lat, driver_lng,
                      created_at, updated_at)
                 VALUES
@@ -395,7 +409,7 @@ def insert_driver_check(case_id,
                 driver_address,
                 dl, permit, occupation,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
-                check_status, statement, observation,
+                check_status, statement, triggers,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted driver_check id={row_id} for case={case_id}")
@@ -416,8 +430,8 @@ def insert_spot_check(case_id,
                       district='', fir_number='',
                       city='', police_station='', accident_brief='',
                       case_documents=None, vendor_documents=None,
-                      check_status='PENDING',
-                      observations=''):
+                      check_status='Not Initiated',
+                      triggers=''):
     """Insert into incident_case_db.spot_checks.
     Note: spot_checks has 'observations' (plural) and no 'statement' column.
     Geocodes the accident location using place_of_accident + district in background thread.
@@ -434,7 +448,7 @@ def insert_spot_check(case_id,
                      district, fir_number,
                      city, police_station, accident_brief,
                      case_documents, vendor_documents,
-                     check_status, observations,
+                     check_status, triggers,
                      spot_lat, spot_lng,
                      created_at, updated_at)
                 VALUES
@@ -451,7 +465,7 @@ def insert_spot_check(case_id,
                 district, fir_number,
                 city, police_station, accident_brief,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
-                check_status, observations,
+                check_status, triggers,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted spot_check id={row_id} for case={case_id}")
@@ -473,8 +487,8 @@ def insert_chargesheet(case_id,
                        mv_act='', fir_delay_days=None,
                        bsn_section='', ipc='',
                        case_documents=None, vendor_documents=None,
-                       check_status='PENDING',
-                       statement='', observations=''):
+                       check_status='Not Initiated',
+                       statement='', triggers=''):
     """Insert into incident_case_db.chargesheets.
     Geocodes the city/court location using OpenStreetMap Nominatim.
     case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
@@ -490,7 +504,7 @@ def insert_chargesheet(case_id,
                      mv_act, fir_delay_days,
                      bsn_section, ipc,
                      case_documents, vendor_documents,
-                     check_status, statement, observations,
+                     check_status, statement, triggers,
                      chargesheet_lat, chargesheet_lng,
                      created_at, updated_at)
                 VALUES
@@ -507,7 +521,7 @@ def insert_chargesheet(case_id,
                 mv_act, fir_delay_days,
                 bsn_section, ipc,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
-                check_status, statement, observations,
+                check_status, statement, triggers,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted chargesheet id={row_id} for case={case_id}")
@@ -531,7 +545,7 @@ def insert_rti_check(case_id,
                      rc_checked=False, rc_number='',
                      remarks='',
                      case_documents=None, vendor_documents=None,
-                     check_status='PENDING'):
+                     check_status='Not Initiated'):
     """Insert into incident_case_db.rti_checks.
     Each field has a boolean toggle and an associated number/text value.
     """
@@ -589,7 +603,7 @@ def insert_rto_check(case_id,
                      rc_checked=False, rc_number='',
                      remarks='',
                      case_documents=None, vendor_documents=None,
-                     check_status='PENDING'):
+                     check_status='Not Initiated'):
     """Insert into incident_case_db.rto_checks.
     Geocodes the RTO office address in background thread.
     """

@@ -254,6 +254,88 @@ class ApiService {
     }
   }
 
+  async getVendorAssignedChecks(): Promise<any> {
+    try {
+      const response = await this.api.get('/vendor-assigned-checks');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async getVendorCheckDetail(caseId: number, checkType: string): Promise<any> {
+    try {
+      const response = await this.api.get(`/vendor-check-detail/${caseId}/${checkType}`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async uploadCheckEvidence(
+    caseId: number,
+    checkType: string,
+    photos: { uri: string; name: string }[]
+  ): Promise<any> {
+    try {
+      const formData = new FormData();
+      for (const photo of photos) {
+        const fileType = photo.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const file: any = {
+          uri: photo.uri,
+          name: photo.name,
+          type: `image/${fileType === 'jpg' ? 'jpeg' : fileType}`,
+        };
+        formData.append('photos', file);
+        formData.append('latitudes', photo.lat || '');
+        formData.append('longitudes', photo.long || '');
+      }
+      const response = await this.api.post(
+        `/vendor-check-upload/${caseId}/${checkType}`,
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 60000,
+        }
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async applyStatementText(caseId: number, checkType: string, text: string, transcriptMr?: string): Promise<any> {
+    try {
+      const response = await this.api.post(`/vendor-check-statement/${caseId}/${checkType}`, {
+        text,
+        transcript_mr: transcriptMr,
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async deleteCheckEvidence(caseId: number, checkType: string, filename: string): Promise<any> {
+    try {
+      const response = await this.api.delete(`/vendor-check-evidence/${caseId}/${checkType}`, {
+        params: { filename },
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async markCheckCompleted(caseId: number, checkType: string): Promise<any> {
+    try {
+      const response = await this.api.post(`/vendor-check-complete/${caseId}/${checkType}`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
   async getCases(): Promise<any> {
     try {
       // This is for admin/super admin only

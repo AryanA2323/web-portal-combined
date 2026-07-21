@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -8,7 +9,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   Animated,
-  AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,8 +18,6 @@ import { fetchCases, clearAllCases } from '@/store/casesSlice';
 import { logoutUser } from '@/store/authSlice';
 import { theme } from '@/config/theme';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
-import apiService from '@/services/api';
 
 const checkStatusColors: Record<string, { solid: string; soft: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
   WIP: { solid: '#D9822B', soft: '#FFF3E3', icon: 'progress-clock' },
@@ -49,64 +47,21 @@ const typeToSlug: Record<string, string> = {
   'RTO Check': 'rto',
 };
 
-export default function DashboardScreen() {
+export default function CompletedScreen() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const introAnim = useRef(new Animated.Value(0)).current;
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { cases: checks, isLoading } = useSelector((state: RootState) => state.cases);
-  const [filterType, setFilterType] = useState<'all' | 'wip' | 'reassigned'>('all');
-  
-  const activeChecks = useMemo(() => {
-    return checks.filter((c: any) => {
-      if (c.check_status === 'Completed' || c.check_status === 'Verified') return false;
-      if (filterType === 'wip' && c.check_status !== 'WIP') return false;
-      if (filterType === 'reassigned' && c.check_status !== 'Reassigned') return false;
-      return true;
-    });
-  }, [checks, filterType]);
-  
-  const [unreadCount, setUnreadCount] = useState(0);
-
+  const activeChecks = useMemo(() => checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified'), [checks]);
   // Refresh data every time the screen comes into focus
   useFocusEffect(
     useCallback(() => {
       if (isAuthenticated && user) {
         dispatch(fetchCases());
-        fetchUnreadCount();
       }
     }, [dispatch, isAuthenticated, user])
   );
-
-  // Poll for new notifications every 30 seconds
-  useEffect(() => {
-    if (!isAuthenticated || !user) return;
-    const interval = setInterval(() => {
-      dispatch(fetchCases());
-      fetchUnreadCount();
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [dispatch, isAuthenticated, user]);
-
-  // Also refresh when app comes back to foreground
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && isAuthenticated && user) {
-        dispatch(fetchCases());
-        fetchUnreadCount();
-      }
-    });
-    return () => sub.remove();
-  }, [dispatch, isAuthenticated, user]);
-
-  const fetchUnreadCount = async () => {
-    try {
-      const res = await apiService.getVendorNotifications();
-      setUnreadCount(res.unread_count || 0);
-    } catch (e) {
-      // silently ignore
-    }
-  };
 
   useEffect(() => {
     Animated.timing(introAnim, {
@@ -120,9 +75,8 @@ export default function DashboardScreen() {
     const totalChecks = checks.length;
     const wipChecks = checks.filter((c: any) => c.check_status === 'WIP').length;
     const completedChecks = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified').length;
-    const reassignedChecks = checks.filter((c: any) => c.check_status === 'Reassigned').length;
     const notInitiated = checks.filter((c: any) => c.check_status === 'Not Initiated').length;
-    return { totalChecks, wipChecks, completedChecks, reassignedChecks, notInitiated };
+    return { totalChecks, wipChecks, completedChecks, notInitiated };
   }, [checks]);
 
   if (!isAuthenticated || !user) {
@@ -141,7 +95,6 @@ export default function DashboardScreen() {
   const handleRefresh = () => {
     if (isAuthenticated && user) {
       dispatch(fetchCases());
-      fetchUnreadCount();
     }
   };
 
@@ -151,22 +104,20 @@ export default function DashboardScreen() {
     icon,
     color,
     tint,
-    onPress,
   }: {
     title: string;
     value: number;
     icon: keyof typeof MaterialCommunityIcons.glyphMap;
     color: string;
     tint: string;
-    onPress?: () => void;
   }) => (
-    <TouchableOpacity style={styles.statCard} onPress={onPress} activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}>
+    <View style={styles.statCard}>
       <View style={[styles.statIconWrap, { backgroundColor: tint }]}>
         <MaterialCommunityIcons name={icon} size={20} color={color} />
       </View>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statTitle}>{title}</Text>
-    </TouchableOpacity>
+    </View>
   );
 
   const CheckCard = ({ item }: { item: any }) => {
@@ -211,7 +162,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        <Text style={styles.tapHint}>Open check details, statements, and evidence</Text>
+        <Text style={styles.tapHint}>Open check details to review</Text>
       </TouchableOpacity>
     );
   };
@@ -235,27 +186,7 @@ export default function DashboardScreen() {
             },
           ]}
         >
-          <View style={styles.heroTopRow}>
-            <View style={styles.userBlock}>
-              <Text style={styles.welcomeText}>Welcome back</Text>
-              <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
-              <Text style={styles.userEmail} numberOfLines={1}>{user.email}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={() => router.push('/notifications')}
-              activeOpacity={0.85}
-            >
-              <MaterialCommunityIcons name="bell-outline" size={18} color="#FFFFFF" />
-              {unreadCount > 0 && (
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.userName}>Completed Cases</Text>
 
 
         </Animated.View>
@@ -266,30 +197,21 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={handleRefresh} tintColor={theme.colors.primary} />}
       >
-        <View style={styles.statsContainer}>
-          <StatCard title="Total" value={summary.totalChecks} icon="clipboard-text-outline" color={theme.colors.primary} tint={theme.colors.primarySoft} onPress={() => setFilterType('all')} />
-          <StatCard title="In Progress" value={summary.wipChecks} icon="progress-clock" color={theme.colors.warning} tint={theme.colors.warningSoft} onPress={() => setFilterType(filterType === 'wip' ? 'all' : 'wip')} />
-          <StatCard title="Reassigned" value={summary.reassignedChecks} icon="refresh" color={theme.colors.error} tint={theme.colors.errorSoft} onPress={() => setFilterType(filterType === 'reassigned' ? 'all' : 'reassigned')} />
-        </View>
+        
 
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>Assigned checks</Text>
-            <Text style={styles.sectionHint}>Tap a card to record statements or upload evidence.</Text>
-          </View>
-        </View>
+
 
         {isLoading && activeChecks.length === 0 ? (
           <View style={styles.stateCard}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.stateTitle}>Loading assigned checks</Text>
-            <Text style={styles.stateHint}>Your latest assignments will appear here shortly.</Text>
+            <Text style={styles.stateTitle}>Loading completed checks</Text>
+            <Text style={styles.stateHint}>Fetching your completed work.</Text>
           </View>
         ) : activeChecks.length === 0 ? (
           <View style={styles.stateCard}>
             <MaterialCommunityIcons name="clipboard-search-outline" size={42} color={theme.colors.textMuted} />
-            <Text style={styles.stateTitle}>No checks assigned yet</Text>
-            <Text style={styles.stateHint}>Once work is assigned by admin, it will show here automatically.</Text>
+            <Text style={styles.stateTitle}>No completed checks yet</Text>
+            <Text style={styles.stateHint}>When you complete assigned work, it will appear here.</Text>
           </View>
         ) : (
           activeChecks.map((item: any) => (
@@ -465,25 +387,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-  },
-  notifBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: 'bold',
   },
   typeBadgeText: {
     fontSize: 13,

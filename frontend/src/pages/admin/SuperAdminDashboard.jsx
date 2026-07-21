@@ -34,6 +34,7 @@ import {
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
 import superAdminService from '../../services/superAdminService';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 // Register ChartJS components
 ChartJS.register(
@@ -53,12 +54,12 @@ const SuperAdminDashboard = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboardData(false);
   }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (isAutoRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isAutoRefresh) setLoading(true);
       const data = await superAdminService.getSuperAdminDashboard();
       setDashboardData(data);
       setError(null);
@@ -69,6 +70,8 @@ const SuperAdminDashboard = () => {
       setLoading(false);
     }
   };
+
+  useAutoRefresh(fetchDashboardData);
 
   if (loading) {
     return (

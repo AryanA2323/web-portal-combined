@@ -318,7 +318,7 @@ def _collect_vendor_statements(case_id: int) -> List[dict]:
         ("claimant_checks", "statement", "Claimant Check"),
         ("insured_checks", "statement", "Insured Check"),
         ("driver_checks", "statement", "Driver Check"),
-        ("spot_checks", "observations", "Spot Check"),
+        ("spot_checks", "triggers", "Spot Check"),
         ("chargesheets", "statement", "Chargesheet"),
     )
 
@@ -885,7 +885,7 @@ def get_cases_incident_db(
                        cc.claimant_address AS location,
                        CAST(cc.claimant_income AS TEXT) AS key_info,
                        cc.statement,
-                       cc.observation AS observation,
+                       cc.triggers AS triggers,
                        cc.assigned_vendor_id,
                        v.company_name AS assigned_vendor_name
                 FROM claimant_checks cc
@@ -897,7 +897,7 @@ def get_cases_incident_db(
                 if cid in checks_by_case:
                     checks_by_case[cid].append({
                         "type": "Claimant Check",
-                        "check_status": r[1] or "WIP",
+                        "check_status": "Not Initiated" if not r[8] else (r[1] or "WIP"),
                         "name": r[2] or "—",
                         "contact": r[3] or "—",
                         "location": r[4] or "—",
@@ -918,7 +918,7 @@ def get_cases_incident_db(
                        ic.rc,
                        ic.permit,
                        ic.statement,
-                       ic.observation AS observation,
+                       ic.triggers AS triggers,
                        ic.assigned_vendor_id,
                        v.company_name AS assigned_vendor_name
                 FROM insured_checks ic
@@ -932,7 +932,7 @@ def get_cases_incident_db(
                     rc_permit = " | ".join(filter(None, [r[7] and f"RC:{r[7]}", r[8] and f"Permit:{r[8]}"])) or "—"
                     checks_by_case[cid].append({
                         "type": "Insured Check",
-                        "check_status": r[1] or "WIP",
+                        "check_status": "Not Initiated" if not r[11] else (r[1] or "WIP"),
                         "name": r[2] or "—",
                         "contact": r[3] or "—",
                         "location": r[4] or "—",
@@ -952,7 +952,7 @@ def get_cases_incident_db(
                        dc.permit,
                        dc.occupation,
                        dc.statement,
-                       dc.observation AS observation,
+                       dc.triggers AS triggers,
                        dc.assigned_vendor_id,
                        v.company_name AS assigned_vendor_name
                 FROM driver_checks dc
@@ -965,7 +965,7 @@ def get_cases_incident_db(
                     dl_info = " | ".join(filter(None, [r[5] and f"DL:{r[5]}", r[6] and f"Permit:{r[6]}", r[7] and f"Occ:{r[7]}"])) or "—"
                     checks_by_case[cid].append({
                         "type": "Driver Check",
-                        "check_status": r[1] or "WIP",
+                        "check_status": "Not Initiated" if not r[10] else (r[1] or "WIP"),
                         "name": r[2] or "—",
                         "contact": r[3] or "—",
                         "location": r[4] or "—",
@@ -984,7 +984,7 @@ def get_cases_incident_db(
                        sc.fir_number,
                        sc.time_of_accident,
                        sc.accident_brief,
-                       sc.observations,
+                       sc.triggers,
                        sc.assigned_vendor_id,
                        v.company_name AS assigned_vendor_name
                 FROM spot_checks sc
@@ -997,7 +997,7 @@ def get_cases_incident_db(
                     fir_time = " | ".join(filter(None, [r[5] and f"FIR:{r[5]}", r[6] and f"Time:{r[6]}"])) or "—"
                     checks_by_case[cid].append({
                         "type": "Spot Check",
-                        "check_status": r[1] or "WIP",
+                        "check_status": "Not Initiated" if not r[9] else (r[1] or "WIP"),
                         "name": r[2] or "—",
                         "contact": r[3] or "—",
                         "location": r[4] or "—",
@@ -1018,7 +1018,7 @@ def get_cases_incident_db(
                        cs.bsn_section,
                        cs.ipc,
                        cs.statement,
-                       cs.observations,
+                       cs.triggers,
                        cs.assigned_vendor_id,
                        v.company_name AS assigned_vendor_name
                 FROM chargesheets cs
@@ -1036,7 +1036,7 @@ def get_cases_incident_db(
                     ])) or "—"
                     checks_by_case[cid].append({
                         "type": "Chargesheet",
-                        "check_status": r[1] or "WIP",
+                        "check_status": "Not Initiated" if not r[11] else (r[1] or "WIP"),
                         "name": r[2] or "—",
                         "contact": f"FIR: {r[3]}" if r[3] else "—",
                         "location": "—",
@@ -1075,7 +1075,7 @@ def get_cases_incident_db(
                     key_info = " | ".join(items) or "—"
                     checks_by_case[cid].append({
                         "type": "RTI Check",
-                        "check_status": r[1] or "WIP",
+                        "check_status": "Not Initiated" if not r[11] else (r[1] or "WIP"),
                         "name": f"FIR: {r[2]}" if r[2] else "RTI",
                         "contact": "—",
                         "location": "—",
@@ -1113,7 +1113,7 @@ def get_cases_incident_db(
                     key_info = " | ".join(items) or "—"
                     checks_by_case[cid].append({
                         "type": "RTO Check",
-                        "check_status": r[1] or "WIP",
+                        "check_status": "Not Initiated" if not r[11] else (r[1] or "WIP"),
                         "name": r[2] or "RTO",
                         "contact": "—",
                         "location": r[3] or "—",
@@ -1424,8 +1424,24 @@ def delete_case_from_incident_db(request: HttpRequest, case_id: int):
         raise HttpError(403, "Admin access required")
 
     try:
+        from users.models import InsuranceCase, Report
         from users.incident_case_db import delete_case
+
+        case_number = None
+        with connections['default'].cursor() as cursor:
+            cursor.execute("SELECT case_number FROM cases WHERE id = %s", [case_id])
+            row = cursor.fetchone()
+            if row:
+                case_number = row[0]
+
         result = delete_case(case_id)
+        if case_number:
+            orm_cases = InsuranceCase.objects.filter(case_number=case_number)
+            deleted_reports, _ = Report.objects.filter(case__in=orm_cases).delete()
+            deleted_cases, _ = orm_cases.delete()
+            logger.info(
+                f"[API] Deleted {deleted_reports} report row(s) and {deleted_cases} ORM case row(s) for {case_number}"
+            )
         logger.info(f"[API] Case {case_id} deleted by user {request.user.username}")
         return result
     except ValueError as exc:
@@ -1490,6 +1506,42 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
                     if hasattr(v, 'isoformat'):
                         check_data[k] = v.isoformat()
 
+                # Normalize evidence photos
+                import json as _json
+                evidence_raw = check_data.get('vendor_evidence') or check_data.get('evidence')
+                evidence_photos = []
+                if evidence_raw:
+                    if isinstance(evidence_raw, str):
+                        try:
+                            evidence_photos = _json.loads(evidence_raw)
+                        except Exception:
+                            evidence_photos = []
+                    elif isinstance(evidence_raw, list):
+                        evidence_photos = evidence_raw
+
+                normalized_photos = []
+                for p in evidence_photos:
+                    if not p:
+                        continue
+                    enriched = _enrich_evidence_metadata(request, p)
+                    if not enriched:
+                        continue
+                    if 'preview_url' in enriched:
+                        enriched['url'] = enriched['preview_url']
+                    if enriched.get('url'):
+                        normalized_photos.append(enriched)
+                check_data['evidence_photos'] = normalized_photos
+
+                # Statement audio URL
+                sa = check_data.get('statement_audio')
+                if sa:
+                    if not sa.startswith('http'):
+                        if not sa.startswith('/'):
+                            sa = '/' + sa
+                        check_data['statement_audio_url'] = request.build_absolute_uri(sa)
+                    else:
+                        check_data['statement_audio_url'] = sa
+
             return {"case": case_data, "check": check_data, "check_type": check_type.lower()}
 
     except HttpError:
@@ -1530,31 +1582,31 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
         'claimant_checks': {
             'claimant_name', 'claimant_contact', 'claimant_address',
             'claimant_income', 'dependants',
-            'check_status', 'statement', 'observation',
+            'check_status', 'statement', 'triggers',
             'case_documents', 'vendor_documents',
         },
         'insured_checks': {
             'insured_name', 'insured_contact', 'insured_address',
             'policy_number', 'policy_period', 'rc', 'permit',
-            'check_status', 'statement', 'observation',
+            'check_status', 'statement', 'triggers',
             'case_documents', 'vendor_documents',
         },
         'driver_checks': {
             'driver_name', 'driver_contact', 'driver_address',
             'dl', 'permit', 'occupation',
-            'check_status', 'statement', 'observation',
+            'check_status', 'statement', 'triggers',
             'case_documents', 'vendor_documents',
         },
         'spot_checks': {
             'time_of_accident', 'place_of_accident', 'district',
             'fir_number', 'city', 'police_station', 'accident_brief',
-            'check_status', 'observations',
+            'check_status', 'triggers',
             'case_documents', 'vendor_documents',
         },
         'chargesheets': {
             'fir_number', 'city', 'court_name', 'mv_act', 'fir_delay_days',
             'bsn_section', 'ipc',
-            'check_status', 'statement', 'observations',
+            'check_status', 'statement', 'triggers',
             'case_documents', 'vendor_documents',
         },
         'rti_checks': {
@@ -1734,9 +1786,10 @@ def assign_vendor_to_check(request: HttpRequest, case_id: int, check_type: str):
                 vendor_name = None
 
             # Update the check table
+            new_status = 'WIP' if vendor_id else 'Not Initiated'
             cursor.execute(
-                f"UPDATE {table} SET assigned_vendor_id = %s, updated_at = NOW() WHERE case_id = %s",
-                [vendor_id if vendor_id else None, case_id]
+                f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
+                [vendor_id if vendor_id else None, new_status, case_id]
             )
 
             cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
@@ -1767,6 +1820,55 @@ def assign_vendor_to_check(request: HttpRequest, case_id: int, check_type: str):
         logger.error(f"assign_vendor_to_check failed for case={case_id} type={check_type}: {exc}")
         raise HttpError(500, str(exc))
 
+from ninja import File, UploadedFile
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+import os
+
+@router.post('/{case_id}/upload', tags=["Cases"], summary="Upload Case Documents")
+def upload_case_documents(
+    request: HttpRequest,
+    case_id: int,
+    policy: UploadedFile = File(None),
+    petition: UploadedFile = File(None)
+):
+    """Upload documents directly to the incident_case_db."""
+    if not is_admin_or_super_admin(request.user):
+        return 403, {"error": "Admin access required"}
+        
+    try:
+        from django.db import connections
+        updates = []
+        params = []
+        
+        if policy:
+            file_extension = os.path.splitext(policy.name)[1]
+            file_path = f'case_documents/{case_id}/policy_{policy.name}'
+            saved_path = default_storage.save(file_path, ContentFile(policy.read()))
+            updates.append("policy_document = %s")
+            params.append(default_storage.url(saved_path))
+            
+        if petition:
+            file_extension = os.path.splitext(petition.name)[1]
+            file_path = f'case_documents/{case_id}/petition_{petition.name}'
+            saved_path = default_storage.save(file_path, ContentFile(petition.read()))
+            updates.append("petition_document = %s")
+            params.append(default_storage.url(saved_path))
+            
+        if updates:
+            params.append(case_id)
+            with connections['default'].cursor() as cursor:
+                cursor.execute(
+                    f"UPDATE cases SET {', '.join(updates)} WHERE id = %s",
+                    params
+                )
+                
+        return {"status": "success", "message": "Documents uploaded"}
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to upload case documents: {e}")
+        return 500, {"error": str(e)}
 
 @router.get(
     "/cases/{case_id}",
@@ -1937,6 +2039,8 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
             full_case_status=payload.full_case_status,
             scope_of_work=payload.scope_of_work,
             case_number=case_number,
+            policy_document='',
+            petition_document=''
         )
         logger.info(f"[incident_case_db] case inserted id={incident_case_db_id} claim={payload.claim_number}")
 
@@ -2010,6 +2114,7 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
         
         return 200, {
             "id": orm_case_id or incident_case_db_id,
+            "insurance_case_id": orm_case_id,
             "case_number": case_number,
             "title": title,
             "message": "Case created successfully",
@@ -2055,6 +2160,8 @@ def get_dashboard_stats(request: HttpRequest):
                 """
                 SELECT COUNT(*)
                 FROM reports r
+                JOIN insurance_case ic ON ic.id = r.case_id
+                JOIN cases c ON c.case_number = ic.case_number
                 INNER JOIN (
                     SELECT case_id, MAX(id) AS latest_id
                     FROM reports
@@ -2342,6 +2449,33 @@ def get_audit_logs(
                     f"Case {case_number} created",
                     case_number,
                     "Cases",
+                )
+
+            # User creation events
+            cursor.execute(
+                """
+                SELECT
+                    username,
+                    email,
+                    role,
+                    sub_role,
+                    date_joined
+                FROM users_customuser
+                WHERE date_joined IS NOT NULL
+                ORDER BY date_joined DESC
+                LIMIT %s
+                """,
+                [safe_limit],
+            )
+            for username, email, role, sub_role, date_joined in cursor.fetchall():
+                role_label = sub_role or role or "USER"
+                _add_event(
+                    date_joined,
+                    "USER_CREATED",
+                    "Super Admin/System",
+                    f"User '{username or email}' created with role {role_label}",
+                    "",
+                    "User Management",
                 )
 
             # Vendor assignment events from check tables
@@ -2879,7 +3013,24 @@ def delete_client(request: HttpRequest, client_id: int):
 )
 def list_vendors_for_cases(request):
     """Get list of all active vendors."""
-    from users.models import Vendor
+    from users.models import CustomUser, Vendor
+
+    # Backfill vendor profiles for vendor users created through generic user
+    # management before profile sync existed.
+    vendor_users_without_profile = CustomUser.objects.filter(
+        role=CustomUser.Role.VENDOR,
+        is_active=True,
+        vendor_profile__isnull=True,
+    )
+    for user in vendor_users_without_profile:
+        Vendor.objects.get_or_create(
+            user=user,
+            defaults={
+                'company_name': f"{user.first_name} {user.last_name}".strip() or user.username,
+                'contact_email': user.email,
+                'is_active': True,
+            },
+        )
     
     vendors = Vendor.objects.filter(is_active=True).order_by('company_name')
     
@@ -3074,10 +3225,11 @@ def reassign_check_vendor(
         case_row = cursor.fetchone()
         case_number = case_row[0] if case_row and case_row[0] else str(case_id)
 
-        # 6. Update assigned_vendor_id
+        # 6. Update assigned_vendor_id and check_status
+        new_status = 'WIP' if new_vendor_id else 'Not Initiated'
         cursor.execute(
-            f"UPDATE {table} SET assigned_vendor_id = %s, updated_at = NOW() WHERE case_id = %s",
-            [new_vendor_id, case_id],
+            f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
+            [new_vendor_id, new_status, case_id],
         )
 
     # 7. Fire-and-forget notifications (errors are swallowed inside notify_reassignment)
@@ -3098,3 +3250,62 @@ def reassign_check_vendor(
         "new_vendor_id": new_vendor_id,
         "message": "Vendor reassignment successful",
     }
+
+
+class AdminReviewCheckSchema(Schema):
+    action: str  # 'accept' or 'reject'
+    feedback: Optional[str] = None
+    new_vendor_id: Optional[int] = None
+
+@router.post(
+    "/cases/incident-db/{case_id}/check/{check_type}/review",
+    summary="Review a check (Accept/Reject)",
+)
+def review_check(request: HttpRequest, case_id: int, check_type: str, payload: AdminReviewCheckSchema):
+    from users.models import CustomUser
+    if request.user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
+        raise HttpError(403, "Only admins can review checks")
+    
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        raise HttpError(400, f"Invalid check type '{check_type}'. Valid: claimant, insured, driver, spot, chargesheet, rti, rto")
+        
+    action = payload.action.lower()
+    
+    try:
+        with connections['default'].cursor() as cursor:
+            if action == 'accept':
+                cursor.execute(f"UPDATE {table} SET check_status = 'Verified' WHERE case_id = %s", [case_id])
+                return {"success": True, "message": "Check accepted"}
+                
+            elif action == 'reject':
+                base_feedback = payload.feedback or ''
+                admin_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                feedback = f"{base_feedback} (Rejected by {admin_name})" if base_feedback else f"Rejected by {admin_name}"
+                new_vendor_id = payload.new_vendor_id
+                
+                update_sql = f"""
+                    UPDATE {table} 
+                    SET check_status = 'Reassigned', 
+                        admin_feedback = %s,
+                        is_reassigned = TRUE
+                """
+                params = [feedback]
+                
+                if new_vendor_id:
+                    update_sql += ", assigned_vendor_id = %s"
+                    params.append(new_vendor_id)
+                    
+                update_sql += " WHERE case_id = %s"
+                params.append(case_id)
+                
+                cursor.execute(update_sql, params)
+                return {"success": True, "message": "Check rejected and reassigned"}
+            
+            else:
+                raise HttpError(400, "Invalid action. Must be 'accept' or 'reject'.")
+    except HttpError:
+        raise
+    except Exception as exc:
+        logger.error(f"review_check failed for case={case_id} type={check_type}: {exc}")
+        raise HttpError(500, str(exc))

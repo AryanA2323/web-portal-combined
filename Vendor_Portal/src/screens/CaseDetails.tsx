@@ -8,11 +8,12 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Image,
-  Alert,
   TextInput,
   Platform,
 } from 'react-native';
+import { showToast, showDialog } from '@/components/Toast';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +21,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/config/theme';
 import apiService from '@/services/api';
+import { useDispatch } from 'react-redux';
+import { markCheckAsCompleted } from '@/store/casesSlice';
 import { API_BASE_URL } from '@/config/constants';
 
 const PRIMARY_BLUE = theme.colors.primary;
@@ -71,7 +74,7 @@ const checkFieldLabels: Record<string, Record<string, string>> = {
     claimant_address: 'Address',
     claimant_income: 'Income',
     statement: 'Statement',
-    observation: 'Observation',
+    triggers: 'Triggers',
   },
   insured: {
     insured_name: 'Insured Name',
@@ -82,7 +85,7 @@ const checkFieldLabels: Record<string, Record<string, string>> = {
     rc: 'RC',
     permit: 'Permit',
     statement: 'Statement',
-    observation: 'Observation',
+    triggers: 'Triggers',
   },
   driver: {
     driver_name: 'Driver Name',
@@ -92,7 +95,7 @@ const checkFieldLabels: Record<string, Record<string, string>> = {
     permit: 'Permit',
     occupation: 'Occupation',
     statement: 'Statement',
-    observation: 'Observation',
+    triggers: 'Triggers',
   },
   spot: {
     place_of_accident: 'Place of Accident',
@@ -101,7 +104,7 @@ const checkFieldLabels: Record<string, Record<string, string>> = {
     fir_number: 'FIR Number',
     time_of_accident: 'Time of Accident',
     accident_brief: 'Accident Brief',
-    observations: 'Observations',
+    triggers: 'Triggers',
   },
   chargesheet: {
     court_name: 'Court Name',
@@ -111,7 +114,7 @@ const checkFieldLabels: Record<string, Record<string, string>> = {
     bsn_section: 'BSN Section',
     ipc: 'IPC',
     statement: 'Statement',
-    observations: 'Observations',
+    triggers: 'Triggers',
   },
 };
 
@@ -157,12 +160,17 @@ const getEvidencePhotoUri = (photo: any, apiHost: string): string => {
 
 export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const router = useRouter();
+  const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingPhotoName, setDeletingPhotoName] = useState<string | null>(null);
+  const isCompleted = data?.check?.check_status === 'Completed' || data?.check?.check_status === 'Verified';
+
+  const [pendingPhotos, setPendingPhotos] = useState<any[]>([]);
+  const [pendingStatements, setPendingStatements] = useState<any[]>([]);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -213,11 +221,11 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       if (isAssignmentLoadError(err)) {
         if (!assignmentAlertShownRef.current) {
           assignmentAlertShownRef.current = true;
-          Alert.alert(
-            'Check not assigned',
-            'This case is not assigned to you or has been removed from you.',
-            [{ text: 'OK' }]
-          );
+          showToast({
+            type: 'warning',
+            title: 'Check Not Assigned',
+            message: 'This case is not assigned to you or has been removed from you.',
+          });
         }
       } else {
         console.error('Failed to load check detail:', err);
@@ -244,11 +252,12 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Microphone permission is required to record statements. Please grant permission in your device settings.',
-          [{ text: 'OK' }]
-        );
+        showToast({
+          type: 'error',
+          title: 'Permission Required',
+          message: 'Microphone permission is required to record statements. Please grant permission in your device settings.',
+          duration: 4000,
+        });
         return false;
       }
       return true;
@@ -285,7 +294,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       }, 1000);
     } catch (err) {
       console.error('Failed to start recording:', err);
-      Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
+      showToast({ type: 'error', title: 'Recording Error', message: 'Failed to start recording. Please try again.' });
     }
   };
 
@@ -310,7 +319,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     } catch (err) {
       console.error('Failed to stop recording:', err);
       setIsRecording(false);
-      Alert.alert('Recording Error', 'Failed to stop recording.');
+      showToast({ type: 'error', title: 'Recording Error', message: 'Failed to stop recording.' });
     } finally {
       recordingRef.current = null;
     }
@@ -327,7 +336,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   const processRecording = async () => {
     if (!recordingUri) {
-      Alert.alert('No Recording', 'Please record a statement first.');
+      showToast({ type: 'warning', title: 'No Recording', message: 'Please record a statement first.' });
       return;
     }
 
@@ -349,21 +358,63 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         setShowPreview(true);
       }
     } catch (err: any) {
-      console.error('Failed to process recording:', err);
+      console.log('Failed to process recording:', err);
       const errorMsg = err.details?.error || err.message || 'Failed to process audio';
-      Alert.alert('Processing Failed', errorMsg);
+      showToast({ type: 'error', title: 'Processing Failed', message: errorMsg, duration: 4000 });
     } finally {
       setIsProcessing(false);
     }
   };
 
+  const submitAllEvidence = async () => {
+    if (pendingPhotos.length === 0 && pendingStatements.length === 0) return;
+    
+    setUploading(true);
+    let errorCount = 0;
+    
+    try {
+      if (pendingPhotos.length > 0) {
+        await apiService.uploadCheckEvidence(caseId, checkType, pendingPhotos);
+        setPendingPhotos([]);
+      }
+      
+      for (const statement of pendingStatements) {
+        await apiService.applyStatementText(caseId, checkType, statement.text, statement.transcriptMr);
+      }
+      setPendingStatements([]);
+      
+      await apiService.markCheckCompleted(caseId, checkType);
+      
+      dispatch(markCheckAsCompleted({ caseId, checkType }));
+      
+      showDialog({
+        type: 'success',
+        title: 'Evidence Submitted',
+        message: 'All pending evidence submitted successfully. Check marked as completed.',
+        actions: [{ text: 'Done', onPress: () => router.back() }],
+      });
+    } catch (err: any) {
+      console.log('Submit failed:', err);
+      const errorMsg = err.details?.error || err.message || 'Failed to upload evidence.';
+      const isLocationError = errorMsg.toLowerCase().includes('location') || errorMsg.toLowerCase().includes('mismatch');
+      showDialog({
+        type: 'error',
+        title: isLocationError ? 'Location Mismatch' : 'Upload Rejected',
+        message: isLocationError
+          ? 'The evidence photo you uploaded does not match the check location. Try uploading the photo from the correct location.'
+          : errorMsg,
+        actions: [{ text: 'OK' }],
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const applyStatement = async () => {
     if (!editedTranslation.trim()) {
-      Alert.alert('Empty Statement', 'Please enter a statement before applying.');
+      showToast({ type: 'warning', title: 'Empty Statement', message: 'Please enter a statement before applying.' });
       return;
     }
-
-    setIsApplying(true);
 
     const trimmedTitle = statementTitle.trim();
     const trimmedStatement = editedTranslation.trim();
@@ -371,38 +422,18 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       ? `${trimmedTitle} - ${trimmedStatement}`
       : trimmedStatement;
 
-    try {
-      const result = await apiService.applyStatementText(
-        caseId,
-        checkType,
-        finalStatement,
-        transcriptMr
-      );
+    setPendingStatements((prev) => [...prev, {
+      text: finalStatement,
+      transcriptMr: transcriptMr
+    }]);
 
-      if (result.success) {
-        const savedStatementIndex = result.statement_index || nextStatementIndex || statementCount + 1;
-        const totalAllowedStatements = result.max_statements_per_check || maxStatementsPerCheck;
-        Alert.alert(
-          'Statement Applied',
-          `Statement ${savedStatementIndex} of ${totalAllowedStatements} has been saved to the database.`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                discardRecording();
-                loadData();
-              },
-            },
-          ]
-        );
-      }
-    } catch (err: any) {
-      console.error('Failed to apply statement:', err);
-      const errorMsg = err.details?.error || err.message || 'Failed to save statement';
-      Alert.alert('Apply Failed', errorMsg);
-    } finally {
-      setIsApplying(false);
-    }
+    showToast({
+      type: 'success',
+      title: 'Statement Added',
+      message: 'Statement added to pending uploads. Click Submit Evidence to upload.',
+      onDismiss: () => discardRecording(),
+    });
+    discardRecording();
   };
 
   const formatDuration = (seconds: number): string => {
@@ -421,8 +452,18 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const pickAndUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need access to your photos to upload evidence.');
+      showToast({ type: 'error', title: 'Permission Denied', message: 'We need access to your photos to upload evidence.' });
       return;
+    }
+
+    const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+    let location = null;
+    if (locStatus === 'granted') {
+      try {
+        location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      } catch (e) {
+        console.warn('Could not get location', e);
+      }
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -433,35 +474,29 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
     if (result.canceled || !result.assets || result.assets.length === 0) return;
 
-    const photos = result.assets.map((asset, i) => ({
+    const newPhotos = result.assets.map((asset, i) => ({
       uri: asset.uri,
       name: asset.fileName || `evidence_${Date.now()}_${i}.jpg`,
+      lat: location?.coords?.latitude?.toString() || '',
+      long: location?.coords?.longitude?.toString() || '',
     }));
 
-    try {
-      setUploading(true);
-      const res = await apiService.uploadCheckEvidence(caseId, checkType, photos);
-      Alert.alert('Success', res.message || 'Evidence uploaded');
-      await loadData();
-    } catch (err: any) {
-      console.error('Upload failed:', err);
-      Alert.alert('Upload Failed', err.message || 'Failed to upload evidence');
-    } finally {
-      setUploading(false);
-    }
+    setPendingPhotos((prev) => [...prev, ...newPhotos]);
+    showToast({ type: 'success', title: 'Photos Added', message: 'Photos added to pending uploads.' });
   };
 
   const handleDeletePhoto = (photo: any) => {
     const photoName = getEvidencePhotoName(photo);
     if (!photoName) {
-      Alert.alert('Remove Failed', 'This photo could not be identified.');
+      showToast({ type: 'error', title: 'Remove Failed', message: 'This photo could not be identified.' });
       return;
     }
 
-    Alert.alert(
-      'Remove Photo',
-      'Do you want to remove this evidence photo?',
-      [
+    showDialog({
+      type: 'warning',
+      title: 'Remove Photo',
+      message: 'Do you want to remove this evidence photo?',
+      actions: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
@@ -473,20 +508,33 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
               await loadData();
             } catch (err: any) {
               console.error('Delete photo failed:', err);
-              Alert.alert('Remove Failed', err.message || 'Failed to remove evidence photo');
+              showToast({ type: 'error', title: 'Remove Failed', message: err.message || 'Failed to remove evidence photo' });
             } finally {
               setDeletingPhotoName(null);
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need camera access to take photos.');
+      showToast({ type: 'error', title: 'Permission Denied', message: 'We need camera access to take photos.' });
+      return;
+    }
+
+    const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+    let location = null;
+    if (locStatus === 'granted') {
+      try {
+        location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      } catch (e) {
+        console.warn('Could not get location', e);
+      }
+    } else {
+      showToast({ type: 'error', title: 'Location Required', message: 'Location permission is required to verify evidence location.' });
       return;
     }
 
@@ -496,22 +544,15 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
     if (result.canceled || !result.assets || result.assets.length === 0) return;
 
-    const photos = result.assets.map((asset, i) => ({
+    const newPhotos = result.assets.map((asset, i) => ({
       uri: asset.uri,
       name: asset.fileName || `camera_${Date.now()}_${i}.jpg`,
+      lat: location?.coords?.latitude?.toString() || '',
+      long: location?.coords?.longitude?.toString() || '',
     }));
 
-    try {
-      setUploading(true);
-      const res = await apiService.uploadCheckEvidence(caseId, checkType, photos);
-      Alert.alert('Success', res.message || 'Evidence uploaded');
-      await loadData();
-    } catch (err: any) {
-      console.error('Upload failed:', err);
-      Alert.alert('Upload Failed', err.message || 'Failed to upload evidence');
-    } finally {
-      setUploading(false);
-    }
+    setPendingPhotos((prev) => [...prev, ...newPhotos]);
+    showToast({ type: 'success', title: 'Photo Added', message: 'Photo added to pending uploads.' });
   };
 
   const DetailRow = ({ label, value }: { label: string; value: any }) => {
@@ -598,9 +639,9 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const maxStatementsPerCheck = Number.isFinite(checkInfo.max_statements_per_check)
     ? Number(checkInfo.max_statements_per_check)
     : 3;
-  const canAddStatement = typeof checkInfo.can_add_statement === 'boolean'
+  const canAddStatement = !isCompleted && (typeof checkInfo.can_add_statement === 'boolean'
     ? checkInfo.can_add_statement
-    : statementCount < maxStatementsPerCheck;
+    : statementCount < maxStatementsPerCheck);
   const nextStatementIndex = checkInfo.next_statement_index || (canAddStatement ? statementCount + 1 : null);
   const fieldLabels = checkFieldLabels[checkType] || {};
 
@@ -628,6 +669,17 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>
+        {checkInfo.is_reassigned && (
+          <View style={[styles.section, { backgroundColor: '#fff5f5', borderColor: '#feb2b2', borderWidth: 1 }]}>
+            <Text style={[styles.sectionEyebrow, { color: '#e53e3e' }]}>Attention Required</Text>
+            <Text style={[styles.sectionTitle, { color: '#c53030' }]}>This check was reassigned</Text>
+            <Text style={{ fontSize: 15, color: '#2d3748', marginTop: 8, lineHeight: 22 }}>
+              <Text style={{ fontWeight: 'bold' }}>Admin Feedback: </Text>
+              {checkInfo.admin_feedback || 'No feedback provided.'}
+            </Text>
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionEyebrow}>Case</Text>
           <Text style={styles.sectionTitle}>Case information</Text>
@@ -682,7 +734,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             </View>
           )}
 
-          {!canAddStatement && (
+          {!isCompleted && !canAddStatement && (
             <View style={styles.maxStatementBanner}>
               <Text style={styles.maxStatementBannerText}>
                 Maximum {maxStatementsPerCheck} statements have been stored for this check.
@@ -700,7 +752,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 >
                   <Text style={styles.recordButtonIcon}>🎤</Text>
                   <Text style={styles.recordButtonText}>
-                    Start Recording {nextStatementIndex ? `(${nextStatementIndex}/${maxStatementsPerCheck})` : ''}
+                    Start Recording
                   </Text>
                 </TouchableOpacity>
               )}
@@ -797,7 +849,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 <TouchableOpacity
                   style={[styles.applyButton, isApplying && styles.disabledButton]}
                   onPress={applyStatement}
-                  disabled={isApplying}
+                  disabled={isApplying || isCompleted}
                   activeOpacity={0.8}
                 >
                   {isApplying ? (
@@ -815,9 +867,11 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
         <View style={styles.section}>
           <Text style={styles.sectionEyebrow}>Evidence</Text>
-          <Text style={styles.sectionTitle}>Evidence photos ({evidencePhotos.length})</Text>
+          <Text style={styles.sectionTitle}>
+            Evidence photos ({evidencePhotos.length + pendingPhotos.length})
+          </Text>
 
-          {evidencePhotos.length === 0 ? (
+          {evidencePhotos.length === 0 && pendingPhotos.length === 0 ? (
             <Text style={styles.noEvidenceText}>No evidence uploaded yet</Text>
           ) : (
             <View style={styles.photosGrid}>
@@ -836,6 +890,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                         });
                       }}
                     />
+                    {!isCompleted && (
                     <TouchableOpacity
                       style={[
                         styles.removePhotoButton,
@@ -851,6 +906,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                         <Text style={styles.removePhotoButtonText}>×</Text>
                       )}
                     </TouchableOpacity>
+                    )}
                   </View>
                   <Text style={styles.photoName} numberOfLines={1}>
                     {getEvidencePhotoName(photo)}
@@ -860,11 +916,38 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                   </Text>
                 </View>
               ))}
+
+              {pendingPhotos.map((photo: any, idx: number) => (
+                <View key={`pending-${photo.name}-${idx}`} style={styles.photoCard}>
+                  <View style={styles.photoImageWrapper}>
+                    <Image
+                      source={{ uri: photo.uri }}
+                      style={styles.photoImage}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity
+                      style={styles.removePhotoButton}
+                      onPress={() => {
+                        setPendingPhotos((prev) => prev.filter((p) => p !== photo));
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.removePhotoButtonText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.photoName} numberOfLines={1}>
+                    {photo.name} (Pending)
+                  </Text>
+                  <Text style={styles.photoDate}>Just now</Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
 
-        <View style={styles.uploadSection}>
+        {!isCompleted && (
+<>
+<View style={styles.uploadSection}>
           <TouchableOpacity
             style={styles.uploadButton}
             onPress={pickAndUpload}
@@ -897,7 +980,45 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             )}
           </TouchableOpacity>
         </View>
-      </ScrollView>
+
+        {(pendingPhotos.length > 0 || pendingStatements.length > 0) && (
+          <View style={[styles.section, { marginTop: 16, borderColor: theme.colors.primary }]}>
+            <Text style={styles.sectionEyebrow}>Pending Uploads</Text>
+            <Text style={styles.sectionTitle}>Ready to Submit</Text>
+            
+            {pendingPhotos.length > 0 && (
+              <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 4 }}>
+                • {pendingPhotos.length} photo(s)
+              </Text>
+            )}
+            
+            {pendingStatements.length > 0 && (
+              <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 12 }}>
+                • {pendingStatements.length} statement(s)
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={[styles.uploadButton, { backgroundColor: PRIMARY_BLUE }]}
+              onPress={submitAllEvidence}
+              disabled={uploading}
+              activeOpacity={0.8}
+            >
+              {uploading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={styles.uploadButtonContent}>
+                  <MaterialCommunityIcons name="cloud-upload-outline" size={18} color="#FFFFFF" />
+                  <Text style={styles.uploadButtonText}>Submit Evidence</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+      </>
+)}
+</ScrollView>
     </SafeAreaView>
   );
 }

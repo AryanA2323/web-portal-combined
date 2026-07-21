@@ -154,6 +154,16 @@ class AIBriefService:
         if statements_info:
             sections.append("=== AVAILABLE STATEMENTS ===\n" + "\n".join(statements_info))
 
+        # Vendor Evidence
+        vendor_evidence = case_context.get('vendor_evidence') or []
+        if vendor_evidence:
+            evidence_info = []
+            for ev in vendor_evidence:
+                loc = ev.get('location_name') or 'Unknown Location'
+                ts = ev.get('captured_at') or ev.get('uploaded_at') or 'Unknown Time'
+                evidence_info.append(f"- Photo at {loc} taken on {ts}")
+            sections.append("=== VENDOR EVIDENCE ===\n" + "\n".join(evidence_info))
+
         return "\n\n".join(sections)
 
     _SYSTEM_INSTRUCTION = (
@@ -178,6 +188,8 @@ class AIBriefService:
         "VENDOR STATEMENTS\n"
         "[List all stored vendor statements in sequence exactly as provided, with source/check labels when available. "
         "If none are available, write 'Not provided in case data']\n\n"
+        "VENDOR EVIDENCE SUMMARY\n"
+        "[List the vendor evidence photos with their location and timestamp based on the case data provided. If none are available, write 'Not provided in case data']\n\n"
         "AI SUMMARY\n"
         "[Provide a concise summary in exactly 2-3 sentences that synthesizes:\n"
         "- Key findings from the vendor statements\n"

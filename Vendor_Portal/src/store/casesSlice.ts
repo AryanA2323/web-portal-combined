@@ -59,6 +59,13 @@ const casesSlice = createSlice({
       state.error = null;
       state.isLoading = false;
     },
+    markCheckAsCompleted: (state, action: PayloadAction<{ caseId: number; checkType: string }>) => {
+      state.cases = state.cases.map(c => 
+        c.case_id === action.payload.caseId && c.check_type === action.payload.checkType 
+          ? { ...c, check_status: 'Completed' } 
+          : c
+      );
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -109,5 +116,5 @@ const casesSlice = createSlice({
   },
 });
 
-export const { clearError, clearSelectedCase, clearAllCases } = casesSlice.actions;
+export const { clearError, clearSelectedCase, clearAllCases, markCheckAsCompleted } = casesSlice.actions;
 export default casesSlice.reducer;

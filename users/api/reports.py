@@ -409,13 +409,29 @@ def report_to_list_schema(report: Report) -> dict:
 
 def _latest_reports_per_case_queryset():
     """Return queryset with only the latest report for each case."""
+    active_case_numbers = _active_incident_case_numbers()
+    if not active_case_numbers:
+        return Report.objects.none()
+
     latest_report_ids = Report.objects.values('case_id').annotate(
         latest_id=Max('id')
     ).values('latest_id')
 
     return Report.objects.select_related('case', 'assigned_lawyer').filter(
-        id__in=Subquery(latest_report_ids)
+        id__in=Subquery(latest_report_ids),
+        case__case_number__in=active_case_numbers,
     )
+
+
+def _active_incident_case_numbers() -> List[str]:
+    """Case numbers currently present in the incident cases table."""
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("SELECT case_number FROM cases")
+            return [row[0] for row in cursor.fetchall() if row and row[0]]
+    except Exception as exc:
+        logger.error(f"Failed to fetch active incident case numbers: {exc}")
+        return []
 
 
 # =============================================================================
@@ -762,8 +778,13 @@ def get_lawyer_reports(request: HttpRequest, status: Optional[str] = None):
     if user.role != CustomUser.Role.LAWYER:
         raise HttpError(403, "Access denied")
 
+    active_case_numbers = _active_incident_case_numbers()
+    if not active_case_numbers:
+        return []
+
     queryset = Report.objects.select_related('case', 'assigned_lawyer').filter(
-        assigned_lawyer=user
+        assigned_lawyer=user,
+        case__case_number__in=active_case_numbers,
     )
 
     if status:
@@ -785,7 +806,11 @@ def get_lawyer_report_stats(request: HttpRequest):
     if user.role != CustomUser.Role.LAWYER:
         raise HttpError(403, "Access denied")
 
-    base_queryset = Report.objects.filter(assigned_lawyer=user)
+    active_case_numbers = _active_incident_case_numbers()
+    base_queryset = Report.objects.filter(
+        assigned_lawyer=user,
+        case__case_number__in=active_case_numbers,
+    ) if active_case_numbers else Report.objects.none()
 
     total = base_queryset.count()
     pending = base_queryset.filter(status=Report.Status.PENDING).count()

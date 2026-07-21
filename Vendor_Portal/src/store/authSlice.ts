@@ -53,10 +53,20 @@ export const restoreToken = createAsyncThunk('auth/restoreToken', async (_, { re
     const userDataJson = await storage.getItem(STORAGE_KEYS.USER_DATA);
     
     if (accessToken && userDataJson) {
+      const user = JSON.parse(userDataJson);
+      if (String(user?.role || '').toUpperCase() !== 'VENDOR') {
+        await Promise.all([
+          storage.deleteItem(STORAGE_KEYS.ACCESS_TOKEN).catch(() => {}),
+          storage.deleteItem(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
+          storage.deleteItem(STORAGE_KEYS.USER_DATA).catch(() => {}),
+        ]);
+        return rejectWithValue('Only vendor accounts can use this app');
+      }
+
       return {
         accessToken,
         refreshToken,
-        user: JSON.parse(userDataJson),
+        user,
       };
     }
     

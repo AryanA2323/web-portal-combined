@@ -3,6 +3,7 @@ import { Box, Typography, Paper, Card, CardContent, Divider, CircularProgress, A
 import { Assessment, CheckCircle, Pending, Cancel, Description, CheckCircleOutline, CancelOutlined } from '@mui/icons-material';
 import LawyerLayout from './components/LawyerLayout';
 import api from '../../services/api';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 const StatCard = ({ title, value, icon: Icon, color, bgColor, loading }) => (
   <Card sx={{ height: '100%', boxShadow: 2 }}>
@@ -45,9 +46,14 @@ const DashboardPage = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
+    fetchData(false);
+  }, []);
+
+  useAutoRefresh(fetchData);
+
+  const fetchData = async (isAutoRefresh = false) => {
+    if (!isAutoRefresh) setLoading(true);
+    setError(null);
       try {
         const [statsRes, reportsRes] = await Promise.all([
           api.get('/lawyer/reports/stats'),
@@ -64,8 +70,6 @@ const DashboardPage = () => {
       }
     };
 
-    fetchData();
-  }, []);
 
   const statCards = [
     { title: 'Total Reports', value: stats.total, icon: Assessment, color: '#3498db', bgColor: '#e3f2fd' },

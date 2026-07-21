@@ -503,70 +503,122 @@ def get_vendor_cases(
 # =============================================================================
 
 _CHECK_TABLE_MAP = {
-    'claimant':    'claimant_checks',
-    'insured':     'insured_checks',
-    'driver':      'driver_checks',
-    'spot':        'spot_checks',
-    'chargesheet': 'chargesheets',
+    'claimant':          'claimant_checks',
+    'claimant check':    'claimant_checks',
+    'claimant_checks':   'claimant_checks',
+    'insured':           'insured_checks',
+    'insured check':     'insured_checks',
+    'insured_checks':    'insured_checks',
+    'driver':            'driver_checks',
+    'driver check':      'driver_checks',
+    'driver_checks':     'driver_checks',
+    'spot':              'spot_checks',
+    'spot check':        'spot_checks',
+    'spot_checks':       'spot_checks',
+    'chargesheet':       'chargesheets',
+    'chargesheet check': 'chargesheets',
+    'chargesheet_checks':'chargesheets',
+    'chargesheets':      'chargesheets',
+    'rti':               'rti_checks',
+    'rti check':         'rti_checks',
+    'rti_checks':        'rti_checks',
+    'rto':               'rto_checks',
+    'rto check':         'rto_checks',
+    'rto_checks':        'rto_checks',
 }
 
 _CHECK_DETAIL_COLUMNS = {
     'claimant_checks': {
         'select': '''cc.id, cc.case_id, cc.check_status,
                      cc.claimant_name, cc.claimant_contact, cc.claimant_address,
-                     cc.claimant_income, cc.statement, cc.observation, cc.vendor_evidence AS evidence''',
+                     cc.claimant_income, cc.statement, cc.triggers, cc.vendor_evidence AS evidence,
+                     cc.admin_feedback, cc.is_reassigned''',
         'alias': 'cc',
         'fields': ['id','case_id','check_status','claimant_name','claimant_contact',
-                    'claimant_address','claimant_income','statement','observation','evidence'],
+                    'claimant_address','claimant_income','statement','triggers','evidence',
+                    'admin_feedback','is_reassigned'],
     },
     'insured_checks': {
         'select': '''ic.id, ic.case_id, ic.check_status,
                      ic.insured_name, ic.insured_contact, ic.insured_address,
                      ic.policy_number, ic.policy_period, ic.rc, ic.permit,
-                     ic.statement, ic.observation, ic.vendor_evidence AS evidence''',
+                     ic.statement, ic.triggers, ic.vendor_evidence AS evidence,
+                     ic.admin_feedback, ic.is_reassigned''',
         'alias': 'ic',
         'fields': ['id','case_id','check_status','insured_name','insured_contact',
                     'insured_address','policy_number','policy_period','rc','permit',
-                    'statement','observation','evidence'],
+                    'statement','triggers','evidence','admin_feedback','is_reassigned'],
     },
     'driver_checks': {
         'select': '''dc.id, dc.case_id, dc.check_status,
                      dc.driver_name, dc.driver_contact, dc.driver_address,
                      dc.dl, dc.permit, dc.occupation,
-                     dc.statement, dc.observation, dc.vendor_evidence AS evidence''',
+                     dc.statement, dc.triggers, dc.vendor_evidence AS evidence,
+                     dc.admin_feedback, dc.is_reassigned''',
         'alias': 'dc',
         'fields': ['id','case_id','check_status','driver_name','driver_contact',
                     'driver_address','dl','permit','occupation',
-                    'statement','observation','evidence'],
+                    'statement','triggers','evidence','admin_feedback','is_reassigned'],
     },
     'spot_checks': {
         'select': '''sc.id, sc.case_id, sc.check_status,
                      sc.place_of_accident, sc.police_station, sc.district,
                      sc.fir_number, sc.time_of_accident, sc.accident_brief,
-                     sc.observations, sc.vendor_evidence AS evidence''',
+                     sc.triggers, sc.vendor_evidence AS evidence,
+                     sc.admin_feedback, sc.is_reassigned''',
         'alias': 'sc',
         'fields': ['id','case_id','check_status','place_of_accident','police_station',
                     'district','fir_number','time_of_accident','accident_brief',
-                    'observations','evidence'],
+                    'triggers','evidence','admin_feedback','is_reassigned'],
     },
     'chargesheets': {
         'select': '''cs.id, cs.case_id, cs.check_status,
                      cs.court_name, cs.fir_number, cs.mv_act,
                      cs.fir_delay_days, cs.bsn_section, cs.ipc,
-                     cs.statement, cs.observations, cs.vendor_evidence AS evidence''',
+                     cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
+                     cs.admin_feedback, cs.is_reassigned''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
-                    'statement','observations','evidence'],
+                    'statement','triggers','evidence','admin_feedback','is_reassigned'],
+    },
+    'chargesheet_checks': {
+        'select': '''cs.id, cs.case_id, cs.check_status,
+                     cs.court_name, cs.fir_number, cs.mv_act,
+                     cs.fir_delay_days, cs.bsn_section, cs.ipc,
+                     cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
+                     cs.admin_feedback, cs.is_reassigned''',
+        'alias': 'cs',
+        'fields': ['id','case_id','check_status','court_name','fir_number','mv_act',
+                    'fir_delay_days','bsn_section','ipc',
+                    'statement','triggers','evidence','admin_feedback','is_reassigned'],
+    },
+    'rti_checks': {
+        'select': '''rt.id, rt.case_id, rt.check_status,
+                     rt.statement, rt.triggers, rt.vendor_evidence AS evidence,
+                     rt.admin_feedback, rt.is_reassigned''',
+        'alias': 'rt',
+        'fields': ['id','case_id','check_status','statement','triggers','evidence',
+                   'admin_feedback','is_reassigned'],
+    },
+    'rto_checks': {
+        'select': '''ro.id, ro.case_id, ro.check_status,
+                     ro.statement, ro.triggers, ro.vendor_evidence AS evidence,
+                     ro.admin_feedback, ro.is_reassigned''',
+        'alias': 'ro',
+        'fields': ['id','case_id','check_status','statement','triggers','evidence',
+                   'admin_feedback','is_reassigned'],
     },
 }
 
 _CHECK_TYPE_LABELS = {
-    'claimant_checks':  'Claimant Check',
-    'insured_checks':   'Insured Check',
-    'driver_checks':    'Driver Check',
-    'spot_checks':      'Spot Check',
-    'chargesheets':     'Chargesheet',
+    'claimant_checks': 'Claimant Check',
+    'insured_checks':  'Insured Check',
+    'driver_checks':   'Driver Check',
+    'spot_checks':     'Spot Check',
+    'chargesheets':    'Chargesheet',
+    'rti_checks':      'RTI Check',
+    'rto_checks':      'RTO Check',
 }
 
 
@@ -595,27 +647,33 @@ def get_vendor_assigned_checks(request: HttpRequest):
         assigned_checks = []
         with connections['default'].cursor() as cursor:
             for table, label in _CHECK_TYPE_LABELS.items():
+                if table not in _CHECK_DETAIL_COLUMNS:
+                    continue
                 meta = _CHECK_DETAIL_COLUMNS[table]
                 alias = meta['alias']
-                cursor.execute(f"""
-                    SELECT {alias}.id, {alias}.case_id, {alias}.check_status,
-                           c.claim_number, c.client_name, c.category, c.full_case_status
-                    FROM {table} {alias}
-                    JOIN cases c ON c.id = {alias}.case_id
-                    WHERE {alias}.assigned_vendor_id = %s
-                    ORDER BY {alias}.updated_at DESC NULLS LAST
-                """, [vendor_id])
-                for r in cursor.fetchall():
-                    assigned_checks.append({
-                        "check_id": r[0],
-                        "case_id": r[1],
-                        "check_status": r[2] or "WIP",
-                        "check_type": label,
-                        "claim_number": r[3] or "",
-                        "client_name": r[4] or "",
-                        "category": r[5] or "",
-                        "case_status": r[6] or "",
-                    })
+                try:
+                    cursor.execute(f"""
+                        SELECT {alias}.id, {alias}.case_id, {alias}.check_status,
+                               c.claim_number, c.client_name, c.category, c.full_case_status
+                        FROM {table} {alias}
+                        JOIN cases c ON c.id = {alias}.case_id
+                        WHERE {alias}.assigned_vendor_id = %s
+                        ORDER BY {alias}.updated_at DESC NULLS LAST
+                    """, [vendor_id])
+                    for r in cursor.fetchall():
+                        assigned_checks.append({
+                            "check_id": r[0],
+                            "case_id": r[1],
+                            "check_status": r[2] or "WIP",
+                            "check_type": label,
+                            "claim_number": r[3] or "",
+                            "client_name": r[4] or "",
+                            "category": r[5] or "",
+                            "case_status": r[6] or "",
+                        })
+                except Exception as table_err:
+                    logger.warning(f"Skipping table '{table}' in vendor-assigned-checks: {table_err}")
+                    continue
 
         stats = {
             "total": len(assigned_checks),
@@ -751,9 +809,43 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
             }
 
     except Exception as e:
-        logger.error(f"Failed to fetch vendor check detail: {e}")
+        logger.error(f"Failed to fetch vendor check detail for case_id={case_id} check_type={check_type}: {e}", exc_info=True)
         return 500, {"error": "Failed to fetch check detail"}
 
+
+
+def _evaluate_and_update_check_status(cursor, table: str, check_id: int, check_type: str):
+    cursor.execute(f"SELECT vendor_evidence FROM {table} WHERE id = %s", [check_id])
+    row = cursor.fetchone()
+    if not row: return
+    evidence_json = row[0]
+    
+    evidence_list = []
+    if evidence_json:
+        import json
+        try:
+            evidence_list = json.loads(evidence_json)
+        except:
+            pass
+            
+    has_evidence = len(evidence_list) > 0
+    has_mismatch = any(e.get("location_mismatch", False) for e in evidence_list)
+    
+    # Check if statements are required
+    # Based on incident_case_db.py, VALID_CHECK_TYPES. RTI and RTO might not need statements depending on the schema, but the safest way is to check if the statement column is filled if it exists.
+    # Actually, let's check _statement_entries_column_exists
+    statement_done = True
+    if _statement_entries_column_exists(table):
+        # Check if there are any statement entries
+        stmt_count = _get_statement_entries_count(table, check_id)
+        if stmt_count == 0:
+            statement_done = False
+            
+    new_status = 'WIP'
+    if has_evidence and statement_done and not has_mismatch:
+        new_status = 'Completed'
+        
+    cursor.execute(f"UPDATE {table} SET check_status = %s, updated_at = NOW() WHERE id = %s", [new_status, check_id])
 
 @router.post(
     "/vendor-check-upload/{case_id}/{check_type}",
@@ -788,12 +880,26 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
                 return 404, {"error": "Check not found or not assigned to you"}
             check_id = check_row[0]
             existing_evidence = check_row[1]
+
+            # Fetch case location for validation
+            case_location = None
+            if check_type.lower() != 'chargesheet':
+                lat_col = f"{check_type.lower()}_lat"
+                lng_col = f"{check_type.lower()}_lng"
+                cursor.execute(f"SELECT {lat_col}, {lng_col} FROM {table} WHERE id = %s", [check_id])
+                loc_row = cursor.fetchone()
+                if loc_row and loc_row[0] is not None and loc_row[1] is not None:
+                    case_location = {'latitude': float(loc_row[0]), 'longitude': float(loc_row[1])}
+                
     except Exception as e:
         logger.error(f"Failed to verify check assignment: {e}")
         return 500, {"error": "Failed to verify check"}
 
     # Get uploaded files
     files = request.FILES.getlist('photos') if hasattr(request, 'FILES') else []
+    latitudes = request.POST.getlist('latitudes')
+    longitudes = request.POST.getlist('longitudes')
+    
     if not files:
         return 400, {"error": "No photos provided"}
 
@@ -806,11 +912,44 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
     os.makedirs(upload_dir, exist_ok=True)
 
     uploaded = []
-    for f in files:
+    errors = []
+    has_mismatch = False
+    
+    for i, f in enumerate(files):
+        # Validate GPS location if case has a location set
+        latitude, longitude = extract_gps_from_image(f)
+        
+        # Fallback to form data
+        if latitude is None or longitude is None:
+            if i < len(latitudes) and i < len(longitudes) and latitudes[i] and longitudes[i]:
+                try:
+                    latitude = float(latitudes[i])
+                    longitude = float(longitudes[i])
+                except ValueError:
+                    pass
+                    
+        if latitude is None or longitude is None:
+            errors.append(f"{f.name}: Missing GPS coordinates")
+            continue
+            
+        if case_location:
+            from geopy.distance import geodesic
+            photo_location = (latitude, longitude)
+            case_coords = (case_location['latitude'], case_location['longitude'])
+            distance_meters = geodesic(case_coords, photo_location).meters
+            
+            if distance_meters > 100:
+                errors.append("The evidence photo you uploaded does not match the check location. Try uploading the photo from the correct location.")
+                continue
+                
+        # If valid, proceed to save
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         safe_name = f.name.replace(' ', '_')
         filename = f'{timestamp}_{safe_name}'
         filepath = os.path.join(upload_dir, filename)
+
+        # Reset file pointer after EXIF reading
+        f.seek(0)
 
         with open(filepath, 'wb') as dest:
             for chunk in f.chunks():
@@ -818,20 +957,46 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
 
         relative_path = f'evidence_photos/case_{case_id}/{check_type}/{filename}'
         photo_url = f'/media/{relative_path}'
+        address_text = f"{latitude}, {longitude}"
+        try:
+            from geopy.geocoders import ArcGIS, Nominatim
+            # Try ArcGIS first for high accuracy
+            geolocator = ArcGIS(timeout=5)
+            location = geolocator.reverse((latitude, longitude))
+            if location and location.address:
+                address_text = f"{location.address} ({latitude}, {longitude})"
+            else:
+                # Fallback to Nominatim
+                nom = Nominatim(user_agent="IncidentMgmtPlatform/1.0", timeout=5)
+                location = nom.reverse((latitude, longitude))
+                if location and location.address:
+                    address_text = f"{location.address} ({latitude}, {longitude})"
+        except Exception as e:
+            logger.warning(f"Reverse geocode failed: {e}")
+
         evidence_entry = {
             "filename": filename,
             "url": photo_url,
             "uploaded_at": datetime.now().isoformat(),
+            "location_name": address_text,
+            "location_mismatch": False,
         }
         evidence_list.append(evidence_entry)
         uploaded.append(evidence_entry)
         logger.info(f"[Evidence] Saved {filename} for case={case_id} check={check_type}")
+        
+    if errors:
+        # If any of the errors is our custom location mismatch message, return just that
+        mismatch_msg = "The evidence photo you uploaded does not match the check location. Try uploading the photo from the correct location."
+        if any(mismatch_msg in e for e in errors):
+            return 400, {"error": mismatch_msg}
+        return 400, {"error": "Validation failed: " + "; ".join(errors)}
 
     # Update the check table's vendor_evidence column
     try:
         with connections['default'].cursor() as cursor:
             cursor.execute(f"""
-                UPDATE {table} SET vendor_evidence = %s, updated_at = NOW()
+                UPDATE {table} SET vendor_evidence = %s, check_status = 'WIP', updated_at = NOW()
                 WHERE id = %s
             """, [json.dumps(evidence_list), check_id])
     except Exception as e:
@@ -843,6 +1008,90 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
         "message": f"Uploaded {len(uploaded)} photo(s)",
         "uploaded": uploaded,
         "total_evidence": len(evidence_list),
+    }
+
+
+@router.post(
+    "/vendor-check-complete/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Mark Check Completed",
+    description="Mark the vendor check as completed.",
+)
+def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
+    """Mark a specific check as completed."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role != 'VENDOR':
+        return 403, {"error": "Vendor access required"}
+
+    vendor_id = get_vendor_id_from_user(request.user)
+    if not vendor_id:
+        return 403, {"error": "Vendor profile not found"}
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+
+    try:
+        with connections['default'].cursor() as cursor:
+            # Verify the check is assigned to this vendor
+            cursor.execute(f"""
+                SELECT id, vendor_evidence FROM {table}
+                WHERE case_id = %s AND assigned_vendor_id = %s
+            """, [case_id, vendor_id])
+            row = cursor.fetchone()
+            if not row:
+                return 404, {"error": "Check not found or not assigned to you"}
+                
+            check_id = row[0]
+            evidence_json = row[1]
+            
+            import json
+            evidence_list = []
+            if evidence_json:
+                try:
+                    evidence_list = json.loads(evidence_json)
+                except:
+                    pass
+                    
+            if not evidence_list:
+                return 400, {"error": "Cannot complete check: No evidence uploaded."}
+                
+            has_mismatch = any(e.get("location_mismatch", False) for e in evidence_list)
+            if has_mismatch:
+                return 400, {"error": "Cannot complete check: Evidence location mismatch found. Please upload valid evidence."}
+
+            # Check if statements are required
+            from users.api.vendor_cases import _validate_vendor_check_assignment
+            error_response, _, _, _, _ = _validate_vendor_check_assignment(request, case_id, check_type)
+            can_add_statement = (error_response is None)
+            
+            if can_add_statement:
+                from users.api.vendor_cases import _statement_entries_column_exists, _get_statement_entries_count
+                if _statement_entries_column_exists(table):
+                    stmt_count = _get_statement_entries_count(table, check_id)
+                    if stmt_count == 0:
+                        return 400, {"error": "Cannot complete check: Statements are required but missing."}
+
+            # Update check_status
+            cursor.execute(f"""
+                UPDATE {table} SET check_status = 'Completed', updated_at = NOW()
+                WHERE case_id = %s AND assigned_vendor_id = %s
+            """, [case_id, vendor_id])
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to complete check: {e}")
+        return 500, {"error": "Failed to update check status"}
+
+    return {
+        "success": True,
+        "message": "Check marked as completed"
+    }
+
+    return {
+        "success": True,
+        "message": "Check marked as completed"
     }
 
 
@@ -892,7 +1141,7 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
             deleted_item = evidence_list.pop(delete_index)
 
             cursor.execute(f"""
-                UPDATE {table} SET vendor_evidence = %s, updated_at = NOW()
+                UPDATE {table} SET vendor_evidence = %s, check_status = 'WIP', updated_at = NOW()
                 WHERE id = %s
             """, [json.dumps(evidence_list), check_id])
     except Exception as exc:
@@ -1184,6 +1433,8 @@ def upload_evidence(
     
     # Get uploaded files
     files = request.FILES.getlist('photos') if hasattr(request, 'FILES') else []
+    latitudes = request.POST.getlist('latitudes')
+    longitudes = request.POST.getlist('longitudes')
     
     if not files:
         return 400, {"error": "No photos provided. Please upload at least one photo."}
@@ -1193,11 +1444,20 @@ def upload_evidence(
     uploaded_photos = []
     errors = []
     
-    for file in files:
+    for i, file in enumerate(files):
         try:
             # Extract GPS from EXIF
             latitude, longitude = extract_gps_from_image(file)
             
+            # Fallback to form data
+            if latitude is None or longitude is None:
+                if i < len(latitudes) and i < len(longitudes) and latitudes[i] and longitudes[i]:
+                    try:
+                        latitude = float(latitudes[i])
+                        longitude = float(longitudes[i])
+                    except ValueError:
+                        pass
+                        
             if latitude is None or longitude is None:
                 errors.append(f"{file.name}: Missing GPS coordinates")
                 continue
@@ -1273,13 +1533,11 @@ def upload_evidence(
             continue
     
     # Return response
-    if not uploaded_photos and errors:
-        error_msg = "All photos rejected. " + "; ".join(errors[:3])
+    if errors:
+        error_msg = "Validation failed: " + "; ".join(errors)
         return 400, {"error": error_msg}
     
     response_message = f"Successfully uploaded {len(uploaded_photos)} photo(s)"
-    if errors:
-        response_message += f". {len(errors)} photo(s) rejected: " + "; ".join(errors[:2])
     
     return {
         "message": response_message,

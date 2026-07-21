@@ -44,6 +44,7 @@ import {
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
 import api from '../../services/api';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 import { useAuth } from '../../context/AuthContext';
 
 // All available admin pages for permission toggles
@@ -97,21 +98,24 @@ const UsersPage = () => {
   const [createLoading, setCreateLoading] = useState(false);
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsers(false);
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (isAutoRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isAutoRefresh) setLoading(true);
       const response = await api.get('/users');
       setUsers(response.data);
       setError(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load users');
+      console.error('Failed to load users', err);
     } finally {
       setLoading(false);
     }
   };
+
+  useAutoRefresh(fetchUsers);
 
   const handleOpenCreateDialog = () => {
     setCreateFormData({

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { authStorage } from '../utils/authStorage';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -12,7 +13,7 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
+    const token = authStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -41,12 +42,10 @@ api.interceptors.response.use(
       // Only clear and redirect if we're on a protected page and it's not an auth API call
       if (!isAuthPage && !isAuthApiCall) {
         // Check if token exists - if not, user was never authenticated
-        const token = localStorage.getItem('accessToken');
+        const token = authStorage.getItem('accessToken');
         if (token) {
           // Token exists but got 401 - it's invalid/expired
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('user');
+          authStorage.clearAuth();
           
           // Only redirect if not already redirecting
           if (!window.location.pathname.includes('/login')) {

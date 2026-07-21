@@ -199,11 +199,10 @@ const CreateCaseDialog = ({ open, onClose, onSuccess }) => {
                   onChange={handleChange}
                   label="Category"
                 >
-                  <MenuItem value="MACT">Motor Accident Claims Tribunal</MenuItem>
-                  <MenuItem value="CIVIL">Civil Case</MenuItem>
-                  <MenuItem value="CRIMINAL">Criminal Case</MenuItem>
-                  <MenuItem value="CONSUMER">Consumer Forum</MenuItem>
-                  <MenuItem value="OTHER">Other</MenuItem>
+                  <MenuItem value="MACT">MACT</MenuItem>
+                  <MenuItem value="Health">Health</MenuItem>
+                  <MenuItem value="Theft">Theft</MenuItem>
+                  <MenuItem value="OD">OD</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

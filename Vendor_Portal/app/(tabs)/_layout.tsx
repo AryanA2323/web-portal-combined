@@ -34,11 +34,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="notifications"
+        name="completed"
         options={{
-          title: 'Alerts',
+          title: 'Completed',
           tabBarIcon: ({ color, size, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'bell' : 'bell-outline'} color={color} size={size} />
+            <MaterialCommunityIcons name={focused ? 'check-decagram' : 'check-decagram-outline'} color={color} size={size} />
           ),
         }}
       />

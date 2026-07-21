@@ -23,6 +23,45 @@ logger = logging.getLogger(__name__)
 router = Router(tags=["User Management"])
 
 
+def sync_role_specific_profile(user):
+    """Ensure role-specific profile rows exist for users created by Super Admin."""
+    try:
+        from users.models import Admin, Lawyer, Vendor
+
+        if user.role == 'ADMIN':
+            Admin.objects.get_or_create(
+                user=user,
+                defaults={
+                    'employee_id': f"ADMIN_{user.id}_{int(user.date_joined.timestamp())}",
+                    'department': user.sub_role or 'General',
+                    'contact_email': user.email,
+                },
+            )
+        elif user.role == 'LAWYER':
+            Lawyer.objects.get_or_create(
+                user=user,
+                defaults={
+                    'bar_registration_number': f"BAR_{user.id}",
+                    'contact_email': user.email,
+                    'specialization': 'General Practice',
+                },
+            )
+        elif user.role == 'VENDOR':
+            display_name = f"{user.first_name} {user.last_name}".strip() or user.username
+            Vendor.objects.update_or_create(
+                user=user,
+                defaults={
+                    'company_name': display_name,
+                    'contact_email': user.email,
+                    'is_active': user.is_active,
+                },
+            )
+        else:
+            Vendor.objects.filter(user=user).update(is_active=False)
+    except Exception as exc:
+        logger.error(f"Failed to sync role-specific profile for user {user.username}: {exc}", exc_info=True)
+
+
 # Helper function to check super admin
 def is_super_admin(user) -> bool:
     """Check if user is a super admin."""
@@ -74,7 +113,7 @@ def create_user(request, payload: UserCreateSchema):
     - password: Password (minimum 8 characters)
     - first_name: Optional first name
     - last_name: Optional last name
-    - role: User role (ADMIN, VENDOR, CLIENT, LAWYER)
+    - role: User role (SUPER_ADMIN, ADMIN, VENDOR, CLIENT, LAWYER)
     """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
@@ -84,7 +123,7 @@ def create_user(request, payload: UserCreateSchema):
     
     # Validate role
     role_upper = payload.role.upper() if payload.role else 'CLIENT'
-    valid_roles = ['ADMIN', 'VENDOR', 'CLIENT', 'LAWYER']
+    valid_roles = ['SUPER_ADMIN', 'ADMIN', 'VENDOR', 'CLIENT', 'LAWYER']
     if role_upper not in valid_roles:
         return 400, {"error": f"Invalid role. Must be one of: {', '.join(valid_roles)}", "code": "INVALID_ROLE"}
     
@@ -97,6 +136,8 @@ def create_user(request, payload: UserCreateSchema):
         return 400, {"error": "Email already registered", "code": "EMAIL_EXISTS"}
     
     try:
+        sub_role = 'SUPER_ADMIN' if role_upper == 'SUPER_ADMIN' else (payload.sub_role or '')
+
         # Create user
         user = User.objects.create_user(
             username=payload.username,
@@ -105,11 +146,14 @@ def create_user(request, payload: UserCreateSchema):
             first_name=payload.first_name or '',
             last_name=payload.last_name or '',
             role=role_upper,
-            sub_role=payload.sub_role or '',
+            sub_role=sub_role,
+            is_staff=role_upper == 'SUPER_ADMIN',
+            is_superuser=role_upper == 'SUPER_ADMIN',
             is_active=True,
         )
         
         logger.info(f"New user {user.username} created by admin {request.user.username}")
+        sync_role_specific_profile(user)
         
         return 201, UserResponseSchema.model_validate(user)
     except Exception as e:
@@ -155,7 +199,7 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
     
     Payload can include:
     - first_name, last_name, email: Basic user info
-    - role: User role (ADMIN, VENDOR, CLIENT)
+    - role: User role (SUPER_ADMIN, ADMIN, VENDOR, CLIENT, LAWYER)
     - sub_role: Admin sub-role (SUPER_ADMIN, CASE_HANDLER, etc.)
     - permissions: Array of allowed page paths
     - is_active: Enable/disable user account
@@ -187,10 +231,18 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
     # Update role and sub_role
     if payload.role is not None:
         role_upper = payload.role.upper()
-        valid_roles = ['ADMIN', 'VENDOR', 'CLIENT', 'LAWYER']
+        valid_roles = ['SUPER_ADMIN', 'ADMIN', 'VENDOR', 'CLIENT', 'LAWYER']
         if role_upper not in valid_roles:
             return 400, {"error": f"Invalid role. Must be one of: {', '.join(valid_roles)}", "code": "INVALID_ROLE"}
         user.role = role_upper
+        if role_upper == 'SUPER_ADMIN' and payload.sub_role is None:
+            user.sub_role = 'SUPER_ADMIN'
+            user.is_staff = True
+            user.is_superuser = True
+        elif role_upper != 'SUPER_ADMIN':
+            if role_upper != 'ADMIN' and payload.sub_role is None:
+                user.sub_role = None
+            user.is_superuser = False
     
     if payload.sub_role is not None:
         if payload.sub_role and payload.sub_role != '':
@@ -215,6 +267,7 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
         user.is_active = bool(payload.is_active)
     
     user.save()
+    sync_role_specific_profile(user)
     logger.info(f"User {user.username} updated successfully by admin {request.user.username}")
     
     return 200, UserResponseSchema.model_validate(user)

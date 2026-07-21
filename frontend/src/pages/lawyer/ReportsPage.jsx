@@ -33,31 +33,7 @@ import {
 } from '@mui/icons-material';
 import LawyerLayout from './components/LawyerLayout';
 import api from '../../services/api';
-
-const getEvidencePhotoUrl = (photo) => {
-  if (!photo) return '';
-  if (typeof photo === 'string') return photo;
-  return photo.preview_url || photo.url || photo.photo_url || '';
-};
-
-const resolveEvidencePhotoUrl = (photoUrl) => {
-  if (!photoUrl) return '';
-  if (photoUrl.startsWith('data:')) return photoUrl;
-  if (photoUrl.startsWith('http')) {
-    try {
-      const parsedUrl = new URL(photoUrl);
-      if (parsedUrl.pathname.startsWith('/media/')) {
-        return `${parsedUrl.pathname}${parsedUrl.search || ''}`;
-      }
-    } catch {
-      return photoUrl;
-    }
-    return photoUrl;
-  }
-  if (photoUrl.startsWith('/media/')) return photoUrl;
-  if (photoUrl.startsWith('media/')) return `/${photoUrl}`;
-  return `/media/${photoUrl.replace(/^\/+/, '')}`;
-};
+import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
 
 const formatEvidenceTimestamp = (photo) => {
   const rawValue = photo?.captured_at || photo?.uploaded_at || photo?.timestamp;

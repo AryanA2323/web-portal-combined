@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services';
 import api from '../services/api';
+import { authStorage } from '../utils/authStorage';
 
 // Create Auth Context
 const AuthContext = createContext(null);
@@ -14,14 +15,14 @@ export const AuthProvider = ({ children }) => {
   // Fetch fresh user data from server
   const refreshUser = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = authStorage.getItem('accessToken');
       if (!token) {
         return null;
       }
       
       const response = await api.get('/auth/me');
       const freshUser = response.data;
-      localStorage.setItem('user', JSON.stringify(freshUser));
+      authStorage.setItem('user', JSON.stringify(freshUser));
       setUser(freshUser);
       return freshUser;
     } catch (err) {
@@ -31,12 +32,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Initialize auth state from localStorage and refresh from server
+  // Initialize auth state from tab-scoped sessionStorage and refresh from server
   useEffect(() => {
     const initializeAuth = async () => {
       try {
         const storedUser = authService.getCurrentUser();
-        const token = localStorage.getItem('accessToken');
+        const token = authStorage.getItem('accessToken');
         
         if (storedUser && token) {
           setUser(storedUser);
@@ -64,7 +65,7 @@ export const AuthProvider = ({ children }) => {
         return data;
       }
       
-      // Set user from localStorage after successful login
+      // Set user from tab-scoped sessionStorage after successful login
       const storedUser = authService.getCurrentUser();
       
       // Ensure user data is valid before setting
@@ -91,7 +92,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await authService.loginWith2FA(email, password, code);
       
-      // Set user from localStorage after successful 2FA login
+      // Set user from tab-scoped sessionStorage after successful 2FA login
       const storedUser = authService.getCurrentUser();
       setUser(storedUser);
       return data;

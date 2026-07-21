@@ -28,6 +28,122 @@ logger = logging.getLogger(__name__)
 router = Router(tags=["Verifications"])
 
 
+def _parse_incident_date(value):
+    """Parse incident DB date values into a Django date, if possible."""
+    if not value:
+        return None
+    if hasattr(value, "date") and not isinstance(value, str):
+        return value.date()
+    if hasattr(value, "isoformat") and not isinstance(value, str):
+        return value
+    try:
+        return datetime.fromisoformat(str(value)).date()
+    except ValueError:
+        try:
+            return datetime.strptime(str(value), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+
+def _resolve_insurance_case(case_id: int, incident_case_db_id: Optional[int], request_user=None) -> Optional[InsuranceCase]:
+    """Resolve the ORM case even when the frontend has an incident DB case id.
+
+    Case creation writes the incident `cases` row first. If the secondary
+    `insurance_case` write fails, the API can still return the incident id; this
+    resolver maps that id back by case_number and recreates the minimal ORM row
+    so verification rows can be created instead of losing the selected checks.
+    """
+    try:
+        return InsuranceCase.objects.get(id=case_id)
+    except InsuranceCase.DoesNotExist:
+        pass
+
+    candidate_ids = []
+    if incident_case_db_id:
+        candidate_ids.append(incident_case_db_id)
+    if case_id not in candidate_ids:
+        candidate_ids.append(case_id)
+
+    for incident_id in candidate_ids:
+        try:
+            with connections["default"].cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT case_number, claim_number, client_name, category,
+                           case_receive_date, receive_month, completion_date,
+                           completion_month, case_due_date, tat_days, sla,
+                           case_type, investigation_report_status,
+                           full_case_status, scope_of_work
+                    FROM cases
+                    WHERE id = %s
+                    """,
+                    [incident_id],
+                )
+                row = cursor.fetchone()
+        except Exception as db_err:
+            logger.warning(f"Could not resolve incident case id {incident_id}: {db_err}")
+            continue
+
+        if not row:
+            continue
+
+        (
+            case_number,
+            claim_number,
+            client_name,
+            category,
+            case_receive_date,
+            receive_month,
+            completion_date,
+            completion_month,
+            case_due_date,
+            tat_days,
+            sla_status,
+            case_type,
+            investigation_report_status,
+            full_case_status,
+            scope_of_work,
+        ) = row
+
+        case = InsuranceCase.objects.filter(case_number=case_number).first()
+        if case:
+            return case
+
+        try:
+            return InsuranceCase.objects.create(
+                case_number=case_number,
+                title=f"Case {claim_number or case_number} - {client_name or 'New Case'}",
+                description="",
+                claim_number=claim_number or "",
+                client_name=client_name or "",
+                category=category or "MACT",
+                case_receive_date=_parse_incident_date(case_receive_date),
+                receive_month=receive_month or "",
+                completion_date=_parse_incident_date(completion_date),
+                completion_month=completion_month or "",
+                case_due_date=_parse_incident_date(case_due_date),
+                tat_days=tat_days,
+                sla_status=sla_status or "",
+                case_type=case_type or "",
+                investigation_report_status=investigation_report_status or "Open",
+                full_case_status=full_case_status or "WIP",
+                scope_of_work=scope_of_work or "",
+                priority="MEDIUM",
+                status="OPEN",
+                created_by=request_user if getattr(request_user, "is_authenticated", False) else None,
+                source="MANUAL",
+                workflow_type="STANDARD",
+                investigation_progress=0,
+            )
+        except Exception as create_err:
+            logger.error(
+                f"Failed to recreate ORM case for incident case {incident_id} ({case_number}): {create_err}",
+                exc_info=True,
+            )
+
+    return None
+
+
 # =============================================================================
 # Schemas
 # =============================================================================
@@ -161,10 +277,8 @@ class ErrorResponse(Schema):
 def create_verification(request: HttpRequest, payload: CreateVerificationSchema):
     """Create a new verification."""
     try:
-        # Get the case
-        try:
-            case = InsuranceCase.objects.get(id=payload.case_id)
-        except InsuranceCase.DoesNotExist:
+        case = _resolve_insurance_case(payload.case_id, payload.incident_case_db_id, request.user)
+        if not case:
             return 400, {"error": "Case not found"}
         
         # Map check_type to verification_type
@@ -189,7 +303,7 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
         if existing:
             # Update existing
             for field, value in payload.dict().items():
-                if field not in ['case_id', 'check_type'] and value is not None:
+                if field not in ['case_id', 'incident_case_db_id', 'check_type'] and value is not None:
                     setattr(existing, field, value)
             existing.check_status = payload.check_status
             existing.save()
@@ -383,8 +497,10 @@ def create_dependent(request: HttpRequest, payload: CreateDependentSchema):
     try:
         # Get the case
         try:
-            case = InsuranceCase.objects.get(id=payload.case_id)
-        except InsuranceCase.DoesNotExist:
+            case = _resolve_insurance_case(payload.case_id, None, request.user)
+            if not case:
+                return 400, {"error": "Case not found"}
+        except Exception:
             return 400, {"error": "Case not found"}
         
         # Create dependent

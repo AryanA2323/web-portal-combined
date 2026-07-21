@@ -11,6 +11,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as ScreenCapture from 'expo-screen-capture';
 import { addNotificationResponseListener, registerForPushNotifications } from '@/services/pushNotifications';
 import 'react-native-reanimated';
+import { ToastProvider } from '@/components/Toast';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -113,8 +114,10 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <Provider store={store}>
-        <StatusBar style="dark" translucent={false} />
-        <RootNavigator />
+        <ToastProvider>
+          <StatusBar style="dark" translucent={false} />
+          <RootNavigator />
+        </ToastProvider>
       </Provider>
     </SafeAreaProvider>
   );

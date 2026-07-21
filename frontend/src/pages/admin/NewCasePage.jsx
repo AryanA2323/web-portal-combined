@@ -135,6 +135,7 @@ const NewCasePage = () => {
   });
 
   // File uploads for each verification type
+    const [caseFiles, setCaseFiles] = useState({ policy: null, petition: null });
   const [verificationFiles, setVerificationFiles] = useState({
     claimant: [],
     insured: [],
@@ -150,19 +151,19 @@ const NewCasePage = () => {
     // Per-verification-type common fields (each type gets own status/statement/observations)
     claimant_check_status: 'WIP',
     claimant_statement: '',
-    claimant_observations: '',
+    claimant_triggers: '',
     insured_check_status: 'WIP',
     insured_statement: '',
-    insured_observations: '',
+    insured_triggers: '',
     driver_check_status: 'WIP',
     driver_statement: '',
-    driver_observations: '',
+    driver_triggers: '',
     spot_check_status: 'WIP',
     spot_statement: '',
-    spot_observations: '',
+    spot_triggers: '',
     chargesheet_check_status: 'WIP',
     chargesheet_statement: '',
-    chargesheet_observations: '',
+    chargesheet_triggers: '',
     
     // Claimant fields
     claimant_name: '',
@@ -306,10 +307,20 @@ const NewCasePage = () => {
 
   const handleVerificationChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setVerificationData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    setVerificationData(prev => {
+      const newData = {
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      };
+      
+      if (name === 'driver_same_as_insured' && checked) {
+        newData.driver_name = newData.insured_name || '';
+        newData.driver_contact = newData.insured_contact || '';
+        newData.driver_address = newData.insured_address || '';
+      }
+      
+      return newData;
+    });
   };
 
   const handleAddDependent = () => {
@@ -408,26 +419,7 @@ const NewCasePage = () => {
           setLoading(false);
           return;
         }
-        if (isBlank(verificationData.policy_number)) {
-          setError('Policy Number is required for Insured Check');
-          setLoading(false);
-          return;
-        }
-        if (isBlank(verificationData.policy_period)) {
-          setError('Policy Period is required for Insured Check');
-          setLoading(false);
-          return;
-        }
-        if (isBlank(verificationData.rc_number)) {
-          setError('RC Number is required for Insured Check');
-          setLoading(false);
-          return;
-        }
-        if (isBlank(verificationData.permit_insured)) {
-          setError('Permit is required for Insured Check');
-          setLoading(false);
-          return;
-        }
+
       }
 
       if (selectedVerifications.driver) {
@@ -441,21 +433,7 @@ const NewCasePage = () => {
           setLoading(false);
           return;
         }
-        if (isBlank(verificationData.dl_number)) {
-          setError('DL is required for Driver Check');
-          setLoading(false);
-          return;
-        }
-        if (isBlank(verificationData.permit_driver)) {
-          setError('Permit is required for Driver Check');
-          setLoading(false);
-          return;
-        }
-        if (isBlank(verificationData.occupation)) {
-          setError('Occupation is required for Driver Check');
-          setLoading(false);
-          return;
-        }
+
       }
 
       if (selectedVerifications.spot) {
@@ -474,11 +452,7 @@ const NewCasePage = () => {
           setLoading(false);
           return;
         }
-        if (isBlank(verificationData.fir_number_spot)) {
-          setError('FIR Number is required for Spot Check');
-          setLoading(false);
-          return;
-        }
+
         if (isBlank(verificationData.spot_city)) {
           setError('City is required for Spot Check');
           setLoading(false);
@@ -507,26 +481,7 @@ const NewCasePage = () => {
           setLoading(false);
           return;
         }
-        if (isBlank(verificationData.mv_act)) {
-          setError('MV Act is required for Chargesheet Check');
-          setLoading(false);
-          return;
-        }
-        if (isBlank(verificationData.fir_delay_in_days)) {
-          setError('FIR Delay Days is required for Chargesheet Check');
-          setLoading(false);
-          return;
-        }
-        if (isBlank(verificationData.bsn_sections)) {
-          setError('BSN Section is required for Chargesheet Check');
-          setLoading(false);
-          return;
-        }
-        if (isBlank(verificationData.ipc_sections)) {
-          setError('IPC Section is required for Chargesheet Check');
-          setLoading(false);
-          return;
-        }
+
       }
 
       // Build the case payload from common fields
@@ -565,8 +520,22 @@ const NewCasePage = () => {
 
       // Create the case
       const response = await api.post('/cases', payload);
-      const caseId = response.data.id;
+      const caseId = response.data.insurance_case_id || response.data.id;
       const incidentCaseDbId = response.data.incident_case_db_id;
+
+      // Upload case documents if any
+      if (caseFiles.policy || caseFiles.petition) {
+        const formData = new FormData();
+        if (caseFiles.policy) formData.append('policy', caseFiles.policy);
+        if (caseFiles.petition) formData.append('petition', caseFiles.petition);
+        try {
+          await api.post(`/cases/${incidentCaseDbId}/upload`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        } catch (uploadError) {
+          console.error('Failed to upload case documents:', uploadError);
+        }
+      }
 
       // Create verification records only for selected types
       const verificationsToCreate = [];
@@ -578,7 +547,7 @@ const NewCasePage = () => {
           check_type: 'CLAIMANT',
           check_status: verificationData.claimant_check_status || 'WIP',
           statement: verificationData.claimant_statement,
-          observations: verificationData.claimant_observations,
+          triggers: verificationData.claimant_triggers,
           claimant_name: verificationData.claimant_name,
           claimant_contact: verificationData.claimant_contact,
           claimant_address: verificationData.claimant_address,
@@ -593,7 +562,7 @@ const NewCasePage = () => {
           check_type: 'INSURED',
           check_status: verificationData.insured_check_status || 'WIP',
           statement: verificationData.insured_statement,
-          observations: verificationData.insured_observations,
+          triggers: verificationData.insured_triggers,
           insured_name: verificationData.insured_name,
           insured_contact: verificationData.insured_contact,
           insured_address: verificationData.insured_address,
@@ -611,7 +580,7 @@ const NewCasePage = () => {
           check_type: 'DRIVER',
           check_status: verificationData.driver_check_status || 'WIP',
           statement: verificationData.driver_statement,
-          observations: verificationData.driver_observations,
+          triggers: verificationData.driver_triggers,
           driver_name: verificationData.driver_name,
           driver_contact: verificationData.driver_contact,
           driver_address: verificationData.driver_address,
@@ -629,7 +598,7 @@ const NewCasePage = () => {
           check_type: 'SPOT',
           check_status: verificationData.spot_check_status || 'WIP',
           statement: verificationData.spot_statement,
-          observations: verificationData.spot_observations,
+          triggers: verificationData.spot_triggers,
           time_of_accident: verificationData.time_of_accident,
           place_of_accident: verificationData.place_of_accident,
           district: verificationData.district,
@@ -647,7 +616,7 @@ const NewCasePage = () => {
           check_type: 'CHARGESHEET',
           check_status: verificationData.chargesheet_check_status || 'WIP',
           statement: verificationData.chargesheet_statement,
-          observations: verificationData.chargesheet_observations,
+          triggers: verificationData.chargesheet_triggers,
           fir_number_claimant: verificationData.fir_number_claimant,
           chargesheet_city: verificationData.chargesheet_city,
           court_name: verificationData.court_name,
@@ -874,10 +843,9 @@ const NewCasePage = () => {
                         sx={{ borderRadius: '8px' }}
                       >
                         <MenuItem value="MACT">MACT</MenuItem>
-                        <MenuItem value="CIVIL">Civil</MenuItem>
-                        <MenuItem value="CRIMINAL">Criminal</MenuItem>
-                        <MenuItem value="CONSUMER">Consumer Forum</MenuItem>
-                        <MenuItem value="OTHER">Other</MenuItem>
+                        <MenuItem value="Health">Health</MenuItem>
+                        <MenuItem value="Theft">Theft</MenuItem>
+                        <MenuItem value="OD">OD</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
@@ -1065,7 +1033,7 @@ const NewCasePage = () => {
                   </Typography>
                 </Box>
                 <Grid container>
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
                       size="small"
@@ -1079,6 +1047,18 @@ const NewCasePage = () => {
                       placeholder="Describe the scope of investigation work for this case..."
                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                     />
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Button variant="outlined" component="label" fullWidth sx={{ height: '100%', borderRadius: '8px', borderStyle: 'dashed', minHeight: '50px' }}>
+                      {caseFiles.policy ? caseFiles.policy.name : 'Upload Policy'}
+                      <input type="file" hidden accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleCaseFileSelect(e, 'policy')} />
+                    </Button>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Button variant="outlined" component="label" fullWidth sx={{ height: '100%', borderRadius: '8px', borderStyle: 'dashed', minHeight: '50px' }}>
+                      {caseFiles.petition ? caseFiles.petition.name : 'Upload Petition'}
+                      <input type="file" hidden accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleCaseFileSelect(e, 'petition')} />
+                    </Button>
                   </Grid>
                 </Grid>
 
@@ -1409,29 +1389,18 @@ const NewCasePage = () => {
                       {/* ── Status & Findings ────────────────────────────── */}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; Findings</Typography>
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
                       </Box>
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <FormControl fullWidth size="small">
-                            <InputLabel>Check Status</InputLabel>
-                            <Select name="claimant_check_status" value={verificationData.claimant_check_status}
-                              onChange={handleVerificationChange} label="Check Status" sx={{ borderRadius: '8px' }}>
-                              <MenuItem value="Not Initiated">Not Initiated</MenuItem>
-                              <MenuItem value="WIP">WIP</MenuItem>
-                              <MenuItem value="Completed">Completed</MenuItem>
-                              <MenuItem value="Stop">Stop</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
+                        
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Statement" name="claimant_statement"
                             value={verificationData.claimant_statement} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Observations" name="claimant_observations"
-                            value={verificationData.claimant_observations} onChange={handleVerificationChange}
+                          <TextField fullWidth size="small" label="Triggers" name="claimant_triggers"
+                            value={verificationData.claimant_triggers} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1443,10 +1412,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
                       </Box>
-                      <Button variant="outlined" component="label" size="small" sx={{ borderRadius: '8px' }}>
-                        Upload Documents
-                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileSelect('claimant', e)} />
-                      </Button>
+                      
                       {verificationFiles.claimant.length > 0 && (
                         <Box sx={{ mt: 1.5 }}>
                           {verificationFiles.claimant.map((file, index) => (
@@ -1508,25 +1474,25 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={3}>
                           <TextField fullWidth size="small" label="Policy Number" name="policy_number"
                             value={verificationData.policy_number} onChange={handleVerificationChange}
-                            required
+                            
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={3}>
                           <TextField fullWidth size="small" label="Policy Period" name="policy_period"
                             value={verificationData.policy_period} onChange={handleVerificationChange}
-                            required
+                            
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={3}>
                           <TextField fullWidth size="small" label="RC Number" name="rc_number"
                             value={verificationData.rc_number} onChange={handleVerificationChange}
-                            required
+                            
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={3}>
                           <TextField fullWidth size="small" label="Permit" name="permit_insured"
                             value={verificationData.permit_insured} onChange={handleVerificationChange}
-                            required
+                            
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1536,29 +1502,18 @@ const NewCasePage = () => {
                       {/* ── Status & Findings ────────────────────────────── */}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; Findings</Typography>
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
                       </Box>
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <FormControl fullWidth size="small">
-                            <InputLabel>Check Status</InputLabel>
-                            <Select name="insured_check_status" value={verificationData.insured_check_status}
-                              onChange={handleVerificationChange} label="Check Status" sx={{ borderRadius: '8px' }}>
-                              <MenuItem value="Not Initiated">Not Initiated</MenuItem>
-                              <MenuItem value="WIP">WIP</MenuItem>
-                              <MenuItem value="Completed">Completed</MenuItem>
-                              <MenuItem value="Stop">Stop</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
+                        
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Statement" name="insured_statement"
                             value={verificationData.insured_statement} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Observations" name="insured_observations"
-                            value={verificationData.insured_observations} onChange={handleVerificationChange}
+                          <TextField fullWidth size="small" label="Triggers" name="insured_triggers"
+                            value={verificationData.insured_triggers} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1570,10 +1525,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
                       </Box>
-                      <Button variant="outlined" component="label" size="small" sx={{ borderRadius: '8px' }}>
-                        Upload Documents
-                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileSelect('insured', e)} />
-                      </Button>
+                      
                       {verificationFiles.insured.length > 0 && (
                         <Box sx={{ mt: 1.5 }}>
                           {verificationFiles.insured.map((file, index) => (
@@ -1604,6 +1556,11 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#ed6c02' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#ed6c02', letterSpacing: '1px', lineHeight: 1 }}>Personal Details</Typography>
                       </Box>
+                      <FormControlLabel
+                        control={<Checkbox checked={verificationData.driver_same_as_insured || false} onChange={handleVerificationChange} name="driver_same_as_insured" sx={{ '&.Mui-checked': { color: '#6a1b9a' } }} />}
+                        label="Driver is same as Insured"
+                        sx={{ mb: 2 }}
+                      />
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Driver Name" name="driver_name"
@@ -1635,30 +1592,17 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Driving License (DL)" name="dl_number"
                             value={verificationData.dl_number} onChange={handleVerificationChange}
-                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Permit" name="permit_driver"
                             value={verificationData.permit_driver} onChange={handleVerificationChange}
-                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="Occupation" name="occupation"
                             value={verificationData.occupation} onChange={handleVerificationChange}
-                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12}>
-                          <FormControlLabel
-                            control={
-                              <Checkbox checked={verificationData.driver_and_insured_same}
-                                onChange={(e) => handleVerificationChange({ target: { name: 'driver_and_insured_same', type: 'checkbox', checked: e.target.checked } })}
-                                name="driver_and_insured_same" />
-                            }
-                            label="Driver and Insured is Same"
-                          />
                         </Grid>
                       </Grid>
 
@@ -1667,29 +1611,18 @@ const NewCasePage = () => {
                       {/* ── Status & Findings ────────────────────────────── */}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; Findings</Typography>
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
                       </Box>
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <FormControl fullWidth size="small">
-                            <InputLabel>Check Status</InputLabel>
-                            <Select name="driver_check_status" value={verificationData.driver_check_status}
-                              onChange={handleVerificationChange} label="Check Status" sx={{ borderRadius: '8px' }}>
-                              <MenuItem value="Not Initiated">Not Initiated</MenuItem>
-                              <MenuItem value="WIP">WIP</MenuItem>
-                              <MenuItem value="Completed">Completed</MenuItem>
-                              <MenuItem value="Stop">Stop</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
+                        
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Statement" name="driver_statement"
                             value={verificationData.driver_statement} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Observations" name="driver_observations"
-                            value={verificationData.driver_observations} onChange={handleVerificationChange}
+                          <TextField fullWidth size="small" label="Triggers" name="driver_triggers"
+                            value={verificationData.driver_triggers} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1701,10 +1634,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
                       </Box>
-                      <Button variant="outlined" component="label" size="small" sx={{ borderRadius: '8px' }}>
-                        Upload Documents
-                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileSelect('driver', e)} />
-                      </Button>
+                      
                       {verificationFiles.driver.length > 0 && (
                         <Box sx={{ mt: 1.5 }}>
                           {verificationFiles.driver.map((file, index) => (
@@ -1767,7 +1697,6 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={6}>
                           <TextField fullWidth size="small" label="FIR Number" name="fir_number_spot"
                             value={verificationData.fir_number_spot} onChange={handleVerificationChange}
-                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -1810,29 +1739,18 @@ const NewCasePage = () => {
                       {/* ── Status & Findings ────────────────────────────── */}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; Findings</Typography>
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
                       </Box>
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <FormControl fullWidth size="small">
-                            <InputLabel>Check Status</InputLabel>
-                            <Select name="spot_check_status" value={verificationData.spot_check_status}
-                              onChange={handleVerificationChange} label="Check Status" sx={{ borderRadius: '8px' }}>
-                              <MenuItem value="Not Initiated">Not Initiated</MenuItem>
-                              <MenuItem value="WIP">WIP</MenuItem>
-                              <MenuItem value="Completed">Completed</MenuItem>
-                              <MenuItem value="Stop">Stop</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
+                        
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Statement" name="spot_statement"
                             value={verificationData.spot_statement} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Observations" name="spot_observations"
-                            value={verificationData.spot_observations} onChange={handleVerificationChange}
+                          <TextField fullWidth size="small" label="Triggers" name="spot_triggers"
+                            value={verificationData.spot_triggers} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1844,10 +1762,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
                       </Box>
-                      <Button variant="outlined" component="label" size="small" sx={{ borderRadius: '8px' }}>
-                        Upload Documents
-                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileSelect('spot', e)} />
-                      </Button>
+                      
                       {verificationFiles.spot.length > 0 && (
                         <Box sx={{ mt: 1.5 }}>
                           {verificationFiles.spot.map((file, index) => (
@@ -1916,7 +1831,6 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={6}>
                           <TextField fullWidth size="small" label="MV Act" name="mv_act"
                             value={verificationData.mv_act} onChange={handleVerificationChange}
-                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1932,19 +1846,16 @@ const NewCasePage = () => {
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="FIR Delay (Days)" name="fir_delay_in_days" type="number"
                             value={verificationData.fir_delay_in_days} onChange={handleVerificationChange}
-                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="BSN Sections" name="bsn_sections"
                             value={verificationData.bsn_sections} onChange={handleVerificationChange}
-                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField fullWidth size="small" label="IPC Sections" name="ipc_sections"
                             value={verificationData.ipc_sections} onChange={handleVerificationChange}
-                            required
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1954,29 +1865,18 @@ const NewCasePage = () => {
                       {/* ── Status & Findings ────────────────────────────── */}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; Findings</Typography>
+                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
                       </Box>
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <FormControl fullWidth size="small">
-                            <InputLabel>Check Status</InputLabel>
-                            <Select name="chargesheet_check_status" value={verificationData.chargesheet_check_status}
-                              onChange={handleVerificationChange} label="Check Status" sx={{ borderRadius: '8px' }}>
-                              <MenuItem value="Not Initiated">Not Initiated</MenuItem>
-                              <MenuItem value="WIP">WIP</MenuItem>
-                              <MenuItem value="Completed">Completed</MenuItem>
-                              <MenuItem value="Stop">Stop</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
+                        
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Statement" name="chargesheet_statement"
                             value={verificationData.chargesheet_statement} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                         <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Observations" name="chargesheet_observations"
-                            value={verificationData.chargesheet_observations} onChange={handleVerificationChange}
+                          <TextField fullWidth size="small" label="Triggers" name="chargesheet_triggers"
+                            value={verificationData.chargesheet_triggers} onChange={handleVerificationChange}
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
@@ -1988,10 +1888,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
                       </Box>
-                      <Button variant="outlined" component="label" size="small" sx={{ borderRadius: '8px' }}>
-                        Upload Documents
-                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileSelect('chargesheet', e)} />
-                      </Button>
+                      
                       {verificationFiles.chargesheet.length > 0 && (
                         <Box sx={{ mt: 1.5 }}>
                           {verificationFiles.chargesheet.map((file, index) => (
@@ -2091,18 +1988,7 @@ const NewCasePage = () => {
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
                       </Box>
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <FormControl fullWidth size="small">
-                            <InputLabel>Check Status</InputLabel>
-                            <Select name="rti_check_status" value={verificationData.rti_check_status}
-                              onChange={handleVerificationChange} label="Check Status" sx={{ borderRadius: '8px' }}>
-                              <MenuItem value="Not Initiated">Not Initiated</MenuItem>
-                              <MenuItem value="WIP">WIP</MenuItem>
-                              <MenuItem value="Completed">Completed</MenuItem>
-                              <MenuItem value="Stop">Stop</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
+                        
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Remarks" name="rti_remarks"
                             value={verificationData.rti_remarks} onChange={handleVerificationChange}
@@ -2117,10 +2003,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
                       </Box>
-                      <Button variant="outlined" component="label" size="small" sx={{ borderRadius: '8px' }}>
-                        Upload Documents
-                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileSelect('rti', e)} />
-                      </Button>
+                      
                       {verificationFiles.rti.length > 0 && (
                         <Box sx={{ mt: 1.5 }}>
                           {verificationFiles.rti.map((file, index) => (
@@ -2225,18 +2108,7 @@ const NewCasePage = () => {
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
                       </Box>
                       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <FormControl fullWidth size="small">
-                            <InputLabel>Check Status</InputLabel>
-                            <Select name="rto_check_status" value={verificationData.rto_check_status}
-                              onChange={handleVerificationChange} label="Check Status" sx={{ borderRadius: '8px' }}>
-                              <MenuItem value="Not Initiated">Not Initiated</MenuItem>
-                              <MenuItem value="WIP">WIP</MenuItem>
-                              <MenuItem value="Completed">Completed</MenuItem>
-                              <MenuItem value="Stop">Stop</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
+                        
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Remarks" name="rto_remarks"
                             value={verificationData.rto_remarks} onChange={handleVerificationChange}
@@ -2251,10 +2123,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
                       </Box>
-                      <Button variant="outlined" component="label" size="small" sx={{ borderRadius: '8px' }}>
-                        Upload Documents
-                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleFileSelect('rto', e)} />
-                      </Button>
+                      
                       {verificationFiles.rto.length > 0 && (
                         <Box sx={{ mt: 1.5 }}>
                           {verificationFiles.rto.map((file, index) => (

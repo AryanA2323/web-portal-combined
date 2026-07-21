@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vendor_Portal",
     "slug": "Vendor_Portal",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "vendorportal",
@@ -12,7 +12,8 @@
       "supportsTablet": true
     },
     "android": {
-      "usesCleartextTraffic": true,
+      "package": "in.shovelsolutions.claimverify.vendor",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -41,11 +42,25 @@
         }
       ],
       "expo-notifications",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0c9954ca-ac4a-4923-860b-1f28b7542ce7"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "apiBaseUrl": "",
+      "router": {},
+      "eas": {
+        "projectId": "0c9954ca-ac4a-4923-860b-1f28b7542ce7"
+      }
     }
   }
 }

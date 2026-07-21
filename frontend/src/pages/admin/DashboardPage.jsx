@@ -25,6 +25,7 @@ import {
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
 import api from '../../services/api';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 // Register ChartJS components
 ChartJS.register(
@@ -46,12 +47,12 @@ const AdminDashboard = () => {
   const [recentActivity, setRecentActivity] = useState([]);
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboardData(false);
   }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (isAutoRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isAutoRefresh) setLoading(true);
       
       // Fetch all dashboard data in parallel
       const [statsRes, volumeRes, statusRes, activityRes] = await Promise.all([
@@ -69,9 +70,11 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
-      setLoading(false);
+      if (!isAutoRefresh) setLoading(false);
     }
   };
+
+  useAutoRefresh(fetchDashboardData);
 
   // Generate stats cards data from API response
   const statsData = stats ? [

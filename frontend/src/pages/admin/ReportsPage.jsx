@@ -24,31 +24,7 @@ import AdminLayout from './components/AdminLayout';
 import api from '../../services/api';
 import jsPDF from 'jspdf';
 import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
-
-const getEvidencePhotoUrl = (photo) => {
-  if (!photo) return '';
-  if (typeof photo === 'string') return photo;
-  return photo.preview_url || photo.url || photo.photo_url || '';
-};
-
-const resolveEvidencePhotoUrl = (photoUrl) => {
-  if (!photoUrl) return '';
-  if (photoUrl.startsWith('data:')) return photoUrl;
-  if (photoUrl.startsWith('http')) {
-    try {
-      const parsedUrl = new URL(photoUrl);
-      if (parsedUrl.pathname.startsWith('/media/')) {
-        return `${parsedUrl.pathname}${parsedUrl.search || ''}`;
-      }
-    } catch {
-      return photoUrl;
-    }
-    return photoUrl;
-  }
-  if (photoUrl.startsWith('/media/')) return photoUrl;
-  if (photoUrl.startsWith('media/')) return `/${photoUrl}`;
-  return `/media/${photoUrl.replace(/^\/+/, '')}`;
-};
+import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
 
 const getEvidenceImageDataUrl = async (photo) => {
   const imgSrc = resolveEvidencePhotoUrl(getEvidencePhotoUrl(photo));

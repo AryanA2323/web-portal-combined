@@ -26,6 +26,7 @@ import api from '../../services/api';
 
 const eventTypeColor = {
   CASE_CREATED: '#4c6ef5',
+  USER_CREATED: '#0ca678',
   VENDOR_ASSIGNED: '#ff922b',
   LAWYER_ASSIGNED: '#9c36b5',
   AI_REPORT_GENERATED: '#2b8a3e',

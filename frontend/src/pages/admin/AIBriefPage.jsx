@@ -42,6 +42,7 @@ import StatCard from './components/StatCard';
 import api from '../../services/api';
 import jsPDF from 'jspdf';
 import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 const REPORT_STORAGE_KEY = 'aiBriefReports';
 
@@ -54,8 +55,8 @@ const irStatusColors = {
 };
 
 const reportStatusColors = {
-  Generated: '#48bb78',
-  'Pending Report': '#ff922b',
+  'Report Generated': '#48bb78',
+  'Report Not Generated': '#ff922b',
 };
 
 const loadStoredReports = () => {
@@ -188,6 +189,11 @@ const extractAssignedVendor = (row) => {
   return subItem?.assigned_vendor_name || 'Unassigned';
 };
 
+const extractVendorSubmitStatus = (row) => {
+  const subItem = (row.sub_items || []).find((item) => item.assigned_vendor_name);
+  return subItem?.check_status || 'Not Initiated';
+};
+
 const extractSummary = (row) => {
   const summary = (row.sub_items || []).find((item) => item.statement)?.statement;
   if (summary) return summary;
@@ -258,11 +264,11 @@ const AIBriefPage = () => {
   }, []);
 
   useEffect(() => {
-    fetchCases();
+    fetchCases(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, rowsPerPage, statusFilter, caseTypeFilter, vendorFilter, vendors]);
 
-  const fetchLawyers = async () => {
+  const fetchLawyers = async (isAutoRefresh = false) => {
     try {
       const response = await api.get('/lawyers');
       setLawyers(response.data || []);
@@ -271,7 +277,7 @@ const AIBriefPage = () => {
     }
   };
 
-  const fetchVendors = async () => {
+  const fetchVendors = async (isAutoRefresh = false) => {
     try {
       const response = await api.get('/check-vendors');
       setVendors(response.data || []);
@@ -280,9 +286,9 @@ const AIBriefPage = () => {
     }
   };
 
-  const fetchCases = async () => {
+  const fetchCases = async (isAutoRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isAutoRefresh) setLoading(true);
       setError('');
       const response = await api.get('/cases/incident-db', {
         params: {
@@ -310,6 +316,10 @@ const AIBriefPage = () => {
     }
   };
 
+  useAutoRefresh(fetchCases);
+  useAutoRefresh(fetchVendors);
+  useAutoRefresh(fetchLawyers);
+
   const rows = useMemo(() => {
     return cases.map((row) => {
       const report = reportsByCase[row.id];
@@ -321,8 +331,9 @@ const AIBriefPage = () => {
         summary,
         vendorName,
         vendorAvatar: vendorName?.charAt(0)?.toUpperCase() || 'U',
-        reportStatus: report ? 'Generated' : 'Pending Report',
+        reportStatus: report ? 'Report Generated' : 'Report Not Generated',
         reportGeneratedAt: report?.generatedAt || null,
+        vendorSubmitStatus: extractVendorSubmitStatus(row),
       };
     });
   }, [cases, reportsByCase]);
@@ -973,6 +984,7 @@ const AIBriefPage = () => {
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Case ID</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Summary</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Assigned Vendor</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Vendor Status</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Generated</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>IR Status</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Report Status</TableCell>
@@ -1038,6 +1050,11 @@ const AIBriefPage = () => {
                           </Avatar>
                           <Typography sx={{ fontSize: '14px', color: '#333' }}>{row.vendorName}</Typography>
                         </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Typography sx={{ fontSize: '14px', color: '#333' }}>
+                          {row.vendorSubmitStatus}
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Typography sx={{ fontSize: '14px', color: '#666' }}>

@@ -12,12 +12,13 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { Email, Lock, Security } from '@mui/icons-material';
+import { Email, Lock } from '@mui/icons-material';
 
 import { FormInput, LoadingButton, AlertMessage } from '../../components/common';
 import { loginSchema } from '../../utils/validationSchemas';
 import { getRoleDashboard } from '../../utils/constants';
 import { useAuth } from '../../context';
+import companyLogo from '../../logoo.png';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -201,16 +202,29 @@ const LoginPage = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 70,
-                height: 70,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: '20px',
+                width: { xs: 108, sm: 124 },
+                height: { xs: 108, sm: 124 },
+                mx: 'auto',
                 mb: 3,
-                boxShadow: '0 8px 24px rgba(102, 126, 234, 0.4)',
+                p: 1.25,
+                background: 'linear-gradient(145deg, rgba(255,255,255,0.96), rgba(244,247,255,0.9))',
+                borderRadius: '28px',
+                border: '1px solid rgba(102,126,234,0.24)',
+                boxShadow: '0 18px 36px rgba(102, 126, 234, 0.22), inset 0 1px 0 rgba(255,255,255,0.95)',
                 animation: 'iconBounce 0.8s ease-out',
               }}
             >
-              <Security sx={{ fontSize: 40, color: '#fff' }} />
+              <Box
+                component="img"
+                src={companyLogo}
+                alt="Shovel Screen"
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  filter: 'drop-shadow(0 8px 14px rgba(35, 48, 120, 0.22))',
+                }}
+              />
             </Box>
             <Typography
               variant={isMobile ? 'h5' : 'h4'}

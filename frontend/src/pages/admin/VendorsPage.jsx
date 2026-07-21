@@ -31,6 +31,7 @@ import {
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
 import api from '../../services/api';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 const VendorCard = ({ vendor, onViewProfile }) => {
   // Generate initials from company name
@@ -187,29 +188,33 @@ const VendorsPage = () => {
   });
 
   useEffect(() => {
-    fetchVendors();
+    fetchVendors(false);
   }, []);
 
-  const fetchVendors = async () => {
+  const fetchVendors = async (isAutoRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isAutoRefresh) setLoading(true);
       const response = await api.get('/vendors');
       setVendors(response.data || []);
       
       // Calculate stats
       const activeVendors = response.data.filter(v => v.is_active);
+      const avgRating = response.data.reduce((acc, curr) => acc + (curr.rating || 0), 0) / (response.data.length || 1);
+      
       setStats({
         total: response.data.length,
         active: activeVendors.length,
-        avgRating: 4.6, // You can calculate this from actual data if you have ratings
-        activeCases: 0, // You can fetch this from cases API if needed
+        avgRating: avgRating.toFixed(1),
+        activeCases: response.data.reduce((acc, curr) => acc + (curr.active_cases || 0), 0),
       });
-    } catch (error) {
-      console.error('Failed to fetch vendors:', error);
+    } catch (err) {
+      console.error('Failed to load vendors', err);
     } finally {
       setLoading(false);
     }
   };
+
+  useAutoRefresh(fetchVendors);
 
   const statsData = [
     { title: 'Total Vendors', value: stats.total.toString(), icon: LocationOn, color: '#3498db', bgColor: '#e3f2fd' },

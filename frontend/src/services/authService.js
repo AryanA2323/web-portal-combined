@@ -1,4 +1,5 @@
 import api from './api';
+import { authStorage } from '../utils/authStorage';
 
 // Auth service for handling authentication operations
 const authService = {
@@ -9,8 +10,8 @@ const authService = {
       
       // Store token and user data
       if (response.data.token) {
-        localStorage.setItem('accessToken', response.data.token.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        authStorage.setItem('accessToken', response.data.token.token);
+        authStorage.setItem('user', JSON.stringify(response.data.user));
       }
       
       return response.data;
@@ -40,8 +41,8 @@ const authService = {
       
       // Backend returns token object and user info
       if (response.data.token) {
-        localStorage.setItem('accessToken', response.data.token.token);
-        localStorage.setItem('user', JSON.stringify(userData));
+        authStorage.setItem('accessToken', response.data.token.token);
+        authStorage.setItem('user', JSON.stringify(userData));
       }
       
       return { ...response.data, user: userData };
@@ -62,8 +63,8 @@ const authService = {
       const userData = response.data.user;
       
       if (response.data.token) {
-        localStorage.setItem('accessToken', response.data.token.token);
-        localStorage.setItem('user', JSON.stringify(userData));
+        authStorage.setItem('accessToken', response.data.token.token);
+        authStorage.setItem('user', JSON.stringify(userData));
       }
       
       return { ...response.data, user: userData };
@@ -136,20 +137,18 @@ const authService = {
 
   // Logout function
   logout: () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    authStorage.clearAuth();
   },
 
   // Get current user
   getCurrentUser: () => {
-    const user = localStorage.getItem('user');
+    const user = authStorage.getItem('user');
     return user ? JSON.parse(user) : null;
   },
 
   // Check if user is authenticated
   isAuthenticated: () => {
-    return !!localStorage.getItem('accessToken');
+    return !!authStorage.getItem('accessToken');
   },
 };
 

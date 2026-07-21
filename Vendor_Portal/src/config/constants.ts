@@ -1,6 +1,12 @@
 import Constants from 'expo-constants';
 
 const getApiBaseUrl = () => {
+  const configuredApiBaseUrl = Constants.expoConfig?.extra?.apiBaseUrl;
+
+  if (typeof configuredApiBaseUrl === 'string' && configuredApiBaseUrl.length > 0) {
+    return configuredApiBaseUrl;
+  }
+
   const expoHost = Constants.expoConfig?.hostUri?.split(':')[0];
   
   if (expoHost) {
