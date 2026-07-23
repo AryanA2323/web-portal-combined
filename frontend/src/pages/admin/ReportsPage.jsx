@@ -25,6 +25,7 @@ import api from '../../services/api';
 import jsPDF from 'jspdf';
 import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
 import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
+import { PDFDocument } from 'pdf-lib';
 
 const getEvidenceImageDataUrl = async (photo) => {
   const imgSrc = resolveEvidencePhotoUrl(getEvidencePhotoUrl(photo));
@@ -279,7 +280,119 @@ const ReportsPage = () => {
         }
       }
 
-      doc.save(`${caseFilePart}-approved-report.pdf`);
+      const vendorDocs = response.data.vendor_documents || [];
+      const caseDocs = response.data.case_documents || [];
+      const hasAnyDocs = vendorDocs.length > 0 || caseDocs.length > 0;
+
+      if (hasAnyDocs) {
+        doc.addPage();
+        y = 20;
+
+        if (vendorDocs.length > 0) {
+          addLine('VENDOR DOCUMENTS', 13, true);
+          y += 4;
+          for (let i = 0; i < vendorDocs.length; i++) {
+            addLine(`Vendor Document ${i + 1}: ${vendorDocs[i].filename || 'Document'}`, 11, false);
+          }
+          y += 6;
+        }
+
+        if (caseDocs.length > 0) {
+          addLine('CASE DOCUMENTS', 13, true);
+          y += 4;
+          for (let i = 0; i < caseDocs.length; i++) {
+            addLine(`Case Document ${i + 1}: ${caseDocs[i].filename || 'Document'}`, 11, false);
+          }
+          y += 6;
+        }
+      }
+
+      const pdfInsertions = [];
+      const fileName = `${caseFilePart}-approved-report.pdf`;
+
+      const drawDocumentHeadingAndQueue = async (docObj, labelPrefix) => {
+        doc.addPage();
+        y = 20;
+        addLine(`${labelPrefix}: ${docObj.filename || 'Document'}`, 13, true);
+        y += 8;
+        
+        const urlStr = docObj.url || docObj.file_url || '';
+        const isImage = /\.(jpeg|jpg|png|gif|webp)$/i.test(urlStr || docObj.filename || '');
+        const isPdf = /\.(pdf)$/i.test(urlStr || docObj.filename || '');
+
+        if (isImage) {
+          try {
+            const imageDataUrl = await getEvidenceImageDataUrl({ url: urlStr });
+            if (imageDataUrl) {
+              const imageFormat = imageDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+              const imageHeight = 78;
+              doc.addImage(imageDataUrl, imageFormat, margin, y, textWidth, imageHeight);
+            }
+          } catch (err) {
+            console.error('Failed to add document image to PDF:', err);
+          }
+        } else if (isPdf) {
+          pdfInsertions.push({
+            afterPageIndex: doc.internal.getNumberOfPages() - 1,
+            url: urlStr,
+            filename: docObj.filename
+          });
+        } else {
+          addLine(urlStr || 'No URL available', 9, false);
+        }
+      };
+
+      if (vendorDocs.length > 0) {
+        for (let i = 0; i < vendorDocs.length; i++) {
+          await drawDocumentHeadingAndQueue(vendorDocs[i], `Vendor Document ${i + 1}`);
+        }
+      }
+
+      if (caseDocs.length > 0) {
+        for (let i = 0; i < caseDocs.length; i++) {
+          await drawDocumentHeadingAndQueue(caseDocs[i], `Case Document ${i + 1}`);
+        }
+      }
+
+      if (pdfInsertions.length > 0) {
+        try {
+          const basePdfBuffer = doc.output('arraybuffer');
+          const mergedPdf = await PDFDocument.load(basePdfBuffer);
+          
+          pdfInsertions.sort((a, b) => b.afterPageIndex - a.afterPageIndex);
+
+          for (const insertion of pdfInsertions) {
+            try {
+              const res = await fetch(insertion.url);
+              if (!res.ok) throw new Error(`Fetch failed with status ${res.status}`);
+              const pdfBytes = await res.arrayBuffer();
+              const externalPdf = await PDFDocument.load(pdfBytes);
+              const copiedPages = await mergedPdf.copyPages(externalPdf, externalPdf.getPageIndices());
+              
+              let insertAt = insertion.afterPageIndex + 1;
+              for (const page of copiedPages) {
+                mergedPdf.insertPage(insertAt, page);
+                insertAt++;
+              }
+            } catch (err) {
+              console.error(`Failed to fetch or merge PDF ${insertion.filename}:`, err);
+            }
+          }
+          
+          const mergedPdfBytes = await mergedPdf.save();
+          const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = fileName;
+          link.click();
+          URL.revokeObjectURL(link.href);
+        } catch (err) {
+          console.error('Failed to merge PDFs:', err);
+          doc.save(fileName);
+        }
+      } else {
+        doc.save(fileName);
+      }
     } catch (err) {
       console.error('Failed to download approved report:', err);
       setError('Failed to download approved report. Please try again.');

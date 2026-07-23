@@ -29,6 +29,11 @@ import {
   Grid,
   Snackbar,
   Alert,
+  Tabs,
+  Tab,
+  Stack,
+  Divider,
+  Tooltip,
 } from '@mui/material';
 import {
   Search,
@@ -43,6 +48,10 @@ import {
   Edit,
   Close,
   Visibility,
+  Description,
+  Assignment,
+  Collections,
+  InsertDriveFile,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
@@ -90,6 +99,69 @@ const caseTypeColors = {
   'Connected Case': '#76e4f7',
 };
 
+const QUESTIONNAIRE_LABELS = {
+  relation: 'Relation with Deceased / Injured',
+  claim_type: 'Type of Claim',
+  deceased_injury_name: 'Deceased / Injured Person Name',
+  deceased_injury_income: 'Deceased / Injured Income',
+  monthly_income: 'Monthly Income of Claimant',
+  hr_manager: 'Name & No. of Company HR / Manager',
+  date_of_accident: 'Date of Accident',
+  time_of_accident: 'Time of Accident',
+  description_of_accident: 'Description of Accident',
+  investigation_datetime: 'Date & Time of Investigation',
+};
+
+const KNOWN_Q_KEYS = new Set(Object.keys({
+  relation: 1, claim_type: 1, deceased_injury_name: 1, deceased_injury_income: 1,
+  monthly_income: 1, hr_manager: 1, date_of_accident: 1, time_of_accident: 1,
+  description_of_accident: 1, investigation_datetime: 1,
+}));
+
+const parseQuestionnaire = (rawVal) => {
+  if (!rawVal) return null;
+  let parsed = rawVal;
+  // Handle string (possibly double-serialized)
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+      if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    } catch (e) {
+      return null;
+    }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+
+  // Check if the object already has known questionnaire field names
+  const knownEntries = {};
+  let foundKnown = 0;
+  for (const k of Object.keys(parsed)) {
+    if (KNOWN_Q_KEYS.has(k)) {
+      knownEntries[k] = parsed[k];
+      foundKnown++;
+    }
+  }
+  if (foundKnown > 0) return knownEntries;
+
+  // Fallback: if it's a character-indexed object ({"0": "{", "1": "\"", ...})
+  if (parsed['0'] !== undefined && parsed['1'] !== undefined) {
+    try {
+      const numericKeys = Object.keys(parsed).filter(k => /^\d+$/.test(k));
+      numericKeys.sort((a, b) => Number(a) - Number(b));
+      const str = numericKeys.map(k => parsed[k]).join('');
+      let inner = JSON.parse(str);
+      if (typeof inner === 'string') inner = JSON.parse(inner);
+      if (typeof inner === 'object' && inner !== null && !Array.isArray(inner)) return inner;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // If it has any keys at all, return it as-is (generic questionnaire data)
+  if (Object.keys(parsed).length > 0) return parsed;
+  return null;
+};
+
 const CasesPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -104,6 +176,15 @@ const CasesPage = () => {
   const [selected, setSelected] = useState([]);
   const [expandedCases, setExpandedCases] = useState({});
 
+  // Full case view modal state
+  const [fullCaseModalOpen, setFullCaseModalOpen] = useState(false);
+  const [fullCaseLoading, setFullCaseLoading] = useState(false);
+  const [fullCaseData, setFullCaseData] = useState(null);
+  const [fullCaseTab, setFullCaseTab] = useState(0);
+  const [selectedCheckTab, setSelectedCheckTab] = useState(0);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
+  const [statusConfirmAction, setStatusConfirmAction] = useState(null);
   // Vendor assignment modal state
   const [vendorModalOpen, setVendorModalOpen] = useState(false);
   const [vendorList, setVendorList] = useState([]);
@@ -250,6 +331,29 @@ const CasesPage = () => {
 
   const isSelected = (id) => selected.indexOf(id) !== -1;
 
+  const handleToggleCaseStatus = async (caseId, newStatus) => {
+    try {
+      setStatusLoading(true);
+      await api.patch(`/cases/incident-db/${caseId}/status`, { status: newStatus });
+      setSnackbar({ open: true, message: `Case status updated to ${newStatus}`, severity: 'success' });
+      // Update local state for immediate feedback
+      if (fullCaseData && fullCaseData.case.id === caseId) {
+        setFullCaseData(prev => ({
+          ...prev,
+          case: { ...prev.case, full_case_status: newStatus }
+        }));
+      }
+      setCases(prevCases =>
+        prevCases.map(c => c.id === caseId ? { ...c, full_case_status: newStatus } : c)
+      );
+    } catch (error) {
+      console.error('Error updating case status:', error);
+      setSnackbar({ open: true, message: error.response?.data?.error || 'Failed to update case status', severity: 'error' });
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
   // Create case handler
   const handleCreateCase = () => {
     navigate('/admin/cases/new');
@@ -274,6 +378,24 @@ const CasesPage = () => {
     'Chargesheet': 'chargesheet',
     'RTI Check': 'rti',
     'RTO Check': 'rto',
+  };
+
+  // Open Full Case View Modal
+  const openFullCaseModal = async (caseId) => {
+    try {
+      setFullCaseLoading(true);
+      setFullCaseModalOpen(true);
+      setFullCaseTab(0);
+      setSelectedCheckTab(0);
+      const res = await api.get(`/cases/incident-db/${caseId}/full-details`);
+      setFullCaseData(res.data);
+    } catch (err) {
+      console.error('Failed to fetch full case details:', err);
+      setSnackbar({ open: true, message: 'Failed to load case details', severity: 'error' });
+      setFullCaseModalOpen(false);
+    } finally {
+      setFullCaseLoading(false);
+    }
   };
 
   // Open vendor assignment modal for a sub-check
@@ -337,8 +459,8 @@ const CasesPage = () => {
   };
 
   const handleReviewSubmit = async (action) => {
-    if (action === 'reject' && (!reviewFeedback || !reviewVendorId)) {
-      setSnackbar({ open: true, message: "Please provide feedback and select a new vendor for reassignment.", severity: 'warning' });
+    if (action === 'reject' && !reviewFeedback) {
+      setSnackbar({ open: true, message: "Please provide feedback for the rejection.", severity: 'warning' });
       return;
     }
 
@@ -358,7 +480,6 @@ const CasesPage = () => {
       await api.post(`/cases/incident-db/${reviewData.case.id}/check/${slug}/review`, {
         action: action,
         feedback: action === 'reject' ? reviewFeedback : null,
-        new_vendor_id: action === 'reject' ? parseInt(reviewVendorId, 10) : null
       });
       setReviewModalOpen(false);
       setReviewData(null);
@@ -662,7 +783,18 @@ const CasesPage = () => {
 
                       {/* Case Number */}
                       <TableCell>
-                        <Typography sx={{ fontWeight: 600, fontSize: '14px', color: '#764ba2' }}>
+                        <Typography
+                          onClick={() => openFullCaseModal(row.id)}
+                          sx={{
+                            fontWeight: 700,
+                            fontSize: '14px',
+                            color: '#4f46e5',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            '&:hover': { color: '#3730a3' },
+                          }}
+                          title="Click to view full case details, recordings, documents & evidence"
+                        >
                           {row.case_number || '—'}
                         </Typography>
                       </TableCell>
@@ -788,6 +920,7 @@ const CasesPage = () => {
                                   <TableBody>
                                     {subItems.map((sub, idx) => {
                                       const sc = checkStatusColors[sub.check_status] || '#a0aec0';
+                                      const isVendorAssigned = Boolean(sub.assigned_vendor_name || sub.assigned_vendor_id);
                                       return (
                                         <TableRow
                                           key={sub.sub_id}
@@ -821,13 +954,43 @@ const CasesPage = () => {
                                             )}
                                           </TableCell>
                                           <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                                            {sub.check_status === 'Verified' ? (
-                                              <Button size="small" variant="text" onClick={() => openReviewModal(row.id, sub.type)} sx={{ textTransform: 'none', p: 0, minWidth: 'auto' }}>
-                                                <Typography variant="body2" sx={{ fontWeight: 700, color: '#48bb78', fontSize: '13px', textDecoration: 'underline' }}>Accepted</Typography>
-                                              </Button>
-                                            ) : (
-                                              <Button size="medium" variant="contained" startIcon={<Visibility sx={{ fontSize: 16 }} />} onClick={() => openReviewModal(row.id, sub.type)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 700, backgroundColor: '#667eea', color: '#fff', py: 0.75, px: 2, minWidth: 0, boxShadow: 'none', mx: 'auto' }}>Review</Button>
-                                            )}
+                                            <Tooltip title={!isVendorAssigned ? "Assign vendor to enable this button" : ""} arrow placement="top">
+                                              <Box component="span" sx={{ display: 'inline-block', cursor: !isVendorAssigned ? 'not-allowed' : 'default' }}>
+                                                {sub.check_status === 'Verified' ? (
+                                                  <Button size="small" variant="text" disabled={!isVendorAssigned} onClick={() => openReviewModal(row.id, sub.type)} sx={{ textTransform: 'none', p: 0, minWidth: 'auto', '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'not-allowed' } }}>
+                                                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#48bb78', fontSize: '13px', textDecoration: 'underline' }}>Accepted</Typography>
+                                                  </Button>
+                                                ) : (
+                                                  <Button
+                                                    size="medium"
+                                                    variant="contained"
+                                                    disabled={!isVendorAssigned}
+                                                    startIcon={<Visibility sx={{ fontSize: 16 }} />}
+                                                    onClick={() => openReviewModal(row.id, sub.type)}
+                                                    sx={{
+                                                      textTransform: 'none',
+                                                      fontSize: '13px',
+                                                      fontWeight: 700,
+                                                      backgroundColor: '#667eea',
+                                                      color: '#fff',
+                                                      py: 0.75,
+                                                      px: 2,
+                                                      minWidth: 0,
+                                                      boxShadow: 'none',
+                                                      mx: 'auto',
+                                                      '&.Mui-disabled': {
+                                                        pointerEvents: 'auto',
+                                                        cursor: 'not-allowed',
+                                                        backgroundColor: '#e2e8f0',
+                                                        color: '#94a3b8',
+                                                      },
+                                                    }}
+                                                  >
+                                                    Review
+                                                  </Button>
+                                                )}
+                                              </Box>
+                                            </Tooltip>
                                           </TableCell>
                                         </TableRow>
                                       );
@@ -1078,21 +1241,61 @@ const CasesPage = () => {
                     <TableBody>
                       {Object.entries(reviewData.check || {})
                         .filter(([k, v]) =>
-                          !['id', 'case_id', 'created_at', 'updated_at', 'vendor_evidence', 'evidence', 'evidence_photos', 'statement_audio', 'statement_audio_url', 'statement', 'statement_mr', 'statement_en', 'statement_transcript_updated_at', 'statement_entries', 'statement_transcript_mr', 'statement_transcript_provider', 'statement_transcript_confidence', 'claimant_lat', 'claimant_lng', 'insured_lat', 'insured_lng', 'driver_lat', 'driver_lng', 'spot_lat', 'spot_lng', 'statement_transcript_en', 'statement_audio_path', 'vendor_documents', 'admin_feedback', 'is_reassigned'].includes(k)
+                          !['id', 'case_id', 'created_at', 'updated_at', 'vendor_evidence', 'evidence', 'evidence_photos', 'statement_audio', 'statement_audio_url', 'statement', 'statement_mr', 'statement_en', 'statement_transcript_updated_at', 'statement_entries', 'statement_transcript_mr', 'statement_transcript_provider', 'statement_transcript_confidence', 'claimant_lat', 'claimant_lng', 'insured_lat', 'insured_lng', 'driver_lat', 'driver_lng', 'spot_lat', 'spot_lng', 'statement_transcript_en', 'statement_audio_path', 'admin_feedback', 'is_reassigned', 'questionnaire'].includes(k)
                         )
-                        .map(([key, val], index) => {
+                        .map(([key, rawVal], index) => {
+                          let val = rawVal;
+                          if (typeof rawVal === 'string' && rawVal.startsWith('[') && rawVal.endsWith(']')) {
+                            try {
+                              val = JSON.parse(rawVal);
+                            } catch (e) { }
+                          }
                           const displayVal = val === null || val === undefined || val === '' || val === '[]' || val === '{}'
                             ? 'NA'
                             : Array.isArray(val)
                               ? (val.length > 0 ? val.map(item => typeof item === 'object' ? JSON.stringify(item) : item).join(', ') : 'NA')
                               : (typeof val === 'object' && val !== null ? (Object.keys(val).length > 0 ? JSON.stringify(val) : 'NA') : String(val));
+
                           return (
                             <TableRow key={key} sx={{ '&:last-child td': { border: 0 }, bgcolor: index % 2 === 0 ? '#f7fafc' : '#ffffff' }}>
                               <TableCell component="th" scope="row" sx={{ width: '40%', color: '#4a5568', fontWeight: 600, textTransform: 'capitalize', borderRight: '1px solid #edf2f7', py: 1.5 }}>
                                 {key.replace(/_/g, ' ')}
                               </TableCell>
                               <TableCell sx={{ color: '#2d3748', wordBreak: 'break-word', py: 1.5 }}>
-                                {displayVal}
+                                {key.toLowerCase().includes('document') && Array.isArray(val) && val.length > 0 ? (
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                    {val.map((doc, dIdx) => (
+                                      <Button
+                                        key={dIdx}
+                                        size="small"
+                                        variant="outlined"
+                                        component="a"
+                                        href={doc.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        startIcon={<InsertDriveFile fontSize="small" />}
+                                        sx={{ textTransform: 'none', borderRadius: '4px', p: 0.5, px: 1 }}
+                                      >
+                                        Preview {doc.filename || 'Document'}
+                                      </Button>
+                                    ))}
+                                  </Box>
+                                ) : typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/media/')) ? (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    component="a"
+                                    href={val}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    startIcon={<InsertDriveFile fontSize="small" />}
+                                    sx={{ textTransform: 'none', borderRadius: '4px', p: 0.5, px: 1 }}
+                                  >
+                                    Preview
+                                  </Button>
+                                ) : (
+                                  displayVal
+                                )}
                               </TableCell>
                             </TableRow>
                           );
@@ -1102,6 +1305,55 @@ const CasesPage = () => {
                   </Table>
                 </Box>
               </Paper>
+
+              {/* Dedicated Questionnaire Form Section */}
+              {(() => {
+                const qData = parseQuestionnaire(reviewData?.check?.questionnaire);
+                const hasData = qData && typeof qData === 'object' && Object.keys(qData).length > 0;
+                const displayObj = hasData
+                  ? qData
+                  : Object.keys(QUESTIONNAIRE_LABELS).reduce((acc, k) => ({ ...acc, [k]: '—' }), {});
+
+                return (
+                  <Paper elevation={0} sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #e2e8f0', bgcolor: '#fff' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#667eea', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        📋 Questionnaire Form
+                      </Typography>
+                      <Chip
+                        label={hasData ? "Vendor Submitted" : "Pending Submission"}
+                        size="small"
+                        sx={{
+                          bgcolor: hasData ? '#e0f2fe' : '#f1f5f9',
+                          color: hasData ? '#0369a1' : '#64748b',
+                          fontWeight: 700,
+                          fontSize: '11px'
+                        }}
+                      />
+                    </Box>
+                    <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                      <Table size="small" sx={{ minWidth: 400 }}>
+                        <TableBody>
+                          {Object.entries(displayObj).map(([qKey, qVal], qIdx) => {
+                            const label = QUESTIONNAIRE_LABELS[qKey] || qKey.replace(/_/g, ' ');
+                            const valStr = qVal != null && qVal !== '' ? String(qVal) : '—';
+                            return (
+                              <TableRow key={qKey} sx={{ '&:last-child td': { border: 0 }, bgcolor: qIdx % 2 === 0 ? '#f7fafc' : '#ffffff' }}>
+                                <TableCell component="th" scope="row" sx={{ width: '40%', color: '#4a5568', fontWeight: 600, textTransform: 'capitalize', borderRight: '1px solid #edf2f7', py: 1.5 }}>
+                                  {label}
+                                </TableCell>
+                                <TableCell sx={{ color: '#2d3748', wordBreak: 'break-word', py: 1.5, whiteSpace: qKey === 'description_of_accident' ? 'pre-wrap' : 'normal' }}>
+                                  {valStr}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </Box>
+                  </Paper>
+                );
+              })()}
 
               {/* Vendor Statements */}
               <Paper elevation={0} sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #e2e8f0', bgcolor: '#fff' }}>
@@ -1153,11 +1405,10 @@ const CasesPage = () => {
                   </Typography>
                 )}
               </Paper>
-
-              {/* Evidence Photos Preview */}
+              {/* Visit Photos Preview */}
               <Paper elevation={0} sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #e2e8f0', bgcolor: '#fff' }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#667eea', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Evidence Photos ({reviewData.check?.evidence_photos?.length || 0})
+                  Visit Photos ({reviewData.check?.evidence_photos?.length || 0})
                 </Typography>
 
                 {reviewData.check?.evidence_photos && reviewData.check.evidence_photos.length > 0 ? (
@@ -1179,7 +1430,7 @@ const CasesPage = () => {
                           <Box
                             component="img"
                             src={photo.preview_url || photo.url}
-                            alt={photo.filename || `Evidence ${pIdx + 1}`}
+                            alt={photo.filename || `Visit Photo ${pIdx + 1}`}
                             sx={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block', bgcolor: '#f7fafc' }}
                             onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=Image+Error'; }}
                           />
@@ -1204,7 +1455,7 @@ const CasesPage = () => {
                   </Grid>
                 ) : (
                   <Typography variant="body2" sx={{ color: '#a0aec0', fontStyle: 'italic' }}>
-                    No evidence photos uploaded for this check yet.
+                    No visit photos uploaded for this check yet.
                   </Typography>
                 )}
               </Paper>
@@ -1213,110 +1464,703 @@ const CasesPage = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
           {reviewAction === 'reject' && (
-            <Box sx={{ mb: 2, display: 'flex', flexDirection: 'column', gap: 2, width: '100%', bgcolor: '#f7fafc', p: 2, borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#e53e3e' }}>Reject Check &amp; Reassign</Typography>
+            <Paper elevation={0} sx={{ p: 2, mb: 1.5, bgcolor: '#fff5f5', border: '1px solid #feb2b2', borderRadius: '8px', width: '100%' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#c53030', mb: 1 }}>
+                Provide Rejection / Reassignment Feedback for Vendor
+              </Typography>
               <TextField
-                label="Feedback for Vendor"
-                multiline
-                rows={3}
                 fullWidth
+                multiline
+                rows={2}
+                placeholder="Enter specific feedback on why this check is rejected and what the vendor needs to correct or re-verify..."
                 value={reviewFeedback}
                 onChange={(e) => setReviewFeedback(e.target.value)}
-                placeholder="Explain why this check is being rejected..."
                 size="small"
+                sx={{ bgcolor: '#fff', '& .MuiOutlinedInput-root': { borderRadius: '6px' } }}
               />
-              <FormControl fullWidth size="small">
-                <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, color: '#4a5568' }}>Select Vendor to Reassign</Typography>
-                <Select
-                  value={reviewVendorId}
-                  onChange={(e) => setReviewVendorId(e.target.value)}
-                  displayEmpty
-                >
-                  <MenuItem value="" disabled>Select Vendor</MenuItem>
-                  {vendorList.map((v) => (
-                    <MenuItem key={v.id} value={v.id}>{v.company_name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
-                <Button onClick={() => setReviewAction(null)} size="small" variant="text" sx={{ color: '#718096' }}>Cancel</Button>
-                <Button onClick={() => handleReviewSubmit('reject')} size="small" variant="contained" color="error" disabled={!reviewFeedback || !reviewVendorId}>Submit Rejection</Button>
-              </Box>
-            </Box>
+            </Paper>
           )}
 
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, width: '100%' }}>
-            <Button onClick={() => { setReviewModalOpen(false); setReviewData(null); setReviewAction(null); }} variant="outlined" sx={{ textTransform: 'none', color: '#718096', borderColor: '#cbd5e0', borderRadius: '6px' }}>
-              Close
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <Button onClick={() => setReviewModalOpen(false)} sx={{ textTransform: 'none', color: '#718096' }}>
+              Cancel
             </Button>
-            {(reviewData?.check?.check_status === 'Completed' || reviewData?.check?.check_status === 'Verified') && (
-              <>
-                <Button onClick={() => setReviewAction('reject')} variant="outlined" color="error" sx={{ textTransform: 'none', borderRadius: '6px', px: 3 }}>
-                  Reject
-                </Button>
-                {reviewData?.check?.check_status !== 'Verified' && (
-                  <Button onClick={() => handleReviewSubmit('accept')} variant="contained" color="success" sx={{ textTransform: 'none', borderRadius: '6px', px: 3, bgcolor: '#48bb78', '&:hover': { bgcolor: '#38a169' } }}>
-                    Accept
+
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              {reviewAction === 'reject' ? (
+                <>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setReviewAction(null)}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Back
                   </Button>
-                )}
-              </>
-            )}
+                  <Button
+                    variant="contained"
+                    color="error"
+                    disabled={reviewLoading || !reviewFeedback.trim()}
+                    onClick={() => handleReviewSubmit('reject')}
+                    sx={{ textTransform: 'none', fontWeight: 700 }}
+                  >
+                    Confirm Rejection &amp; Reassign
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => setReviewAction('reject')}
+                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                  >
+                    Reject &amp; Reassign
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    disabled={reviewLoading}
+                    onClick={() => handleReviewSubmit('accept')}
+                    sx={{ textTransform: 'none', fontWeight: 700, bgcolor: '#48bb78', '&:hover': { bgcolor: '#38a169' } }}
+                  >
+                    Accept Check
+                  </Button>
+                </>
+              )}
+            </Box>
           </Box>
         </DialogActions>
       </Dialog>
 
-      {/* Lightbox Photo Preview Modal */}
+      {/* FULL CASE VIEW MODAL */}
       <Dialog
-        open={Boolean(activePhotoPreview)}
-        onClose={() => setActivePhotoPreview(null)}
-        maxWidth="md"
+        open={fullCaseModalOpen}
+        onClose={() => setFullCaseModalOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden' } }}
       >
-        <Box sx={{ position: 'relative', p: 1, bgcolor: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <IconButton
-            onClick={() => setActivePhotoPreview(null)}
-            sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' } }}
-          >
+        <DialogTitle sx={{ bgcolor: '#1e293b', color: '#fff', px: 3, py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff', fontSize: '18px' }}>
+              📁 Case Full Details &amp; Evidence — {fullCaseData?.case?.claim_number || 'Case'}
+            </Typography>
+          </Box>
+          <IconButton onClick={() => setFullCaseModalOpen(false)} sx={{ color: '#94a3b8', '&:hover': { color: '#fff' } }}>
             <Close />
           </IconButton>
-          {activePhotoPreview && (
-            <Box
-              component="img"
-              src={activePhotoPreview}
-              alt="Evidence Preview"
-              sx={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
-            />
-          )}
-        </Box>
-      </Dialog>
+        </DialogTitle>
 
-      {/* Confirmation Dialog for Accept */}
-      <Dialog open={confirmAcceptOpen} onClose={() => setConfirmAcceptOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700, color: '#1e293b' }}>Confirm Acceptance</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ color: '#475569' }}>
-            Are you sure you want to accept this check? This will mark it as Verified.
-          </Typography>
+        <DialogContent sx={{ p: 3, bgcolor: '#f8fafc' }}>
+          {fullCaseLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress size={40} sx={{ color: '#4f46e5' }} />
+            </Box>
+          ) : !fullCaseData ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <Typography variant="body1" sx={{ color: '#94a3b8' }}>No case data available.</Typography>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+
+              {/* Navigation Tabs */}
+              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                <Tabs
+                  value={fullCaseTab}
+                  onChange={(e, val) => setFullCaseTab(val)}
+                  sx={{ '& .MuiTab-root': { textTransform: 'none', fontWeight: 700, fontSize: '14px' } }}
+                >
+                  <Tab label="General Case Information" />
+                  <Tab label={`Verification Checks (${fullCaseData.checks?.length || 0})`} />
+                  <Tab label="Media &amp; Evidence Gallery" />
+                </Tabs>
+              </Box>
+
+              {/* TAB 0: General Case Information */}
+              {fullCaseTab === 0 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+
+                  {/* 4 Rows Format for General Info (Divider separated, no subheadings) */}
+                  <Paper elevation={0} sx={{ p: 3, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                    <Stack spacing={2.5} divider={<Divider flexItem sx={{ borderColor: '#f1f5f9' }} />}>
+
+                      {/* Row 1: Case Number | Claim Number | Client Name | Client Code */}
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Case Number
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.case_number || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Claim Number
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.claim_number || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Client Name
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.client_name || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Client Code
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.client_code || '—'}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+
+                      {/* Row 2: Claimant Name | Insured Name | Driver Name */}
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Claimant Name
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.claimant_name || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Insured Name
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.insured_name || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Driver Name
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.driver_name || '—'}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+
+                      {/* Row 3: Category | Case Type | Full Case Status | IR Status | SLA Status */}
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} sm={2.4}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Category
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.category || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={2.4}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Case Type
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.case_type || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={2.4}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Full Case Status
+                          </Typography>
+                          <Box sx={{ mt: 0.5 }}>
+                            <Chip label={fullCaseData.case?.full_case_status || '—'} size="small" sx={{ fontWeight: 700, bgcolor: '#eff6ff', color: '#1d4ed8' }} />
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12} sm={2.4}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            IR Status
+                          </Typography>
+                          <Box sx={{ mt: 0.5 }}>
+                            <Chip label={fullCaseData.case?.investigation_report_status || '—'} size="small" sx={{ fontWeight: 700, bgcolor: '#fef3c7', color: '#b45309' }} />
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12} sm={2.4}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            SLA Status
+                          </Typography>
+                          <Box sx={{ mt: 0.5 }}>
+                            <Chip label={fullCaseData.case?.sla || '—'} size="small" sx={{ fontWeight: 700, bgcolor: '#f0fdf4', color: '#15803d' }} />
+                          </Box>
+                        </Grid>
+                      </Grid>
+
+                      {/* Row 4: Case Receive Date | Case Due Date | Case Completion Date | TAT Days */}
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Case Receive Date
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {formatDate(fullCaseData.case?.case_receive_date)}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Case Due Date
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {formatDate(fullCaseData.case?.case_due_date)}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Case Completion Date
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {formatDate(fullCaseData.case?.completion_date)}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            TAT Days
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
+                            {fullCaseData.case?.tat_days ?? '—'}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+
+                    </Stack>
+                  </Paper>
+
+                  {/* Scope of Work */}
+                  <Paper elevation={0} sx={{ p: 3, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#1e293b', mb: 1.5 }}>
+                      🎯 Scope of Work
+                    </Typography>
+                    <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <Typography variant="body2" sx={{ color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
+                        {fullCaseData.case?.scope_of_work || 'No scope of work details specified.'}
+                      </Typography>
+                    </Box>
+                  </Paper>
+
+                  {/* Case Documents */}
+                  <Paper elevation={0} sx={{ p: 3, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>
+                      📁 Uploaded Case Documents
+                    </Typography>
+                    <Grid container spacing={2}>
+                      {[
+                        { title: 'Policy Document', url: fullCaseData.case?.policy_document_url, filename: fullCaseData.case?.policy_document },
+                        { title: 'Petition Document', url: fullCaseData.case?.petition_document_url, filename: fullCaseData.case?.petition_document },
+                        { title: 'Other Case Document', url: fullCaseData.case?.other_document_url, filename: fullCaseData.case?.other_document },
+                      ].map((doc, idx) => (
+                        <Grid item xs={12} sm={4} key={idx}>
+                          <Box sx={{ p: 2, borderRadius: '8px', border: doc.url ? '1.5px solid #3b82f6' : '1px solid #e2e8f0', bgcolor: doc.url ? '#eff6ff' : '#f8fafc', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: doc.url ? '#1d4ed8' : '#64748b' }}>
+                              {doc.title}
+                            </Typography>
+                            {doc.url ? (
+                              Array.isArray(doc.url) ? (
+                                doc.url.map((u, i) => (
+                                  <Button
+                                    key={i}
+                                    size="small"
+                                    variant="contained"
+                                    component="a"
+                                    href={u}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    startIcon={<InsertDriveFile />}
+                                    sx={{ textTransform: 'none', bgcolor: '#2563eb', '&:hover': { bgcolor: '#1d4ed8' }, borderRadius: '6px' }}
+                                  >
+                                    View Document {i + 1}
+                                  </Button>
+                                ))
+                              ) : (
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  component="a"
+                                  href={doc.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  startIcon={<InsertDriveFile />}
+                                  sx={{ textTransform: 'none', bgcolor: '#2563eb', '&:hover': { bgcolor: '#1d4ed8' }, borderRadius: '6px' }}
+                                >
+                                  View / Download Document
+                                </Button>
+                              )
+                            ) : (
+                              <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                                Not uploaded
+                              </Typography>
+                            )}
+                          </Box>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Paper>
+                </Box>
+              )}
+
+              {/* TAB 1: Verification Checks */}
+              {fullCaseTab === 1 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {fullCaseData.checks && fullCaseData.checks.length > 0 ? (
+                    <>
+                      {/* Check Sub Tabs */}
+                      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                        <Tabs
+                          value={selectedCheckTab}
+                          onChange={(e, v) => setSelectedCheckTab(v)}
+                          variant="scrollable"
+                          scrollButtons="auto"
+                          sx={{ '& .MuiTab-root': { textTransform: 'none', fontWeight: 600 } }}
+                        >
+                          {fullCaseData.checks.map((item, cIdx) => (
+                            <Tab
+                              key={cIdx}
+                              label={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <span>{item.check_type_label}</span>
+                                  <Chip
+                                    label={item.check?.check_status || 'Pending'}
+                                    size="small"
+                                    sx={{
+                                      height: '20px',
+                                      fontSize: '10px',
+                                      bgcolor: item.check?.check_status === 'Verified' || item.check?.check_status === 'Completed' ? '#dcfce7' : '#fef3c7',
+                                      color: item.check?.check_status === 'Verified' || item.check?.check_status === 'Completed' ? '#166534' : '#92400e',
+                                      fontWeight: 700
+                                    }}
+                                  />
+                                </Box>
+                              }
+                            />
+                          ))}
+                        </Tabs>
+                      </Box>
+
+                      {/* Selected Check Contents */}
+                      {(() => {
+                        const currentCheckObj = fullCaseData.checks[selectedCheckTab];
+                        if (!currentCheckObj) return null;
+                        const checkData = currentCheckObj.check || {};
+                        return (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {/* Check Status & Vendor Header */}
+                            <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                              <Box>
+                                <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                                  {currentCheckObj.check_type_label}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                  Assigned Vendor: <strong>{checkData.assigned_vendor_name || 'Unassigned'}</strong>
+                                </Typography>
+                              </Box>
+                              <Chip
+                                label={`Status: ${checkData.check_status || 'Not Initiated'}`}
+                                sx={{
+                                  bgcolor: checkData.check_status === 'Verified' || checkData.check_status === 'Completed' ? '#48bb78' : '#f6ad55',
+                                  color: '#fff',
+                                  fontWeight: 700,
+                                  px: 1
+                                }}
+                              />
+                            </Paper>
+
+                            {/* Verification Data Table */}
+                            <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#4f46e5', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                📌 Check Fields &amp; Verification Details
+                              </Typography>
+                              <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                <Table size="small">
+                                  <TableBody>
+                                    {Object.entries(checkData)
+                                      .filter(([k]) => !['id', 'case_id', 'created_at', 'updated_at', 'vendor_evidence', 'evidence', 'evidence_photos', 'statement_audio', 'statement_audio_url', 'statement', 'statement_mr', 'statement_en', 'statement_entries', 'vendor_documents', 'documents', 'assigned_vendor_name', 'questionnaire'].includes(k))
+                                      .map(([key, val], idx) => {
+                                        const displayVal = val === null || val === undefined || val === '' || val === '[]' || val === '{}'
+                                          ? 'N/A'
+                                          : Array.isArray(val)
+                                            ? val.join(', ')
+                                            : typeof val === 'object'
+                                              ? JSON.stringify(val)
+                                              : String(val);
+                                        return (
+                                          <TableRow key={key} sx={{ bgcolor: idx % 2 === 0 ? '#f8fafc' : '#ffffff' }}>
+                                            <TableCell component="th" sx={{ width: '35%', fontWeight: 600, color: '#475569', textTransform: 'capitalize', borderRight: '1px solid #e2e8f0', py: 1.2 }}>
+                                              {key.replace(/_/g, ' ')}
+                                            </TableCell>
+                                            <TableCell sx={{ color: '#0f172a', fontWeight: 500, py: 1.2, wordBreak: 'break-word' }}>
+                                              {displayVal}
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                  </TableBody>
+                                </Table>
+                              </Box>
+                            </Paper>
+
+                            {/* Dedicated Questionnaire Form Section */}
+                            {(() => {
+                              const qData = parseQuestionnaire(checkData?.questionnaire);
+                              const hasData = qData && typeof qData === 'object' && Object.keys(qData).length > 0;
+                              const displayObj = hasData
+                                ? qData
+                                : Object.keys(QUESTIONNAIRE_LABELS).reduce((acc, k) => ({ ...acc, [k]: '—' }), {});
+
+                              return (
+                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                      📋 Questionnaire Form Details
+                                    </Typography>
+                                    <Chip
+                                      label={hasData ? "Vendor Submitted" : "Pending Submission"}
+                                      size="small"
+                                      sx={{
+                                        bgcolor: hasData ? '#e0f2fe' : '#f1f5f9',
+                                        color: hasData ? '#0369a1' : '#64748b',
+                                        fontWeight: 700,
+                                        fontSize: '11px'
+                                      }}
+                                    />
+                                  </Box>
+                                  <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                    <Table size="small">
+                                      <TableBody>
+                                        {Object.entries(displayObj).map(([qKey, qVal], qIdx) => {
+                                          const label = QUESTIONNAIRE_LABELS[qKey] || qKey.replace(/_/g, ' ');
+                                          const valStr = qVal != null && qVal !== '' ? String(qVal) : '—';
+                                          return (
+                                            <TableRow key={qKey} sx={{ bgcolor: qIdx % 2 === 0 ? '#f8fafc' : '#ffffff' }}>
+                                              <TableCell component="th" sx={{ width: '35%', fontWeight: 600, color: '#475569', textTransform: 'capitalize', borderRight: '1px solid #e2e8f0', py: 1.2 }}>
+                                                {label}
+                                              </TableCell>
+                                              <TableCell sx={{ color: '#0f172a', fontWeight: 500, py: 1.2, wordBreak: 'break-word', whiteSpace: qKey === 'description_of_accident' ? 'pre-wrap' : 'normal' }}>
+                                                {valStr}
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })}
+                                      </TableBody>
+                                    </Table>
+                                  </Box>
+                                </Paper>
+                              );
+                            })()}
+
+                            {/* Statements & Audio Recordings */}
+                            <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#4f46e5', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                🎙️ Statements &amp; Audio Recordings
+                              </Typography>
+                              {checkData.statement_entries && checkData.statement_entries.length > 0 ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  {checkData.statement_entries.map((st, sIdx) => (
+                                    <Paper key={sIdx} elevation={0} sx={{ p: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>
+                                        Statement {st.index || sIdx + 1}
+                                      </Typography>
+                                      {st.audio_url && (
+                                        <Box sx={{ mb: 1 }}>
+                                          <audio controls src={st.audio_url} style={{ width: '100%', height: '36px' }} />
+                                        </Box>
+                                      )}
+                                      <Typography variant="body2" sx={{ color: '#334155', whiteSpace: 'pre-line' }}>
+                                        {st.translation_en || st.statement_text || 'No statement text.'}
+                                      </Typography>
+                                    </Paper>
+                                  ))}
+                                </Box>
+                              ) : (
+                                <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                                  No statement audio recordings stored.
+                                </Typography>
+                              )}
+
+                              {checkData.statement_en && (
+                                <Box sx={{ mt: 2 }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>
+                                    Additional Statement Details:
+                                  </Typography>
+                                  <Paper elevation={0} sx={{ p: 2, mt: 0.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                                    <Typography variant="body2" sx={{ color: '#1e293b', whiteSpace: 'pre-line' }}>
+                                      {checkData.statement_en}
+                                    </Typography>
+                                  </Paper>
+                                </Box>
+                              )}
+                            </Paper>
+
+                            {/* Visit Photos */}
+                            <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#4f46e5', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                📷 Visit Photos ({checkData.evidence_photos?.length || 0})
+                              </Typography>
+                              {checkData.evidence_photos && checkData.evidence_photos.length > 0 ? (
+                                <Grid container spacing={2}>
+                                  {checkData.evidence_photos.map((photo, pIdx) => (
+                                    <Grid item xs={6} sm={4} md={3} key={pIdx}>
+                                      <Paper
+                                        elevation={0}
+                                        onClick={() => setActivePhotoPreview(photo.url)}
+                                        sx={{
+                                          border: '1px solid #e2e8f0',
+                                          borderRadius: '8px',
+                                          overflow: 'hidden',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.2s',
+                                          '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }
+                                        }}
+                                      >
+                                        <Box
+                                          component="img"
+                                          src={photo.url}
+                                          alt={photo.filename || `Visit Photo ${pIdx + 1}`}
+                                          sx={{ width: '100%', height: 160, objectFit: 'cover', display: 'block', bgcolor: '#f8fafc' }}
+                                        />
+                                        <Box sx={{ p: 1, bgcolor: '#fafafa', borderTop: '1px solid #e2e8f0' }}>
+                                          <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#334155' }}>
+                                            {photo.filename || `Photo ${pIdx + 1}`}
+                                          </Typography>
+                                        </Box>
+                                      </Paper>
+                                    </Grid>
+                                  ))}
+                                </Grid>
+                              ) : (
+                                <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                                  No visit photos uploaded for this check.
+                                </Typography>
+                              )}
+                            </Paper>
+                          </Box>
+                        );
+                      })()}
+                    </>
+                  ) : (
+                    <Typography variant="body1" sx={{ color: '#94a3b8', textAlign: 'center', py: 4 }}>
+                      No verification checks recorded for this case yet.
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              {/* TAB 2: Media & Evidence Gallery */}
+              {fullCaseTab === 2 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <Paper elevation={0} sx={{ p: 3, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>
+                      📸 All Visit Photos Across Checks
+                    </Typography>
+                    {(() => {
+                      const allPhotos = [];
+                      fullCaseData.checks?.forEach(item => {
+                        item.check?.evidence_photos?.forEach(photo => {
+                          allPhotos.push({ ...photo, checkType: item.check_type_label });
+                        });
+                      });
+
+                      if (allPhotos.length === 0) {
+                        return (
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                            No visit photos found across any checks.
+                          </Typography>
+                        );
+                      }
+
+                      return (
+                        <Grid container spacing={2}>
+                          {allPhotos.map((photo, i) => (
+                            <Grid item xs={6} sm={4} md={3} key={i}>
+                              <Paper
+                                elevation={0}
+                                onClick={() => setActivePhotoPreview(photo.url)}
+                                sx={{
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '10px',
+                                  overflow: 'hidden',
+                                  cursor: 'pointer',
+                                  '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }
+                                }}
+                              >
+                                <Box
+                                  component="img"
+                                  src={photo.url}
+                                  sx={{ width: '100%', height: 160, objectFit: 'cover' }}
+                                />
+                                <Box sx={{ p: 1, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+                                  <Chip label={photo.checkType} size="small" sx={{ fontSize: '10px', height: '18px', mb: 0.5, bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 700 }} />
+                                  <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#334155' }}>
+                                    {photo.filename || `Photo ${i + 1}`}
+                                  </Typography>
+                                </Box>
+                              </Paper>
+                            </Grid>
+                          ))}
+                        </Grid>
+                      );
+                    })()}
+                  </Paper>
+                </Box>
+              )}
+            </Box>
+          )}
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button onClick={() => setConfirmAcceptOpen(false)} variant="outlined" sx={{ color: '#64748b', borderColor: '#cbd5e1', '&:hover': { backgroundColor: '#f1f5f9', borderColor: '#94a3b8' } }}>Cancel</Button>
-          <Button onClick={() => handleReviewSubmit('accept')} variant="contained" disabled={reviewLoading} sx={{ backgroundColor: '#48bb78', '&:hover': { backgroundColor: '#38a169' } }}>
-            {reviewLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Confirm Accept'}
+        <DialogActions sx={{ p: 2, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
+          <Button onClick={() => setFullCaseModalOpen(false)} variant="outlined" sx={{ textTransform: 'none', borderRadius: '8px', px: 3, color: '#64748b', borderColor: '#cbd5e1' }}>
+            Cancel
           </Button>
+          {fullCaseData?.case?.full_case_status === 'Completed' ? (
+            <Button
+              onClick={() => {
+                setStatusConfirmAction('WIP');
+                setStatusConfirmOpen(true);
+              }}
+              variant="contained"
+              disabled={statusLoading}
+              sx={{ textTransform: 'none', bgcolor: '#48bb78', '&:hover': { bgcolor: '#38a169' }, borderRadius: '8px', px: 3 }}
+            >
+              {statusLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Open Case'}
+            </Button>
+          ) : (
+            <Button
+              onClick={() => {
+                setStatusConfirmAction('Completed');
+                setStatusConfirmOpen(true);
+              }}
+              variant="contained"
+              disabled={statusLoading}
+              sx={{ textTransform: 'none', bgcolor: '#e53e3e', '&:hover': { bgcolor: '#c53030' }, borderRadius: '8px', px: 3 }}
+            >
+              {statusLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Close Case'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
-      {/* Confirmation Dialog for Reject */}
-      <Dialog open={confirmRejectOpen} onClose={() => setConfirmRejectOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700, color: '#1e293b' }}>Confirm Rejection</DialogTitle>
+      {/* Confirmation Dialog for Case Status Change */}
+      <Dialog open={statusConfirmOpen} onClose={() => setStatusConfirmOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: '#1e293b' }}>Confirm Status Change</DialogTitle>
         <DialogContent>
           <Typography variant="body1" sx={{ color: '#475569' }}>
-            Are you sure you want to reject this check? This will reassign it to the selected vendor.
+            Are you sure you want to {statusConfirmAction === 'Completed' ? 'close' : 'open'} this case?
           </Typography>
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button onClick={() => setConfirmRejectOpen(false)} variant="outlined" sx={{ color: '#64748b', borderColor: '#cbd5e1', '&:hover': { backgroundColor: '#f1f5f9', borderColor: '#94a3b8' } }}>Cancel</Button>
-          <Button onClick={() => handleReviewSubmit('reject')} variant="contained" color="error" disabled={reviewLoading}>
-            {reviewLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Confirm Reject'}
+          <Button onClick={() => setStatusConfirmOpen(false)} variant="outlined" sx={{ color: '#64748b', borderColor: '#cbd5e1', '&:hover': { backgroundColor: '#f1f5f9', borderColor: '#94a3b8' } }}>Cancel</Button>
+          <Button
+            onClick={() => {
+              handleToggleCaseStatus(fullCaseData.case.id, statusConfirmAction);
+              setStatusConfirmOpen(false);
+            }}
+            variant="contained"
+            color={statusConfirmAction === 'Completed' ? 'error' : 'success'}
+          >
+            Confirm
           </Button>
         </DialogActions>
       </Dialog>

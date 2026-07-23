@@ -36,11 +36,13 @@ import {
   Refresh,
   Schedule,
   TrendingUp,
+  InsertDriveFile,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
 import api from '../../services/api';
 import jsPDF from 'jspdf';
+import { PDFDocument } from 'pdf-lib';
 import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 
@@ -212,6 +214,7 @@ const AIBriefPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [caseTypeFilter, setCaseTypeFilter] = useState('all');
   const [vendorFilter, setVendorFilter] = useState('all');
+  const [reportFilter, setReportFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState([]);
@@ -249,7 +252,7 @@ const AIBriefPage = () => {
       if (reportsToMigrate.length === 0) return;
 
       try {
-        await api.post('/reports/bulk', { reports: reportsToMigrate });
+        await api.post('/reports/bulk/', { reports: reportsToMigrate });
       } catch (err) {
         console.error('Failed to migrate reports to database:', err);
       }
@@ -290,20 +293,44 @@ const AIBriefPage = () => {
     try {
       if (!isAutoRefresh) setLoading(true);
       setError('');
-      const response = await api.get('/cases/incident-db', {
-        params: {
-          page: page + 1,
-          page_size: rowsPerPage,
-          investigation_report_status: statusFilter !== 'all' ? statusFilter : undefined,
-          case_type: caseTypeFilter !== 'all' ? caseTypeFilter : undefined,
-          assigned_vendor_name:
-            vendorFilter !== 'all'
-              ? vendors.find((vendor) => String(vendor.id) === String(vendorFilter))?.company_name || undefined
-              : undefined,
-        },
+      const [response, reportsResponse] = await Promise.all([
+        api.get('/cases/incident-db', {
+          params: {
+            page: page + 1,
+            page_size: rowsPerPage,
+            investigation_report_status: statusFilter !== 'all' ? statusFilter : undefined,
+            case_type: caseTypeFilter !== 'all' ? caseTypeFilter : undefined,
+            assigned_vendor_name:
+              vendorFilter !== 'all'
+                ? vendors.find((vendor) => String(vendor.id) === String(vendorFilter))?.company_name || undefined
+                : undefined,
+          },
+        }),
+        api.get('/reports').catch(() => ({ data: [] })),
+      ]);
+
+      const fetchedCases = response.data.cases || [];
+      const backendReports = reportsResponse.data || [];
+
+      setReportsByCase((prev) => {
+        const next = { ...prev };
+        backendReports.forEach((r) => {
+          const matchedCase = fetchedCases.find((c) => c.case_number === r.case_number);
+          if (matchedCase) {
+            next[matchedCase.id] = {
+              ...(next[matchedCase.id] || {}),
+              id: r.id,
+              caseId: matchedCase.id,
+              caseNumber: r.case_number,
+              generatedAt: r.created_at,
+              reportText: next[matchedCase.id]?.reportText || r.report_content || '',
+            };
+          }
+        });
+        return next;
       });
 
-      setCases(response.data.cases || []);
+      setCases(fetchedCases);
       setTotalCases(response.data.total || 0);
       setSelected([]);
     } catch (err) {
@@ -321,7 +348,19 @@ const AIBriefPage = () => {
   useAutoRefresh(fetchLawyers);
 
   const rows = useMemo(() => {
-    return cases.map((row) => {
+    let filteredCases = cases.filter((row) => {
+      const checks = row.sub_items || [];
+      if (checks.length === 0) return false;
+      return checks.every((check) => check.check_status === 'Verified');
+    });
+
+    if (reportFilter === 'generated') {
+      filteredCases = filteredCases.filter((row) => reportsByCase[row.id]);
+    } else if (reportFilter === 'not_generated') {
+      filteredCases = filteredCases.filter((row) => !reportsByCase[row.id]);
+    }
+
+    return filteredCases.map((row) => {
       const report = reportsByCase[row.id];
       const vendorName = extractAssignedVendor(row);
       const summary = extractSummary(row);
@@ -336,7 +375,7 @@ const AIBriefPage = () => {
         vendorSubmitStatus: extractVendorSubmitStatus(row),
       };
     });
-  }, [cases, reportsByCase]);
+  }, [cases, reportsByCase, reportFilter]);
 
   const selectedCase = useMemo(
     () => rows.find((row) => String(row.id) === String(selected[0])) || null,
@@ -428,6 +467,7 @@ const AIBriefPage = () => {
     setStatusFilter('all');
     setCaseTypeFilter('all');
     setVendorFilter('all');
+    setReportFilter('all');
     setPage(0);
   };
 
@@ -460,7 +500,7 @@ const AIBriefPage = () => {
       // Save report to database for legal review
       let reportId = null;
       try {
-        const saveResponse = await api.post('/reports', {
+        const saveResponse = await api.post('/reports/', {
           case_id: selectedCase.id,
           report_content: response.data.report_text,
         });
@@ -478,6 +518,8 @@ const AIBriefPage = () => {
         statementExcerpt: response.data.statement_excerpt,
         vendorStatements: response.data.vendor_statements || [],
         evidencePhotos: response.data.evidence_photos || [],
+        vendorDocuments: response.data.vendor_documents || [],
+        caseDocuments: response.data.case_documents || [],
         generatedAt: new Date().toISOString(),
         sourceFileName: 'Stored Vendor Statements',
       };
@@ -641,7 +683,7 @@ const AIBriefPage = () => {
       doc.setDrawColor(200, 200, 200);
       doc.line(margin, y, pageWidth - margin, y);
       y += 8;
-      addText('VENDOR EVIDENCE', 13, true, [51, 65, 85]);
+      addText('VENDOR VISIT PHOTOS', 13, true, [51, 65, 85]);
       y += 6;
 
       for (const photo of evidencePhotos) {
@@ -649,8 +691,111 @@ const AIBriefPage = () => {
       }
     }
 
+    const vendorDocs = activeReport.vendorDocuments || [];
+    const caseDocs = activeReport.caseDocuments || [];
+    const hasAnyDocs = vendorDocs.length > 0 || caseDocs.length > 0;
+
+    if (hasAnyDocs) {
+      doc.addPage();
+      y = 20;
+
+      if (vendorDocs.length > 0) {
+        addText('VENDOR DOCUMENTS', 13, true, [51, 65, 85]);
+        y += 6;
+        for (let i = 0; i < vendorDocs.length; i++) {
+          addText(`Vendor Document ${i + 1}: ${vendorDocs[i].filename || 'Document'}`, 11, false);
+          y += 1;
+        }
+        y += 8;
+      }
+
+      if (caseDocs.length > 0) {
+        addText('CASE DOCUMENTS', 13, true, [51, 65, 85]);
+        y += 6;
+        for (let i = 0; i < caseDocs.length; i++) {
+          addText(`Case Document ${i + 1}: ${caseDocs[i].filename || 'Document'}`, 11, false);
+          y += 1;
+        }
+        y += 8;
+      }
+    }
+
+    const pdfInsertions = [];
+
+    const drawDocumentHeadingAndQueue = async (docObj, labelPrefix) => {
+      doc.addPage();
+      y = 20;
+      addText(`${labelPrefix}: ${docObj.filename || 'Document'}`, 13, true, [51, 65, 85]);
+      y += 8;
+      
+      const isImage = /\.(jpeg|jpg|png|gif|webp)$/i.test(docObj.url || docObj.filename || '');
+      const isPdf = /\.(pdf)$/i.test(docObj.url || docObj.filename || '');
+
+      if (isImage) {
+        await addImage({ url: docObj.url }, '');
+      } else if (isPdf) {
+        pdfInsertions.push({
+          afterPageIndex: doc.internal.getNumberOfPages() - 1,
+          url: docObj.url,
+          filename: docObj.filename
+        });
+      } else {
+        addText(docObj.url || 'No URL available', 9, false, [29, 78, 216]);
+      }
+    };
+
+    if (vendorDocs.length > 0) {
+      for (let i = 0; i < vendorDocs.length; i++) {
+        await drawDocumentHeadingAndQueue(vendorDocs[i], `Vendor Document ${i + 1}`);
+      }
+    }
+
+    if (caseDocs.length > 0) {
+      for (let i = 0; i < caseDocs.length; i++) {
+        await drawDocumentHeadingAndQueue(caseDocs[i], `Case Document ${i + 1}`);
+      }
+    }
+
     const fileName = `${sanitizeFileName(caseNum, 'ai-brief-report')}_ai_brief_report.pdf`;
-    doc.save(fileName);
+    
+    if (pdfInsertions.length > 0) {
+      try {
+        const basePdfBuffer = doc.output('arraybuffer');
+        const mergedPdf = await PDFDocument.load(basePdfBuffer);
+        
+        pdfInsertions.sort((a, b) => b.afterPageIndex - a.afterPageIndex);
+
+        for (const insertion of pdfInsertions) {
+          try {
+            const res = await fetch(insertion.url);
+            const pdfBytes = await res.arrayBuffer();
+            const externalPdf = await PDFDocument.load(pdfBytes);
+            const copiedPages = await mergedPdf.copyPages(externalPdf, externalPdf.getPageIndices());
+            
+            let insertAt = insertion.afterPageIndex + 1;
+            for (const page of copiedPages) {
+              mergedPdf.insertPage(insertAt, page);
+              insertAt++;
+            }
+          } catch (err) {
+            console.error(`Failed to fetch or merge PDF ${insertion.filename}:`, err);
+          }
+        }
+        
+        const mergedPdfBytes = await mergedPdf.save();
+        const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      } catch (err) {
+        console.error('Failed to merge PDFs:', err);
+        doc.save(fileName);
+      }
+    } else {
+      doc.save(fileName);
+    }
   };
 
   const handleEditReport = async () => {
@@ -659,7 +804,7 @@ const AIBriefPage = () => {
       if (!activeReport.id) {
         setSubmitting(true);
         try {
-          const saveResponse = await api.post('/reports', {
+          const saveResponse = await api.post('/reports/', {
             case_id: activeReport.caseId,
             report_content: activeReport.reportText,
           });
@@ -738,7 +883,7 @@ const AIBriefPage = () => {
     if (!reportId) {
       setSubmitting(true);
       try {
-        const saveResponse = await api.post('/reports', {
+        const saveResponse = await api.post('/reports/', {
           case_id: activeReport.caseId,
           report_content: activeReport.reportText,
         });
@@ -932,6 +1077,22 @@ const AIBriefPage = () => {
               </Select>
             </FormControl>
 
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <Select
+                value={reportFilter}
+                onChange={(e) => setReportFilter(e.target.value)}
+                displayEmpty
+                sx={{
+                  borderRadius: '8px',
+                  '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
+                }}
+              >
+                <MenuItem value="all">All Reports</MenuItem>
+                <MenuItem value="generated">Generated</MenuItem>
+                <MenuItem value="not_generated">Not Generated</MenuItem>
+              </Select>
+            </FormControl>
+
             <Button
               variant="text"
               size="small"
@@ -974,13 +1135,6 @@ const AIBriefPage = () => {
           <Table>
             <TableHead>
               <TableRow sx={{ backgroundColor: '#f8f9fa' }}>
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    indeterminate={selected.length > 0 && selected.length < rows.length}
-                    checked={rows.length > 0 && selected.length === rows.length}
-                    onChange={handleSelectAll}
-                  />
-                </TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Case ID</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Summary</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Assigned Vendor</TableCell>
@@ -1013,19 +1167,25 @@ const AIBriefPage = () => {
 
                   return (
                     <TableRow
-                      key={row.id}
                       hover
-                      sx={{ '&:last-child td': { border: 0 }, cursor: 'pointer' }}
+                      key={row.id}
+                      selected={rowSelected}
+                      sx={{
+                        '&:last-child td': { border: 0 },
+                        cursor: 'pointer',
+                        backgroundColor: rowSelected ? '#eff6ff !important' : 'inherit',
+                        boxShadow: rowSelected ? 'inset 4px 0 0 0 #2563eb' : 'none',
+                        transition: 'all 0.15s ease',
+                      }}
                       onClick={() => {
                         if (report) {
                           setActiveReportCaseId(row.id);
                           setViewReportDialogOpen(true);
+                        } else {
+                          setSelected(rowSelected ? [] : [row.id]);
                         }
                       }}
                     >
-                      <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
-                        <Checkbox checked={rowSelected} onChange={() => handleSelect(row.id)} />
-                      </TableCell>
                       <TableCell>
                         <Typography sx={{ color: '#667eea', fontWeight: 600, fontSize: '14px' }}>
                           {row.case_number || `#${row.id}`}
@@ -1097,27 +1257,27 @@ const AIBriefPage = () => {
                         <Button
                           variant="contained"
                           size="small"
-                          endIcon={<ChevronRight sx={{ fontSize: 16 }} />}
+                          endIcon={report ? <ChevronRight sx={{ fontSize: 16 }} /> : (rowSelected ? <CheckCircle sx={{ fontSize: 16 }} /> : <ChevronRight sx={{ fontSize: 16 }} />)}
                           onClick={(event) => {
                             event.stopPropagation();
                             if (report) {
                               setActiveReportCaseId(row.id);
                               setViewReportDialogOpen(true);
                             } else {
-                              setSelected([row.id]);
+                              setSelected(rowSelected ? [] : [row.id]);
                             }
                           }}
                           sx={{
-                            backgroundColor: '#667eea',
+                            backgroundColor: report ? '#667eea' : (rowSelected ? '#16a34a' : '#667eea'),
                             textTransform: 'none',
                             fontWeight: 600,
                             fontSize: '13px',
                             borderRadius: '6px',
                             minWidth: '104px',
-                            '&:hover': { backgroundColor: '#5568d3' },
+                            '&:hover': { backgroundColor: report ? '#5568d3' : (rowSelected ? '#15803d' : '#5568d3') },
                           }}
                         >
-                          {report ? 'View Report' : 'Select Case'}
+                          {report ? 'View Report' : (rowSelected ? 'Selected' : 'Select Case')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -1139,11 +1299,11 @@ const AIBriefPage = () => {
           }}
         >
           <Typography sx={{ fontSize: '14px', color: '#666' }}>
-            {rows.length === 0 ? '0 results' : `${page * rowsPerPage + 1}-${Math.min(page * rowsPerPage + rows.length, totalCases)} of ${totalCases}`}
+            {rows.length === 0 ? '0 results' : `${page * rowsPerPage + 1}-${Math.min((page + 1) * rowsPerPage, rows.length)} of ${rows.length}`}
           </Typography>
           <TablePagination
             component="div"
-            count={totalCases}
+            count={rows.length}
             page={page}
             onPageChange={handleChangePage}
             rowsPerPage={rowsPerPage}
@@ -1392,6 +1552,54 @@ const AIBriefPage = () => {
                         </Box>
                       );
                     })}
+                  </Box>
+                </Box>
+              )}
+
+              {!editMode && activeReport.vendorDocuments && activeReport.vendorDocuments.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
+                    Vendor Documents
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {activeReport.vendorDocuments.map((doc, idx) => (
+                      <Button
+                        key={`vendor-doc-${idx}`}
+                        variant="outlined"
+                        component="a"
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        startIcon={<InsertDriveFile fontSize="small" />}
+                        sx={{ justifyContent: 'flex-start', textTransform: 'none', borderRadius: '6px', maxWidth: '400px' }}
+                      >
+                        {doc.filename || `Vendor Document ${idx + 1}`}
+                      </Button>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {!editMode && activeReport.caseDocuments && activeReport.caseDocuments.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
+                    Case Documents (Policy, Petition, etc.)
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {activeReport.caseDocuments.map((doc, idx) => (
+                      <Button
+                        key={`case-doc-${idx}`}
+                        variant="outlined"
+                        component="a"
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        startIcon={<InsertDriveFile fontSize="small" />}
+                        sx={{ justifyContent: 'flex-start', textTransform: 'none', borderRadius: '6px', maxWidth: '400px' }}
+                      >
+                        {doc.filename || `Case Document ${idx + 1}`}
+                      </Button>
+                    ))}
                   </Box>
                 </Box>
               )}

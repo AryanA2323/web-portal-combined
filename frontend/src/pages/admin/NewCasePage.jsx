@@ -18,6 +18,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Chip,
 } from '@mui/material';
 import { 
   Save, 
@@ -25,6 +26,7 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   AttachFile as AttachFileIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
 import api from '../../services/api';
@@ -135,7 +137,7 @@ const NewCasePage = () => {
   });
 
   // File uploads for each verification type
-    const [caseFiles, setCaseFiles] = useState({ policy: null, petition: null });
+  const [caseFiles, setCaseFiles] = useState({ policy: [], petition: [], other: [] });
   const [verificationFiles, setVerificationFiles] = useState({
     claimant: [],
     insured: [],
@@ -344,6 +346,22 @@ const NewCasePage = () => {
   };
 
   // File upload handlers
+  const handleCaseFileSelect = (e, type) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      setCaseFiles(prev => ({ ...prev, [type]: [...prev[type], ...newFiles] }));
+    }
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+  };
+
+  const handleRemoveCaseFile = (type, index) => {
+    setCaseFiles(prev => ({
+      ...prev,
+      [type]: prev[type].filter((_, i) => i !== index),
+    }));
+  };
+
   const handleFileSelect = (verificationType, e) => {
     const files = Array.from(e.target.files);
     setVerificationFiles(prev => ({
@@ -524,10 +542,11 @@ const NewCasePage = () => {
       const incidentCaseDbId = response.data.incident_case_db_id;
 
       // Upload case documents if any
-      if (caseFiles.policy || caseFiles.petition) {
+      if (caseFiles.policy.length > 0 || caseFiles.petition.length > 0 || caseFiles.other.length > 0) {
         const formData = new FormData();
-        if (caseFiles.policy) formData.append('policy', caseFiles.policy);
-        if (caseFiles.petition) formData.append('petition', caseFiles.petition);
+        caseFiles.policy.forEach(f => formData.append('policy', f));
+        caseFiles.petition.forEach(f => formData.append('petition', f));
+        caseFiles.other.forEach(f => formData.append('other', f));
         try {
           await api.post(`/cases/${incidentCaseDbId}/upload`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
@@ -1032,8 +1051,9 @@ const NewCasePage = () => {
                     Scope of Work
                   </Typography>
                 </Box>
-                <Grid container>
-                  <Grid item xs={12} md={6}>
+                <Box sx={{ display: 'flex', gap: 3, width: '100%', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
+                  {/* Left half: Scope of Work text field */}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -1042,25 +1062,86 @@ const NewCasePage = () => {
                       value={commonFields.scope_of_work}
                       onChange={handleCommonFieldChange}
                       multiline
-                      rows={2}
+                      rows={5}
                       required
-                      placeholder="Describe the scope of investigation work for this case..."
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                      placeholder="Describe the scope of investigation work..."
+                      sx={{
+                        width: '100%',
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: '8px',
+                        }
+                      }}
                     />
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <Button variant="outlined" component="label" fullWidth sx={{ height: '100%', borderRadius: '8px', borderStyle: 'dashed', minHeight: '50px' }}>
-                      {caseFiles.policy ? caseFiles.policy.name : 'Upload Policy'}
-                      <input type="file" hidden accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleCaseFileSelect(e, 'policy')} />
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <Button variant="outlined" component="label" fullWidth sx={{ height: '100%', borderRadius: '8px', borderStyle: 'dashed', minHeight: '50px' }}>
-                      {caseFiles.petition ? caseFiles.petition.name : 'Upload Petition'}
-                      <input type="file" hidden accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleCaseFileSelect(e, 'petition')} />
-                    </Button>
-                  </Grid>
-                </Grid>
+                  </Box>
+                  {/* Right half: 3 upload buttons stacked vertically */}
+                  <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {[
+                      { key: 'policy', label: 'Upload Policy' },
+                      { key: 'petition', label: 'Upload Petition' },
+                      { key: 'other', label: 'Upload Other' },
+                    ].map(({ key, label }, index) => (
+                      <Box key={key}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, minHeight: '44px' }}>
+                          {/* File name chips on the left */}
+                          <Box sx={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {caseFiles[key].length > 0 ? (
+                              caseFiles[key].map((file, idx) => (
+                                <Chip
+                                  key={idx}
+                                  label={file.name}
+                                  size="small"
+                                  onDelete={() => handleRemoveCaseFile(key, idx)}
+                                  deleteIcon={<CloseIcon sx={{ fontSize: '14px !important' }} />}
+                                  sx={{
+                                    maxWidth: '200px',
+                                    bgcolor: '#e8f5e9',
+                                    color: '#1b5e20',
+                                    fontWeight: 600,
+                                    fontSize: '0.75rem',
+                                    '& .MuiChip-deleteIcon': { color: '#c62828', '&:hover': { color: '#b71c1c' } },
+                                  }}
+                                />
+                              ))
+                            ) : (
+                              <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                                No files selected
+                              </Typography>
+                            )}
+                          </Box>
+                          {/* Upload Button on the right */}
+                          <Button
+                            variant="outlined"
+                            component="label"
+                            startIcon={<AttachFileIcon sx={{ fontSize: '1.1rem' }} />}
+                            sx={{
+                              flexShrink: 0,
+                              minWidth: '160px',
+                              height: '44px',
+                              borderRadius: '8px',
+                              border: caseFiles[key].length > 0 ? '1.5px solid #2e7d32' : '1.5px solid #1976d2',
+                              bgcolor: caseFiles[key].length > 0 ? '#f0fdf4' : '#ffffff',
+                              color: caseFiles[key].length > 0 ? '#166534' : '#1976d2',
+                              textTransform: 'none',
+                              fontWeight: 600,
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                              '&:hover': {
+                                borderColor: caseFiles[key].length > 0 ? '#1e40af' : '#1565c0',
+                                bgcolor: caseFiles[key].length > 0 ? '#dcfce7' : '#eff6ff',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+                              },
+                            }}
+                          >
+                            <Typography sx={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                              {label}
+                            </Typography>
+                            <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleCaseFileSelect(e, key)} />
+                          </Button>
+                        </Box>
+                        {index < 2 && <Divider sx={{ my: 1 }} />}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
 
               </Box>
             </Card>
@@ -1405,26 +1486,6 @@ const NewCasePage = () => {
                         </Grid>
                       </Grid>
 
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Documents ────────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
-                      </Box>
-                      
-                      {verificationFiles.claimant.length > 0 && (
-                        <Box sx={{ mt: 1.5 }}>
-                          {verificationFiles.claimant.map((file, index) => (
-                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: '8px' }}>
-                              <AttachFileIcon fontSize="small" color="action" />
-                              <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
-                              <IconButton size="small" color="error" onClick={() => handleRemoveFile('claimant', index)}><DeleteIcon fontSize="small" /></IconButton>
-                            </Box>
-                          ))}
-                        </Box>
-                      )}
-
                     </Box>
                   </Card>
                 )}
@@ -1504,7 +1565,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
                       </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                      <Grid container spacing={2.5}>
                         
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Statement" name="insured_statement"
@@ -1517,26 +1578,6 @@ const NewCasePage = () => {
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Documents ────────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
-                      </Box>
-                      
-                      {verificationFiles.insured.length > 0 && (
-                        <Box sx={{ mt: 1.5 }}>
-                          {verificationFiles.insured.map((file, index) => (
-                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: '8px' }}>
-                              <AttachFileIcon fontSize="small" color="action" />
-                              <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
-                              <IconButton size="small" color="error" onClick={() => handleRemoveFile('insured', index)}><DeleteIcon fontSize="small" /></IconButton>
-                            </Box>
-                          ))}
-                        </Box>
-                      )}
 
                     </Box>
                   </Card>
@@ -1613,7 +1654,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
                       </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                      <Grid container spacing={2.5}>
                         
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Statement" name="driver_statement"
@@ -1626,26 +1667,6 @@ const NewCasePage = () => {
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Documents ────────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
-                      </Box>
-                      
-                      {verificationFiles.driver.length > 0 && (
-                        <Box sx={{ mt: 1.5 }}>
-                          {verificationFiles.driver.map((file, index) => (
-                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: '8px' }}>
-                              <AttachFileIcon fontSize="small" color="action" />
-                              <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
-                              <IconButton size="small" color="error" onClick={() => handleRemoveFile('driver', index)}><DeleteIcon fontSize="small" /></IconButton>
-                            </Box>
-                          ))}
-                        </Box>
-                      )}
 
                     </Box>
                   </Card>
@@ -1755,26 +1776,6 @@ const NewCasePage = () => {
                         </Grid>
                       </Grid>
 
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Documents ────────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
-                      </Box>
-                      
-                      {verificationFiles.spot.length > 0 && (
-                        <Box sx={{ mt: 1.5 }}>
-                          {verificationFiles.spot.map((file, index) => (
-                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: '8px' }}>
-                              <AttachFileIcon fontSize="small" color="action" />
-                              <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
-                              <IconButton size="small" color="error" onClick={() => handleRemoveFile('spot', index)}><DeleteIcon fontSize="small" /></IconButton>
-                            </Box>
-                          ))}
-                        </Box>
-                      )}
-
                     </Box>
                   </Card>
                 )}
@@ -1867,7 +1868,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
                       </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                      <Grid container spacing={2.5}>
                         
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Statement" name="chargesheet_statement"
@@ -1880,26 +1881,6 @@ const NewCasePage = () => {
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Documents ────────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
-                      </Box>
-                      
-                      {verificationFiles.chargesheet.length > 0 && (
-                        <Box sx={{ mt: 1.5 }}>
-                          {verificationFiles.chargesheet.map((file, index) => (
-                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: '8px' }}>
-                              <AttachFileIcon fontSize="small" color="action" />
-                              <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
-                              <IconButton size="small" color="error" onClick={() => handleRemoveFile('chargesheet', index)}><DeleteIcon fontSize="small" /></IconButton>
-                            </Box>
-                          ))}
-                        </Box>
-                      )}
 
                     </Box>
                   </Card>
@@ -1987,7 +1968,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
                       </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                      <Grid container spacing={2.5}>
                         
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Remarks" name="rti_remarks"
@@ -1995,26 +1976,6 @@ const NewCasePage = () => {
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Documents ────────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
-                      </Box>
-                      
-                      {verificationFiles.rti.length > 0 && (
-                        <Box sx={{ mt: 1.5 }}>
-                          {verificationFiles.rti.map((file, index) => (
-                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: '8px' }}>
-                              <AttachFileIcon fontSize="small" color="action" />
-                              <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
-                              <IconButton size="small" color="error" onClick={() => handleRemoveFile('rti', index)}><DeleteIcon fontSize="small" /></IconButton>
-                            </Box>
-                          ))}
-                        </Box>
-                      )}
 
                     </Box>
                   </Card>
@@ -2107,7 +2068,7 @@ const NewCasePage = () => {
                         <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
                         <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
                       </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                      <Grid container spacing={2.5}>
                         
                         <Grid item xs={12}>
                           <TextField fullWidth size="small" label="Remarks" name="rto_remarks"
@@ -2115,26 +2076,6 @@ const NewCasePage = () => {
                             multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Grid>
                       </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Documents ────────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Documents</Typography>
-                      </Box>
-                      
-                      {verificationFiles.rto.length > 0 && (
-                        <Box sx={{ mt: 1.5 }}>
-                          {verificationFiles.rto.map((file, index) => (
-                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: '8px' }}>
-                              <AttachFileIcon fontSize="small" color="action" />
-                              <Typography variant="body2" sx={{ flex: 1 }}>{file.name}</Typography>
-                              <IconButton size="small" color="error" onClick={() => handleRemoveFile('rto', index)}><DeleteIcon fontSize="small" /></IconButton>
-                            </Box>
-                          ))}
-                        </Box>
-                      )}
 
                     </Box>
                   </Card>

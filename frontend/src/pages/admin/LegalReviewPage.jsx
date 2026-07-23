@@ -34,6 +34,7 @@ import {
   History,
   Gavel,
   Assignment,
+  InsertDriveFile,
 } from '@mui/icons-material';
 import AdminLayout from './components/AdminLayout';
 import StatCard from './components/StatCard';
@@ -817,40 +818,48 @@ const LegalReviewPage = () => {
                   }}
                 />
               ) : (
-                <Paper
-                  elevation={0}
+                <Box
                   sx={{
-                    p: 2,
-                    backgroundColor: '#f8f9fa',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '8px',
-                    maxHeight: 400,
-                    overflow: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    fontFamily: 'monospace',
-                    fontSize: '13px',
+                    borderRadius: '10px',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    p: 2.5,
                   }}
                 >
-                  {selectedReport.report_content}
-                </Paper>
+                  <Typography
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'inherit',
+                      fontSize: '14px',
+                      lineHeight: 1.7,
+                      color: '#1e293b',
+                    }}
+                  >
+                    {selectedReport.report_content}
+                  </Typography>
+                </Box>
               )}
+
               {selectedReport.evidence_photos && selectedReport.evidence_photos.length > 0 && (
-                <Box sx={{ mt: 2.5 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.25 }}>
-                    Vendor Evidence:
+                <Box sx={{ mt: 3 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
+                    Vendor Evidence
                   </Typography>
                   <Box
                     sx={{
                       display: 'grid',
                       gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                      gap: 1.5,
-                      maxHeight: 420,
+                      gap: 2,
+                      maxHeight: '500px',
                       overflowY: 'auto',
                     }}
                   >
                     {selectedReport.evidence_photos.map((photo, idx) => {
                       const photoUrl = getEvidencePhotoUrl(photo);
                       const watermarkLines = getEvidenceWatermarkLines(photo);
+
                       return (
                         <Box
                           key={`legal-evidence-${idx}`}
@@ -858,51 +867,101 @@ const LegalReviewPage = () => {
                             borderRadius: '8px',
                             overflow: 'hidden',
                             border: '1px solid #e2e8f0',
-                            backgroundColor: '#0f172a',
-                            position: 'relative',
+                            backgroundColor: '#f8fafc',
                           }}
                         >
-                          <img
-                            src={resolveEvidencePhotoUrl(photoUrl)}
-                            alt={`Vendor Evidence ${idx + 1}`}
-                            style={{
-                              width: '100%',
-                              height: '220px',
-                              objectFit: 'cover',
-                              display: 'block',
-                            }}
-                          />
-                          {watermarkLines.length > 0 && (
-                            <Box
-                              sx={{
-                                position: 'absolute',
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                px: 1.25,
-                                py: 0.75,
-                                background: 'linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.9) 55%, rgba(15,23,42,0.98) 100%)',
+                          <Box sx={{ position: 'relative', backgroundColor: '#0f172a' }}>
+                            <img
+                              src={resolveEvidencePhotoUrl(photoUrl)}
+                              alt={`Vendor Evidence ${idx + 1}`}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                height: '250px',
+                                objectFit: 'cover',
                               }}
-                            >
-                              {watermarkLines.map((line, lineIndex) => (
-                                <Typography
-                                  key={`legal-watermark-${idx}-${lineIndex}`}
-                                  sx={{
-                                    fontSize: '11px',
-                                    lineHeight: 1.35,
-                                    color: '#fff',
-                                    fontWeight: 600,
-                                    textShadow: '0 1px 2px rgba(0,0,0,0.45)',
-                                  }}
-                                >
-                                  {line}
-                                </Typography>
-                              ))}
-                            </Box>
-                          )}
+                            />
+                            {watermarkLines.length > 0 && (
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  px: 1.5,
+                                  py: 1,
+                                  background: 'linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.86) 48%, rgba(15, 23, 42, 0.96) 100%)',
+                                }}
+                              >
+                                {watermarkLines.map((line, lineIndex) => (
+                                  <Typography
+                                    key={`legal-watermark-${idx}-${lineIndex}`}
+                                    sx={{
+                                      fontSize: '12px',
+                                      lineHeight: 1.35,
+                                      color: '#ffffff',
+                                      fontWeight: 600,
+                                      textShadow: '0 1px 2px rgba(0, 0, 0, 0.45)',
+                                      wordBreak: 'break-word',
+                                    }}
+                                  >
+                                    {line}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            )}
+                          </Box>
                         </Box>
                       );
                     })}
+                  </Box>
+                </Box>
+              )}
+
+              {selectedReport.vendor_documents && selectedReport.vendor_documents.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
+                    Vendor Documents
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {selectedReport.vendor_documents.map((doc, idx) => (
+                      <Button
+                        key={`vendor-doc-${idx}`}
+                        variant="outlined"
+                        component="a"
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        startIcon={<InsertDriveFile fontSize="small" />}
+                        sx={{ justifyContent: 'flex-start', textTransform: 'none', borderRadius: '6px', maxWidth: '400px' }}
+                      >
+                        {doc.filename || `Vendor Document ${idx + 1}`}
+                      </Button>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {selectedReport.case_documents && selectedReport.case_documents.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
+                    Case Documents (Policy, Petition, etc.)
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {selectedReport.case_documents.map((doc, idx) => (
+                      <Button
+                        key={`case-doc-${idx}`}
+                        variant="outlined"
+                        component="a"
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        startIcon={<InsertDriveFile fontSize="small" />}
+                        sx={{ justifyContent: 'flex-start', textTransform: 'none', borderRadius: '6px', maxWidth: '400px' }}
+                      >
+                        {doc.filename || `Case Document ${idx + 1}`}
+                      </Button>
+                    ))}
                   </Box>
                 </Box>
               )}

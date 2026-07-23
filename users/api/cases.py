@@ -9,7 +9,8 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from urllib.parse import unquote, urlencode, urlparse
 import urllib.request
-from ninja import Router, Schema
+from ninja import Router, Schema, File, Form
+from ninja.files import UploadedFile
 from ninja.errors import HttpError
 from ninja.pagination import paginate, PageNumberPagination
 from django.db import connection, connections
@@ -583,6 +584,8 @@ class AIBriefReportResponse(Schema):
     report_text: str
     statement_excerpt: str
     evidence_photos: Optional[List[dict]] = None  # List of evidence photo URLs
+    vendor_documents: Optional[List[dict]] = None
+    case_documents: Optional[List[dict]] = None
     vendor_statements: Optional[List[dict]] = None  # All statements captured by vendor
 
 
@@ -679,6 +682,12 @@ class ReassignVendorResponse(Schema):
     previous_vendor_id: Optional[int]
     new_vendor_id: Optional[int]
     message: str
+
+
+class UpdateCaseStatusSchema(Schema):
+    """Request schema for updating case status."""
+    status: str
+
 
 
 # =============================================================================
@@ -1182,6 +1191,9 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
                 c.scope_of_work,
                 c.case_receive_date,
                 c.category,
+                c.policy_document,
+                c.petition_document,
+                c.other_document,
                 -- Incident brief from spot check
                 COALESCE(sc.accident_brief, '') AS incident_brief,
                 -- Incident date/time from spot check
@@ -1278,7 +1290,12 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
         return []
 
     vendor_evidence = []
+    case_documents = []
+    vendor_documents = []
     seen_evidence_urls = set()
+    seen_case_doc_urls = set()
+    seen_vendor_doc_urls = set()
+    
     evidence_tables = (
         "claimant_checks",
         "insured_checks",
@@ -1290,24 +1307,42 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
         with connections['default'].cursor() as cursor:
             for table in evidence_tables:
                 cursor.execute(
-                    f"SELECT vendor_evidence FROM {table} WHERE case_id = %s AND vendor_evidence IS NOT NULL",
+                    f"SELECT vendor_evidence, case_documents, vendor_documents FROM {table} WHERE case_id = %s",
                     [case_id],
                 )
-                for (raw_evidence,) in cursor.fetchall():
-                    for item in _parse_jsonb_list(raw_evidence):
-                        if isinstance(item, str):
-                            evidence_item = {"url": item}
-                        elif isinstance(item, dict):
-                            evidence_item = item
-                        else:
-                            continue
-
-                        evidence_url = (evidence_item.get("url") or "").strip()
-                        if not evidence_url or evidence_url in seen_evidence_urls:
-                            continue
-
-                        seen_evidence_urls.add(evidence_url)
-                        vendor_evidence.append(evidence_item)
+                for (raw_evidence, raw_case_docs, raw_vendor_docs) in cursor.fetchall():
+                    # Parse vendor evidence
+                    if raw_evidence:
+                        for item in _parse_jsonb_list(raw_evidence):
+                            if isinstance(item, str): evidence_item = {"url": item}
+                            elif isinstance(item, dict): evidence_item = item
+                            else: continue
+                            evidence_url = (evidence_item.get("url") or "").strip()
+                            if evidence_url and evidence_url not in seen_evidence_urls:
+                                seen_evidence_urls.add(evidence_url)
+                                vendor_evidence.append(evidence_item)
+                                
+                    # Parse case documents
+                    if raw_case_docs:
+                        for item in _parse_jsonb_list(raw_case_docs):
+                            if isinstance(item, str): doc_item = {"url": item}
+                            elif isinstance(item, dict): doc_item = item
+                            else: continue
+                            doc_url = (doc_item.get("url") or "").strip()
+                            if doc_url and doc_url not in seen_case_doc_urls:
+                                seen_case_doc_urls.add(doc_url)
+                                case_documents.append(doc_item)
+                                
+                    # Parse vendor documents
+                    if raw_vendor_docs:
+                        for item in _parse_jsonb_list(raw_vendor_docs):
+                            if isinstance(item, str): doc_item = {"url": item}
+                            elif isinstance(item, dict): doc_item = item
+                            else: continue
+                            doc_url = (doc_item.get("url") or "").strip()
+                            if doc_url and doc_url not in seen_vendor_doc_urls:
+                                seen_vendor_doc_urls.add(doc_url)
+                                vendor_documents.append(doc_item)
     except Exception as exc:
         logger.warning(f"Failed to fetch vendor evidence for case {case_id}: {exc}")
 
@@ -1331,21 +1366,26 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
         "scope_of_work": row[7],
         "case_receive_date": case_receive_date or "",
         "category": row[9],
-        "incident_brief": row[10],
-        "incident_date": row[11],
-        "incident_location": row[12],
-        "fir_number": row[13],
-        "claimant_name": row[14],
-        "claimant_address": row[15],
-        "claimant_statement": row[16],
-        "insured_name": row[17],
-        "insured_address": row[18],
-        "policy_number": row[19],
-        "insured_statement": row[20],
-        "driver_name": row[21],
-        "driver_statement": row[22],
-        "assigned_vendor_name": row[23],
+        "policy_document": row[10],
+        "petition_document": row[11],
+        "other_document": row[12],
+        "incident_brief": row[13],
+        "incident_date": row[14],
+        "incident_location": row[15],
+        "fir_number": row[16],
+        "claimant_name": row[17],
+        "claimant_address": row[18],
+        "claimant_statement": row[19],
+        "insured_name": row[20],
+        "insured_address": row[21],
+        "policy_number": row[22],
+        "insured_statement": row[23],
+        "driver_name": row[24],
+        "driver_statement": row[25],
+        "assigned_vendor_name": row[26],
         "vendor_evidence": vendor_evidence,
+        "vendor_documents": vendor_documents,
+        "case_documents": case_documents,
         "vendor_statements": vendor_statements,
         "vendor_statement_text": vendor_statement_text,
     }
@@ -1394,6 +1434,45 @@ def generate_ai_brief_report(
                     fallback_location_name=fallback_location_name,
                 )
             )
+            
+        enriched_vendor_docs = []
+        for doc in case_context.get('vendor_documents', []):
+            if isinstance(doc, dict):
+                enriched_vendor_docs.append({
+                    "filename": doc.get("filename") or "Vendor Document",
+                    "url": _build_absolute_media_url(request, str(doc.get("url", "")))
+                })
+                
+        enriched_case_docs = []
+        for doc in case_context.get('case_documents', []):
+            if isinstance(doc, dict):
+                enriched_case_docs.append({
+                    "filename": doc.get("filename") or "Check Case Document",
+                    "url": _build_absolute_media_url(request, str(doc.get("url", "")))
+                })
+        
+        # Add primary case documents
+        for doc_key, doc_title in [("policy_document", "Policy Document"), ("petition_document", "Petition Document"), ("other_document", "Other Case Document")]:
+            raw_val = case_context.get(doc_key)
+            if raw_val:
+                if isinstance(raw_val, str) and raw_val.startswith('[') and raw_val.endswith(']'):
+                    try:
+                        urls = json.loads(raw_val)
+                        for idx, u in enumerate(urls, 1):
+                            enriched_case_docs.append({
+                                "filename": f"{doc_title} {idx}" if len(urls) > 1 else doc_title,
+                                "url": _build_absolute_media_url(request, str(u))
+                            })
+                    except json.JSONDecodeError:
+                        enriched_case_docs.append({
+                            "filename": doc_title,
+                            "url": _build_absolute_media_url(request, str(raw_val))
+                        })
+                else:
+                    enriched_case_docs.append({
+                        "filename": doc_title,
+                        "url": _build_absolute_media_url(request, str(raw_val))
+                    })
         
         return {
             "case_id": case_context["case_id"],
@@ -1401,6 +1480,8 @@ def generate_ai_brief_report(
             "report_text": result["report_text"],
             "statement_excerpt": result["statement_text"][:1000],
             "evidence_photos": vendor_evidence if vendor_evidence else None,
+            "vendor_documents": enriched_vendor_docs if enriched_vendor_docs else None,
+            "case_documents": enriched_case_docs if enriched_case_docs else None,
             "vendor_statements": case_context.get("vendor_statements") or [],
         }
     except AIBriefGenerationError as exc:
@@ -1450,6 +1531,55 @@ def delete_case_from_incident_db(request: HttpRequest, case_id: int):
     except Exception as exc:
         logger.error(f"[API] Failed to delete case {case_id}: {exc}")
         raise HttpError(500, f"Failed to delete case: {str(exc)}")
+
+
+@router.patch(
+    "/cases/incident-db/{case_id}/status",
+    summary="Update Case Status",
+    description="Update the full_case_status of a case. Admin access required.",
+)
+def update_case_status(request: HttpRequest, case_id: int, payload: UpdateCaseStatusSchema):
+    """Update the status of a case."""
+    if not is_admin_or_super_admin(request.user):
+        raise HttpError(403, "Admin access required")
+
+    try:
+        from users.models import InsuranceCase
+        
+        status = payload.status
+        valid_statuses = ['OPEN', 'WIP', 'Completed']
+        if status not in valid_statuses:
+            raise HttpError(400, f"Invalid status. Must be one of {valid_statuses}")
+
+        with connections['default'].cursor() as cursor:
+            # Check if case exists and update cases table
+            cursor.execute("SELECT case_number FROM cases WHERE id = %s", [case_id])
+            row = cursor.fetchone()
+            if not row:
+                raise HttpError(404, "Case not found")
+                
+            case_number = row[0]
+            
+            cursor.execute(
+                "UPDATE cases SET full_case_status = %s, updated_at = NOW() WHERE id = %s",
+                [status, case_id]
+            )
+
+        # Update ORM if exists
+        if case_number:
+            InsuranceCase.objects.filter(case_number=case_number).update(
+                full_case_status=status
+            )
+            
+        logger.info(f"[API] Case {case_id} status updated to {status} by user {request.user.username}")
+        return {"success": True, "status": status}
+        
+    except HttpError:
+        raise
+    except Exception as exc:
+        logger.error(f"[API] Failed to update case {case_id} status: {exc}")
+        raise HttpError(500, f"Failed to update case status: {str(exc)}")
+
 
 
 # ---------------------------------------------------------------------------
@@ -1533,14 +1663,76 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
                 check_data['evidence_photos'] = normalized_photos
 
                 # Statement audio URL
-                sa = check_data.get('statement_audio')
+                sa = check_data.get('statement_audio') or check_data.get('statement_audio_path')
+                sa_url = ""
                 if sa:
-                    if not sa.startswith('http'):
-                        if not sa.startswith('/'):
-                            sa = '/' + sa
-                        check_data['statement_audio_url'] = request.build_absolute_uri(sa)
-                    else:
-                        check_data['statement_audio_url'] = sa
+                    sa_url = _build_absolute_media_url(request, str(sa))
+                    check_data['statement_audio_url'] = sa_url
+
+                # Normalize vendor documents / case documents
+                doc_raw = check_data.get('vendor_documents') or check_data.get('case_documents') or check_data.get('documents')
+                documents = []
+                if doc_raw:
+                    if isinstance(doc_raw, str):
+                        try:
+                            documents = _json.loads(doc_raw)
+                        except Exception:
+                            documents = []
+                    elif isinstance(doc_raw, list):
+                        documents = doc_raw
+
+                normalized_docs = []
+                for d in documents:
+                    if not d:
+                        continue
+                    item = dict(d) if isinstance(d, dict) else {"url": d}
+                    raw_url = item.get("url") or item.get("file_url") or ""
+                    if raw_url:
+                        item["url"] = _build_absolute_media_url(request, raw_url)
+                        if not item.get("filename"):
+                            item["filename"] = os.path.basename(str(raw_url)) or "document"
+                        normalized_docs.append(item)
+                check_data['documents'] = normalized_docs
+
+                # Normalize statement entries (audio recordings)
+                statement_raw = check_data.get('statement_entries')
+                entries = []
+                if statement_raw:
+                    if isinstance(statement_raw, str):
+                        try:
+                            entries = _json.loads(statement_raw)
+                        except Exception:
+                            entries = []
+                    elif isinstance(statement_raw, list):
+                        entries = statement_raw
+
+                normalized_entries = []
+                for se in entries:
+                    if not se:
+                        continue
+                    item = dict(se) if isinstance(se, dict) else {"url": se}
+                    raw_url = item.get("url") or item.get("audio_url") or item.get("audio_path") or item.get("statement_audio_path") or ""
+                    if not raw_url and sa_url:
+                        raw_url = sa_url
+
+                    if raw_url:
+                        abs_url = _build_absolute_media_url(request, raw_url)
+                        item["url"] = abs_url
+                        item["audio_url"] = abs_url
+                        if not item.get("filename"):
+                            item["filename"] = os.path.basename(str(raw_url)) or "audio_recording"
+                        normalized_entries.append(item)
+
+                if not normalized_entries and sa_url:
+                    normalized_entries = [{
+                        "url": sa_url,
+                        "audio_url": sa_url,
+                        "filename": os.path.basename(str(sa)) or "Vendor Statement Recording",
+                        "statement_text": check_data.get("statement") or "",
+                        "created_at": check_data.get("updated_at")
+                    }]
+
+                check_data['statement_entries'] = normalized_entries
 
             return {"case": case_data, "check": check_data, "check_type": check_type.lower()}
 
@@ -1548,6 +1740,241 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
         raise
     except Exception as exc:
         logger.error(f"get_check_detail failed for case={case_id} type={check_type}: {exc}")
+        raise HttpError(500, str(exc))
+
+
+@router.get(
+    "/cases/incident-db/{case_id}/full-details",
+    summary="Get Full Case Details + All Verification Checks",
+    description="Returns complete details for a case including all 7 verification check tables, evidence, media, recordings, and documents.",
+)
+def get_full_case_details(request: HttpRequest, case_id: int):
+    """Return full case row + all 7 check rows with normalized media from incident_case_db."""
+    if not is_admin_or_super_admin(request.user):
+        raise HttpError(403, "Admin access required")
+
+    try:
+        with connections['default'].cursor() as cursor:
+            # 1. Fetch case row
+            cursor.execute("SELECT * FROM cases WHERE id = %s", [case_id])
+            col_names = [d[0] for d in cursor.description]
+            case_row = cursor.fetchone()
+            if not case_row:
+                raise HttpError(404, f"Case id={case_id} not found")
+            case_data = dict(zip(col_names, case_row))
+
+            # 1.5 Fetch missing fields from insurance_case, check tables, and insurance_client
+            cursor.execute("SELECT client_code, insured_name, claimant_name FROM insurance_case WHERE case_number = %s", [case_data.get('case_number')])
+            ic_row = cursor.fetchone() or ('', '', '')
+
+            # Claimant Name fallback
+            claimant_name = case_data.get('claimant_name')
+            if not claimant_name:
+                cursor.execute("SELECT claimant_name FROM claimant_checks WHERE case_id = %s", [case_id])
+                ch_row = cursor.fetchone()
+                if ch_row and ch_row[0]:
+                    claimant_name = ch_row[0]
+            if not claimant_name and ic_row[2]:
+                claimant_name = ic_row[2]
+            case_data['claimant_name'] = claimant_name or ''
+
+            # Insured Name fallback
+            insured_name = case_data.get('insured_name')
+            if not insured_name:
+                cursor.execute("SELECT insured_name FROM insured_checks WHERE case_id = %s", [case_id])
+                in_row = cursor.fetchone()
+                if in_row and in_row[0]:
+                    insured_name = in_row[0]
+            if not insured_name and ic_row[1]:
+                insured_name = ic_row[1]
+            case_data['insured_name'] = insured_name or ''
+
+            # Driver Name fallback
+            driver_name = case_data.get('driver_name')
+            if not driver_name:
+                cursor.execute("SELECT driver_name FROM driver_checks WHERE case_id = %s", [case_id])
+                dr_row = cursor.fetchone()
+                if dr_row and dr_row[0]:
+                    driver_name = dr_row[0]
+            case_data['driver_name'] = driver_name or ''
+
+            # Client Code fallback
+            client_code = case_data.get('client_code') or ic_row[0]
+            if not client_code and case_data.get('client_name'):
+                c_name = case_data['client_name']
+                if '–' in c_name:
+                    client_code = c_name.split('–')[-1].strip()
+                elif '-' in c_name:
+                    client_code = c_name.split('-')[-1].strip()
+                else:
+                    cursor.execute("SELECT client_code FROM insurance_client WHERE %s LIKE '%%' || client_code || '%%' OR %s LIKE '%%' || client_name || '%%' LIMIT 1", [c_name, c_name])
+                    cl_row = cursor.fetchone()
+                    if cl_row and cl_row[0]:
+                        client_code = cl_row[0]
+            case_data['client_code'] = client_code or ''
+
+            for k, v in list(case_data.items()):
+                if hasattr(v, 'isoformat'):
+                    case_data[k] = v.isoformat()
+
+            # Normalize case level documents
+            for doc_key in ['policy_document', 'petition_document', 'other_document']:
+                raw_val = case_data.get(doc_key)
+                if raw_val:
+                    if isinstance(raw_val, str) and raw_val.startswith('[') and raw_val.endswith(']'):
+                        try:
+                            urls = json.loads(raw_val)
+                            case_data[f"{doc_key}_url"] = [_build_absolute_media_url(request, str(u)) for u in urls]
+                        except json.JSONDecodeError:
+                            case_data[f"{doc_key}_url"] = _build_absolute_media_url(request, str(raw_val))
+                    else:
+                        case_data[f"{doc_key}_url"] = _build_absolute_media_url(request, str(raw_val))
+                else:
+                    case_data[f"{doc_key}_url"] = None
+
+            # 2. Fetch all check tables
+            check_label_map = {
+                'claimant': 'Claimant Check',
+                'insured': 'Insured Check',
+                'driver': 'Driver Check',
+                'spot': 'Spot Check',
+                'chargesheet': 'Chargesheet',
+                'rti': 'RTI Check',
+                'rto': 'RTO Check',
+            }
+
+            all_checks = []
+            for slug, table_name in _CHECK_TABLE_MAP.items():
+                cursor.execute(f"SELECT * FROM {table_name} WHERE case_id = %s", [case_id])
+                col_names_ch = [d[0] for d in cursor.description]
+                ch_row = cursor.fetchone()
+                if not ch_row:
+                    continue
+
+                ch_data = dict(zip(col_names_ch, ch_row))
+                for k, v in list(ch_data.items()):
+                    if hasattr(v, 'isoformat'):
+                        ch_data[k] = v.isoformat()
+
+                # Get vendor name
+                vendor_id = ch_data.get('assigned_vendor_id') or ch_data.get('vendor_id')
+                vendor_name = None
+                if vendor_id:
+                    cursor.execute("SELECT company_name FROM users_vendor WHERE id = %s", [vendor_id])
+                    v_row = cursor.fetchone()
+                    if v_row:
+                        vendor_name = v_row[0]
+                ch_data['assigned_vendor_name'] = vendor_name
+
+                # Evidence photos
+                import json as _json
+                evidence_raw = ch_data.get('vendor_evidence') or ch_data.get('evidence')
+                evidence_photos = []
+                if evidence_raw:
+                    if isinstance(evidence_raw, str):
+                        try:
+                            evidence_photos = _json.loads(evidence_raw)
+                        except Exception:
+                            evidence_photos = []
+                    elif isinstance(evidence_raw, list):
+                        evidence_photos = evidence_raw
+
+                normalized_photos = []
+                for p in evidence_photos:
+                    if not p:
+                        continue
+                    enriched = _enrich_evidence_metadata(request, p)
+                    if enriched:
+                        if 'preview_url' in enriched:
+                            enriched['url'] = enriched['preview_url']
+                        if enriched.get('url'):
+                            normalized_photos.append(enriched)
+                ch_data['evidence_photos'] = normalized_photos
+
+                # Audio recording URL
+                sa = ch_data.get('statement_audio') or ch_data.get('statement_audio_path')
+                sa_url = ""
+                if sa:
+                    sa_url = _build_absolute_media_url(request, str(sa))
+                    ch_data['statement_audio_url'] = sa_url
+
+                # Documents
+                doc_raw = ch_data.get('vendor_documents') or ch_data.get('case_documents') or ch_data.get('documents')
+                documents = []
+                if doc_raw:
+                    if isinstance(doc_raw, str):
+                        try:
+                            documents = _json.loads(doc_raw)
+                        except Exception:
+                            documents = []
+                    elif isinstance(doc_raw, list):
+                        documents = doc_raw
+
+                normalized_docs = []
+                for d in documents:
+                    if not d:
+                        continue
+                    item = dict(d) if isinstance(d, dict) else {"url": d}
+                    raw_url = item.get("url") or item.get("file_url") or ""
+                    if raw_url:
+                        item["url"] = _build_absolute_media_url(request, raw_url)
+                        if not item.get("filename"):
+                            item["filename"] = os.path.basename(str(raw_url)) or "document"
+                        normalized_docs.append(item)
+                ch_data['documents'] = normalized_docs
+
+                # Statement entries
+                statement_raw = ch_data.get('statement_entries')
+                entries = []
+                if statement_raw:
+                    if isinstance(statement_raw, str):
+                        try:
+                            entries = _json.loads(statement_raw)
+                        except Exception:
+                            entries = []
+                    elif isinstance(statement_raw, list):
+                        entries = statement_raw
+
+                normalized_entries = []
+                for se in entries:
+                    if not se:
+                        continue
+                    item = dict(se) if isinstance(se, dict) else {"url": se}
+                    raw_url = item.get("url") or item.get("audio_url") or item.get("audio_path") or item.get("statement_audio_path") or ""
+                    if not raw_url and sa_url:
+                        raw_url = sa_url
+
+                    if raw_url:
+                        abs_url = _build_absolute_media_url(request, raw_url)
+                        item["url"] = abs_url
+                        item["audio_url"] = abs_url
+                        if not item.get("filename"):
+                            item["filename"] = os.path.basename(str(raw_url)) or "Vendor Statement Recording"
+                        normalized_entries.append(item)
+
+                if not normalized_entries and sa_url:
+                    normalized_entries = [{
+                        "url": sa_url,
+                        "audio_url": sa_url,
+                        "filename": os.path.basename(str(sa)) or "Vendor Statement Recording",
+                        "statement_text": ch_data.get("statement") or "",
+                        "created_at": ch_data.get("updated_at")
+                    }]
+
+                ch_data['statement_entries'] = normalized_entries
+
+                all_checks.append({
+                    "slug": slug,
+                    "check_type_label": check_label_map.get(slug, slug.title()),
+                    "check": ch_data
+                })
+
+            return {"case": case_data, "checks": all_checks}
+
+    except HttpError:
+        raise
+    except Exception as exc:
+        logger.error(f"get_full_case_details failed for case={case_id}: {exc}")
         raise HttpError(500, str(exc))
 
 
@@ -1825,14 +2252,12 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 import os
 
-@router.post('/{case_id}/upload', tags=["Cases"], summary="Upload Case Documents")
+@router.post('/cases/{case_id}/upload', tags=["Cases"], summary="Upload Case Documents")
 def upload_case_documents(
     request: HttpRequest,
     case_id: int,
-    policy: UploadedFile = File(None),
-    petition: UploadedFile = File(None)
 ):
-    """Upload documents directly to the incident_case_db."""
+    """Upload documents directly to the incident_case_db. Supports multiple files per type."""
     if not is_admin_or_super_admin(request.user):
         return 403, {"error": "Admin access required"}
         
@@ -1841,19 +2266,49 @@ def upload_case_documents(
         updates = []
         params = []
         
-        if policy:
-            file_extension = os.path.splitext(policy.name)[1]
-            file_path = f'case_documents/{case_id}/policy_{policy.name}'
-            saved_path = default_storage.save(file_path, ContentFile(policy.read()))
-            updates.append("policy_document = %s")
-            params.append(default_storage.url(saved_path))
+        policy_files = request.FILES.getlist('policy')
+        petition_files = request.FILES.getlist('petition')
+        other_files = request.FILES.getlist('other')
+
+        if policy_files:
+            saved_urls = []
+            for f in policy_files:
+                file_path = f'case_documents/{case_id}/policy_{f.name}'
+                saved_path = default_storage.save(file_path, ContentFile(f.read()))
+                saved_urls.append(default_storage.url(saved_path))
+            # Store as JSON array for multiple files, single path for backward compat
+            if len(saved_urls) == 1:
+                updates.append("policy_document = %s")
+                params.append(saved_urls[0])
+            else:
+                updates.append("policy_document = %s")
+                params.append(json.dumps(saved_urls))
             
-        if petition:
-            file_extension = os.path.splitext(petition.name)[1]
-            file_path = f'case_documents/{case_id}/petition_{petition.name}'
-            saved_path = default_storage.save(file_path, ContentFile(petition.read()))
-            updates.append("petition_document = %s")
-            params.append(default_storage.url(saved_path))
+        if petition_files:
+            saved_urls = []
+            for f in petition_files:
+                file_path = f'case_documents/{case_id}/petition_{f.name}'
+                saved_path = default_storage.save(file_path, ContentFile(f.read()))
+                saved_urls.append(default_storage.url(saved_path))
+            if len(saved_urls) == 1:
+                updates.append("petition_document = %s")
+                params.append(saved_urls[0])
+            else:
+                updates.append("petition_document = %s")
+                params.append(json.dumps(saved_urls))
+            
+        if other_files:
+            saved_urls = []
+            for f in other_files:
+                file_path = f'case_documents/{case_id}/other_{f.name}'
+                saved_path = default_storage.save(file_path, ContentFile(f.read()))
+                saved_urls.append(default_storage.url(saved_path))
+            if len(saved_urls) == 1:
+                updates.append("other_document = %s")
+                params.append(saved_urls[0])
+            else:
+                updates.append("other_document = %s")
+                params.append(json.dumps(saved_urls))
             
         if updates:
             params.append(case_id)
@@ -3309,3 +3764,131 @@ def review_check(request: HttpRequest, case_id: int, check_type: str, payload: A
     except Exception as exc:
         logger.error(f"review_check failed for case={case_id} type={check_type}: {exc}")
         raise HttpError(500, str(exc))
+
+
+@router.post(
+    "/cases/incident-db/{case_id}/check/{check_type}/upload-media",
+    summary="Upload Check Media (Evidence, Document, or Audio)",
+)
+def upload_check_media(
+    request: HttpRequest,
+    case_id: int,
+    check_type: str,
+    category: str = Form(...),  # 'evidence', 'document', or 'statement'
+    statement_text: Optional[str] = Form(None),
+    file: UploadedFile = File(...),
+):
+    """Upload evidence photo, case document, or statement audio file for a check."""
+    import json as _json
+    import os
+    import time
+    from django.conf import settings
+    from django.db import connections
+    from users.models import CustomUser
+
+    if request.user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN, CustomUser.Role.VENDOR]:
+        raise HttpError(403, "Admin or vendor access required")
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        raise HttpError(400, f"Unknown check type '{check_type}'")
+
+    cat_clean = (category or "").lower().strip()
+    if cat_clean not in {"evidence", "document", "statement", "statement_audio"}:
+        raise HttpError(400, "Invalid category. Must be 'evidence', 'document', or 'statement'")
+
+    # Map category to subfolder & DB column
+    if cat_clean == "evidence":
+        subfolder = "evidence_photos"
+        col_name = "vendor_evidence"
+    elif cat_clean == "document":
+        subfolder = "case_documents"
+        col_name = "vendor_documents"
+    else:  # statement / statement_audio
+        subfolder = "statement_audio"
+        col_name = "statement_entries"
+
+    # Save physical file
+    ext = os.path.splitext(file.name)[1].lower()
+    is_photo = ext in ['.jpg', '.jpeg', '.png', '.webp', '.heic']
+    if cat_clean in {"statement", "statement_audio"} and is_photo:
+        subfolder = "statement_photos"
+
+    # Ensure upload directory exists
+    dir_path = os.path.join(settings.MEDIA_ROOT, subfolder, f"case_{case_id}", check_type.lower())
+    os.makedirs(dir_path, exist_ok=True)
+
+    safe_filename = f"{int(time.time())}_{file.name.replace(' ', '_')}"
+    full_file_path = os.path.join(dir_path, safe_filename)
+    
+    with open(full_file_path, "wb") as f:
+        for chunk in file.chunks():
+            f.write(chunk)
+
+    rel_url = f"/media/{subfolder}/case_{case_id}/{check_type.lower()}/{safe_filename}"
+    abs_url = _build_absolute_media_url(request, rel_url)
+
+    # Prepare item payload
+    now_iso = timezone.now().isoformat()
+    if cat_clean == "evidence":
+        new_item = {
+            "url": rel_url,
+            "filename": file.name,
+            "uploaded_at": now_iso,
+        }
+    elif cat_clean == "document":
+        new_item = {
+            "url": rel_url,
+            "filename": file.name,
+            "uploaded_at": now_iso,
+            "size": file.size,
+        }
+    else:
+        new_item = {
+            "url": rel_url,
+            "audio_url": "" if is_photo else rel_url,
+            "image_url": rel_url if is_photo else "",
+            "filename": file.name,
+            "statement_text": statement_text or ("Written Statement Photo" if is_photo else ""),
+            "translation_en": statement_text or ("Written Statement Photo" if is_photo else ""),
+            "type": "photo" if is_photo else "audio",
+            "source": "written_statement_photo" if is_photo else "audio_recording",
+            "created_at": now_iso,
+        }
+
+    # Update DB
+    with connections['default'].cursor() as cursor:
+        cursor.execute(f"SELECT {col_name} FROM {table} WHERE case_id = %s", [case_id])
+        row = cursor.fetchone()
+        existing_list = []
+        if row and row[0]:
+            raw_val = row[0]
+            if isinstance(raw_val, str):
+                try:
+                    existing_list = _json.loads(raw_val)
+                except Exception:
+                    existing_list = []
+            elif isinstance(raw_val, list):
+                existing_list = raw_val
+
+        existing_list.append(new_item)
+        updated_json = _json.dumps(existing_list)
+
+        cursor.execute(
+            f"UPDATE {table} SET {col_name} = %s WHERE case_id = %s",
+            [updated_json, case_id]
+        )
+
+        # If statement audio, also update statement_audio_path if empty
+        if cat_clean in {"statement", "statement_audio"}:
+            cursor.execute(
+                f"UPDATE {table} SET statement_audio_path = %s WHERE case_id = %s AND (statement_audio_path IS NULL OR statement_audio_path = '')",
+                [rel_url, case_id]
+            )
+
+    new_item["url"] = abs_url
+    if "audio_url" in new_item:
+        new_item["audio_url"] = abs_url
+
+    return {"success": True, "message": f"{cat_clean.capitalize()} uploaded successfully", "item": new_item}
+

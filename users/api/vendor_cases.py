@@ -180,20 +180,36 @@ def parse_statement_entries(value) -> List[dict]:
         if not isinstance(item, dict):
             continue
 
-        translation = str(item.get("translation_en") or item.get("text_en") or "").strip()
+        raw_url = str(item.get("url") or item.get("image_url") or item.get("audio_url") or item.get("audio_path") or "").strip()
+        ext = os.path.splitext(raw_url)[1].lower() if raw_url else ""
+        is_photo = item.get("type") == "photo" or item.get("source") == "written_statement_photo" or ext in ['.jpg', '.jpeg', '.png', '.webp', '.heic']
+
+        translation = str(
+            item.get("translation_en")
+            or item.get("text_en")
+            or item.get("statement_text")
+            or item.get("filename")
+            or ("Written Statement Photo" if is_photo else "")
+        ).strip()
+
         transcript = str(item.get("transcript_mr") or item.get("text_mr") or "").strip()
-        if not translation:
+
+        if not translation and not raw_url:
             continue
 
         normalized.append(
             {
                 "index": int(item.get("index") or idx),
                 "transcript_mr": transcript,
-                "translation_en": translation,
-                "audio_path": str(item.get("audio_path") or "").strip(),
+                "translation_en": translation or ("Written Statement Photo" if is_photo else "Statement Audio"),
+                "audio_path": "" if is_photo else raw_url,
+                "audio_url": "" if is_photo else raw_url,
+                "image_url": raw_url if is_photo else str(item.get("image_url") or "").strip(),
+                "filename": str(item.get("filename") or "").strip(),
+                "type": "photo" if is_photo else "audio",
                 "provider": str(item.get("provider") or "").strip() or "manual",
                 "confidence": item.get("confidence"),
-                "source": str(item.get("source") or "manual_edit"),
+                "source": str(item.get("source") or ("written_statement_photo" if is_photo else "manual_edit")),
                 "detected_language": str(item.get("detected_language") or "mr"),
                 "created_at": item.get("created_at") or "",
             }
@@ -532,82 +548,90 @@ _CHECK_DETAIL_COLUMNS = {
         'select': '''cc.id, cc.case_id, cc.check_status,
                      cc.claimant_name, cc.claimant_contact, cc.claimant_address,
                      cc.claimant_income, cc.statement, cc.triggers, cc.vendor_evidence AS evidence,
-                     cc.admin_feedback, cc.is_reassigned''',
+                     cc.vendor_documents AS vendor_documents, cc.case_documents AS case_documents,
+                     cc.admin_feedback, cc.is_reassigned, cc.questionnaire''',
         'alias': 'cc',
         'fields': ['id','case_id','check_status','claimant_name','claimant_contact',
                     'claimant_address','claimant_income','statement','triggers','evidence',
-                    'admin_feedback','is_reassigned'],
+                    'vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
     },
     'insured_checks': {
         'select': '''ic.id, ic.case_id, ic.check_status,
                      ic.insured_name, ic.insured_contact, ic.insured_address,
                      ic.policy_number, ic.policy_period, ic.rc, ic.permit,
                      ic.statement, ic.triggers, ic.vendor_evidence AS evidence,
-                     ic.admin_feedback, ic.is_reassigned''',
+                     ic.vendor_documents AS vendor_documents, ic.case_documents AS case_documents,
+                     ic.admin_feedback, ic.is_reassigned, ic.questionnaire''',
         'alias': 'ic',
         'fields': ['id','case_id','check_status','insured_name','insured_contact',
                     'insured_address','policy_number','policy_period','rc','permit',
-                    'statement','triggers','evidence','admin_feedback','is_reassigned'],
+                    'statement','triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
     },
     'driver_checks': {
         'select': '''dc.id, dc.case_id, dc.check_status,
                      dc.driver_name, dc.driver_contact, dc.driver_address,
                      dc.dl, dc.permit, dc.occupation,
                      dc.statement, dc.triggers, dc.vendor_evidence AS evidence,
-                     dc.admin_feedback, dc.is_reassigned''',
+                     dc.vendor_documents AS vendor_documents, dc.case_documents AS case_documents,
+                     dc.admin_feedback, dc.is_reassigned, dc.questionnaire''',
         'alias': 'dc',
         'fields': ['id','case_id','check_status','driver_name','driver_contact',
                     'driver_address','dl','permit','occupation',
-                    'statement','triggers','evidence','admin_feedback','is_reassigned'],
+                    'statement','triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
     },
     'spot_checks': {
         'select': '''sc.id, sc.case_id, sc.check_status,
                      sc.place_of_accident, sc.police_station, sc.district,
                      sc.fir_number, sc.time_of_accident, sc.accident_brief,
                      sc.triggers, sc.vendor_evidence AS evidence,
-                     sc.admin_feedback, sc.is_reassigned''',
+                     sc.vendor_documents AS vendor_documents, sc.case_documents AS case_documents,
+                     sc.admin_feedback, sc.is_reassigned, sc.questionnaire''',
         'alias': 'sc',
         'fields': ['id','case_id','check_status','place_of_accident','police_station',
                     'district','fir_number','time_of_accident','accident_brief',
-                    'triggers','evidence','admin_feedback','is_reassigned'],
+                    'triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
     },
     'chargesheets': {
         'select': '''cs.id, cs.case_id, cs.check_status,
                      cs.court_name, cs.fir_number, cs.mv_act,
                      cs.fir_delay_days, cs.bsn_section, cs.ipc,
                      cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
-                     cs.admin_feedback, cs.is_reassigned''',
+                     cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
+                     cs.admin_feedback, cs.is_reassigned, cs.questionnaire''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
-                    'statement','triggers','evidence','admin_feedback','is_reassigned'],
+                    'statement','triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
     },
     'chargesheet_checks': {
         'select': '''cs.id, cs.case_id, cs.check_status,
                      cs.court_name, cs.fir_number, cs.mv_act,
                      cs.fir_delay_days, cs.bsn_section, cs.ipc,
                      cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
-                     cs.admin_feedback, cs.is_reassigned''',
+                     cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
+                     cs.admin_feedback, cs.is_reassigned, cs.questionnaire''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
-                    'statement','triggers','evidence','admin_feedback','is_reassigned'],
+                    'statement','triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
     },
     'rti_checks': {
         'select': '''rt.id, rt.case_id, rt.check_status,
                      rt.statement, rt.triggers, rt.vendor_evidence AS evidence,
-                     rt.admin_feedback, rt.is_reassigned''',
+                     rt.vendor_documents AS vendor_documents, rt.case_documents AS case_documents,
+                     rt.admin_feedback, rt.is_reassigned, rt.questionnaire''',
         'alias': 'rt',
         'fields': ['id','case_id','check_status','statement','triggers','evidence',
-                   'admin_feedback','is_reassigned'],
+                   'vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
     },
     'rto_checks': {
         'select': '''ro.id, ro.case_id, ro.check_status,
                      ro.statement, ro.triggers, ro.vendor_evidence AS evidence,
-                     ro.admin_feedback, ro.is_reassigned''',
+                     ro.vendor_documents AS vendor_documents, ro.case_documents AS case_documents,
+                     ro.admin_feedback, ro.is_reassigned, ro.questionnaire''',
         'alias': 'ro',
         'fields': ['id','case_id','check_status','statement','triggers','evidence',
-                   'admin_feedback','is_reassigned'],
+                   'vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
     },
 }
 
@@ -790,7 +814,43 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                 normalized_evidence_list.append(evidence_item)
             check_detail['evidence_photos'] = normalized_evidence_list
 
+            # Parse documents list (vendor_documents + case_documents)
+            docs_raw = check_detail.get('vendor_documents') or check_detail.get('case_documents')
+            docs_list = parse_json_list(docs_raw)
+            normalized_docs_list = []
+            written_statement_photos = []
+            for item in docs_list:
+                if isinstance(item, dict):
+                    doc_item = dict(item)
+                elif isinstance(item, str):
+                    doc_item = {
+                        "url": item,
+                        "filename": extract_evidence_filename(item),
+                    }
+                else:
+                    continue
+
+                raw_url = doc_item.get("url") or ""
+                doc_item["preview_url"] = build_absolute_media_url(request, raw_url)
+                filename = doc_item.get("filename") or extract_evidence_filename(doc_item)
+                doc_item["filename"] = filename
+
+                if doc_item.get("category") == "statement_photo" or filename.startswith("written_statement_"):
+                    written_statement_photos.append(doc_item)
+                else:
+                    normalized_docs_list.append(doc_item)
+
+            check_detail['documents'] = normalized_docs_list
+            check_detail['written_statement_photos'] = written_statement_photos
+
             statement_entries = _get_statement_entries_for_check(table, check_detail.get('id'))
+            for entry in statement_entries:
+                if entry.get("image_url"):
+                    entry["image_url"] = build_absolute_media_url(request, entry["image_url"])
+                if entry.get("audio_url"):
+                    entry["audio_url"] = build_absolute_media_url(request, entry["audio_url"])
+                if entry.get("audio_path"):
+                    entry["audio_path"] = build_absolute_media_url(request, entry["audio_path"])
             check_detail['statement_entries'] = statement_entries
             check_detail['statement_count'] = len(statement_entries)
             check_detail['max_statements_per_check'] = MAX_STATEMENTS_PER_CHECK
@@ -1095,6 +1155,59 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
     }
 
 
+class QuestionnairePayload(Schema):
+    questionnaire: dict
+
+
+@router.post(
+    "/vendor-check-questionnaire/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Save Questionnaire Data",
+    description="Save dynamic questionnaire data for the check.",
+)
+def vendor_check_questionnaire_save(request: HttpRequest, case_id: int, check_type: str, payload: QuestionnairePayload):
+    """Save questionnaire responses to the check."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role != 'VENDOR':
+        return 403, {"error": "Vendor access required"}
+
+    vendor_id = get_vendor_id_from_user(request.user)
+    if not vendor_id:
+        return 403, {"error": "Vendor profile not found"}
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+
+    try:
+        with connections['default'].cursor() as cursor:
+            # Verify the check is assigned to this vendor
+            cursor.execute(f"SELECT id FROM {table} WHERE case_id = %s AND assigned_vendor_id = %s", [case_id, vendor_id])
+            row = cursor.fetchone()
+            if not row:
+                return 404, {"error": "Check not found or not assigned to you"}
+            
+            check_id = row[0]
+            
+            import json
+            questionnaire_json = json.dumps(payload.questionnaire)
+            
+            # Save the questionnaire data
+            cursor.execute(f"""
+                UPDATE {table} SET questionnaire = %s::jsonb, updated_at = NOW()
+                WHERE id = %s
+            """, [questionnaire_json, check_id])
+            
+    except Exception as e:
+        logger.error(f"Failed to save questionnaire: {e}")
+        return 500, {"error": "Failed to save questionnaire"}
+
+    return {
+        "success": True,
+        "message": "Questionnaire saved successfully"
+    }
+
 @router.delete(
     "/vendor-check-evidence/{case_id}/{check_type}",
     response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
@@ -1166,6 +1279,137 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
         "message": "Evidence photo removed successfully",
         "deleted_filename": filename,
         "remaining": len(evidence_list),
+    }
+
+
+@router.delete(
+    "/vendor-check-document/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Delete uploaded document or statement photo from vendor check",
+)
+def delete_vendor_check_document(request: HttpRequest, case_id: int, check_type: str, filename: str):
+    """Delete a specific document or statement photo from vendor_documents."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role != 'VENDOR':
+        return 403, {"error": "Vendor access required"}
+
+    vendor_id = get_vendor_id_from_user(request.user)
+    if not vendor_id:
+        return 403, {"error": "Vendor profile not found"}
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+    if not filename:
+        return 400, {"error": "filename is required"}
+
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(f"""
+                SELECT id, vendor_documents FROM {table}
+                WHERE case_id = %s AND assigned_vendor_id = %s
+            """, [case_id, vendor_id])
+            check_row = cursor.fetchone()
+            if not check_row:
+                return 404, {"error": "Check not found or not assigned to you"}
+
+            check_id = check_row[0]
+            docs_list = parse_json_list(check_row[1])
+
+            delete_index = next(
+                (idx for idx, item in enumerate(docs_list) if extract_evidence_filename(item) == filename),
+                None,
+            )
+            if delete_index is None:
+                return 404, {"error": "Document not found"}
+
+            deleted_item = docs_list.pop(delete_index)
+
+            cursor.execute(f"""
+                UPDATE {table} SET vendor_documents = %s, updated_at = NOW()
+                WHERE id = %s
+            """, [json.dumps(docs_list), check_id])
+    except Exception as exc:
+        logger.error(f"Failed to delete vendor document for case={case_id} check={check_type}: {exc}")
+        return 500, {"error": "Failed to delete document"}
+
+    file_url = deleted_item if isinstance(deleted_item, str) else (deleted_item.get("url") or "")
+    relative_media_path = media_relative_path_from_url(file_url)
+    if relative_media_path:
+        try:
+            media_root = os.path.abspath(settings.MEDIA_ROOT)
+            absolute_file_path = os.path.abspath(os.path.join(media_root, relative_media_path))
+            if absolute_file_path.startswith(media_root + os.sep) and os.path.exists(absolute_file_path):
+                os.remove(absolute_file_path)
+        except Exception as exc:
+            logger.warning(f"Failed to delete document file {relative_media_path}: {exc}")
+
+    return {
+        "success": True,
+        "message": "Document removed successfully",
+        "deleted_filename": filename,
+    }
+
+
+@router.delete(
+    "/vendor-check-statement/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Delete recorded statement entry from vendor check",
+)
+def delete_vendor_check_statement(request: HttpRequest, case_id: int, check_type: str, index: int):
+    """Delete a recorded speech statement entry by its 1-based index from statement_entries."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role != 'VENDOR':
+        return 403, {"error": "Vendor access required"}
+
+    vendor_id = get_vendor_id_from_user(request.user)
+    if not vendor_id:
+        return 403, {"error": "Vendor profile not found"}
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(f"""
+                SELECT id, statement_entries FROM {table}
+                WHERE case_id = %s AND assigned_vendor_id = %s
+            """, [case_id, vendor_id])
+            check_row = cursor.fetchone()
+            if not check_row:
+                return 404, {"error": "Check not found or not assigned to you"}
+
+            check_id = check_row[0]
+            entries_list = parse_json_list(check_row[1])
+
+            if index < 1 or index > len(entries_list):
+                return 404, {"error": "Statement entry not found"}
+
+            deleted_item = entries_list.pop(index - 1)
+
+            # Re-index remaining entries
+            for idx, item in enumerate(entries_list, start=1):
+                if isinstance(item, dict):
+                    item["index"] = idx
+
+            statement_col = "observations" if check_type.lower() == "spot" else "statement"
+            updated_text = _compose_statement_column_text(entries_list)
+
+            cursor.execute(f"""
+                UPDATE {table} SET statement_entries = %s, {statement_col} = %s, updated_at = NOW()
+                WHERE id = %s
+            """, [json.dumps(entries_list), updated_text, check_id])
+    except Exception as exc:
+        logger.error(f"Failed to delete vendor statement for case={case_id} check={check_type}: {exc}")
+        return 500, {"error": "Failed to delete statement"}
+
+    return {
+        "success": True,
+        "message": "Statement removed successfully",
+        "deleted_index": index,
     }
 
 

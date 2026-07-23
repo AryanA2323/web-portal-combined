@@ -254,6 +254,80 @@ class ApiService {
     }
   }
 
+  async uploadCheckDocument(caseId: number, checkType: string, fileAsset: { uri: string; name: string }): Promise<any> {
+    try {
+      const formData = new FormData();
+      const fileType = fileAsset.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileObj: any = {
+        uri: fileAsset.uri,
+        name: fileAsset.name,
+        type: fileType === 'pdf' ? 'application/pdf' : `image/${fileType === 'jpg' ? 'jpeg' : fileType}`,
+      };
+      formData.append('file', fileObj);
+      formData.append('category', 'document');
+
+      const response = await this.api.post(
+        `/cases/incident-db/${caseId}/check/${checkType}/upload-media`,
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 60000,
+        }
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async uploadStatementPhoto(caseId: number, checkType: string, fileAsset: { uri: string; name: string }): Promise<any> {
+    try {
+      const formData = new FormData();
+      const fileType = fileAsset.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileObj: any = {
+        uri: fileAsset.uri,
+        name: fileAsset.name,
+        type: `image/${fileType === 'jpg' ? 'jpeg' : fileType}`,
+      };
+      formData.append('file', fileObj);
+      formData.append('category', 'statement');
+
+      const response = await this.api.post(
+        `/cases/incident-db/${caseId}/check/${checkType}/upload-media`,
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 60000,
+        }
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async deleteCheckDocument(caseId: number, checkType: string, filename: string): Promise<any> {
+    try {
+      const response = await this.api.delete(`/vendor-check-document/${caseId}/${checkType}`, {
+        params: { filename },
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async deleteCheckStatement(caseId: number, checkType: string, index: number): Promise<any> {
+    try {
+      const response = await this.api.delete(`/vendor-check-statement/${caseId}/${checkType}`, {
+        params: { index },
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
   async getVendorAssignedChecks(): Promise<any> {
     try {
       const response = await this.api.get('/vendor-assigned-checks');
@@ -306,8 +380,8 @@ class ApiService {
 
   async applyStatementText(caseId: number, checkType: string, text: string, transcriptMr?: string): Promise<any> {
     try {
-      const response = await this.api.post(`/vendor-check-statement/${caseId}/${checkType}`, {
-        text,
+      const response = await this.api.post(`/vendor-check-statement-text-apply/${caseId}/${checkType}`, {
+        edited_english_text: text,
         transcript_mr: transcriptMr,
       });
       return response.data;
@@ -320,6 +394,17 @@ class ApiService {
     try {
       const response = await this.api.delete(`/vendor-check-evidence/${caseId}/${checkType}`, {
         params: { filename },
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async saveQuestionnaire(caseId: number, checkType: string, questionnaire: any): Promise<any> {
+    try {
+      const response = await this.api.post(`/vendor-check-questionnaire/${caseId}/${checkType}`, {
+        questionnaire,
       });
       return response.data;
     } catch (error) {

@@ -10,9 +10,11 @@ import {
   Image,
   TextInput,
   Platform,
+  Linking,
 } from 'react-native';
 import { showToast, showDialog } from '@/components/Toast';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
@@ -24,6 +26,8 @@ import apiService from '@/services/api';
 import { useDispatch } from 'react-redux';
 import { markCheckAsCompleted } from '@/store/casesSlice';
 import { API_BASE_URL } from '@/config/constants';
+import { QuestionnaireForm } from '@/components/QuestionnaireForm';
+import { clearDraftQuestionnaire } from '@/utils/draftStorage';
 
 const PRIMARY_BLUE = theme.colors.primary;
 const RECORDING_RED = '#E53935';
@@ -184,6 +188,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const questionnaireDataRef = useRef<any>({});
   const assignmentAlertShownRef = useRef(false);
 
   const isAssignmentLoadError = useCallback((err: any) => {
@@ -208,9 +213,11 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const isAssignmentError = (message: string | null) =>
     !!message && /not currently assigned|removed|reassigned/i.test(message);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       setError(null);
       const response = await apiService.getVendorCheckDetail(caseId, checkType);
       setData(response);
@@ -231,7 +238,9 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         console.error('Failed to load check detail:', err);
       }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }, [caseId, checkType, getFriendlyLoadError, isAssignmentLoadError]);
 
@@ -240,7 +249,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     loadData();
     return () => {
       if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        recordingRef.current.stopAndUnloadAsync().catch(() => { });
       }
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
@@ -368,25 +377,25 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   const submitAllEvidence = async () => {
     if (pendingPhotos.length === 0 && pendingStatements.length === 0) return;
-    
+
     setUploading(true);
     let errorCount = 0;
-    
+
     try {
       if (pendingPhotos.length > 0) {
         await apiService.uploadCheckEvidence(caseId, checkType, pendingPhotos);
         setPendingPhotos([]);
       }
-      
+
       for (const statement of pendingStatements) {
         await apiService.applyStatementText(caseId, checkType, statement.text, statement.transcriptMr);
       }
       setPendingStatements([]);
-      
+
       await apiService.markCheckCompleted(caseId, checkType);
-      
+
       dispatch(markCheckAsCompleted({ caseId, checkType }));
-      
+
       showDialog({
         type: 'success',
         title: 'Evidence Submitted',
@@ -412,7 +421,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   const applyStatement = async () => {
     if (!editedTranslation.trim()) {
-      showToast({ type: 'warning', title: 'Empty Statement', message: 'Please enter a statement before applying.' });
+      showToast({ type: 'warning', title: 'Empty Statement', message: 'Please enter a statement before saving.' });
       return;
     }
 
@@ -422,18 +431,22 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       ? `${trimmedTitle} - ${trimmedStatement}`
       : trimmedStatement;
 
-    setPendingStatements((prev) => [...prev, {
-      text: finalStatement,
-      transcriptMr: transcriptMr
-    }]);
-
-    showToast({
-      type: 'success',
-      title: 'Statement Added',
-      message: 'Statement added to pending uploads. Click Submit Evidence to upload.',
-      onDismiss: () => discardRecording(),
-    });
-    discardRecording();
+    setIsApplying(true);
+    try {
+      await apiService.applyStatementText(caseId, checkType, finalStatement, transcriptMr);
+      showToast({
+        type: 'success',
+        title: 'Statement Saved',
+        message: 'Statement saved to check successfully.',
+      });
+      discardRecording();
+      await loadData(false);
+    } catch (err: any) {
+      console.error('Failed to save statement:', err);
+      showToast({ type: 'error', title: 'Save Failed', message: err?.message || 'Failed to save statement.' });
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   const formatDuration = (seconds: number): string => {
@@ -452,7 +465,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const pickAndUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      showToast({ type: 'error', title: 'Permission Denied', message: 'We need access to your photos to upload evidence.' });
+      showToast({ type: 'error', title: 'Permission Denied', message: 'We need access to your photos to upload visit photos.' });
       return;
     }
 
@@ -476,13 +489,22 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
     const newPhotos = result.assets.map((asset, i) => ({
       uri: asset.uri,
-      name: asset.fileName || `evidence_${Date.now()}_${i}.jpg`,
+      name: asset.fileName || `visit_photo_${Date.now()}_${i}.jpg`,
       lat: location?.coords?.latitude?.toString() || '',
       long: location?.coords?.longitude?.toString() || '',
     }));
 
-    setPendingPhotos((prev) => [...prev, ...newPhotos]);
-    showToast({ type: 'success', title: 'Photos Added', message: 'Photos added to pending uploads.' });
+    setUploading(true);
+    try {
+      await apiService.uploadCheckEvidence(caseId, checkType, newPhotos);
+      showToast({ type: 'success', title: 'Photos Uploaded', message: 'Visit photos saved successfully.' });
+      await loadData(false);
+    } catch (err: any) {
+      console.error('Upload visit photos error:', err);
+      showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload visit photos.' });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleDeletePhoto = (photo: any) => {
@@ -505,7 +527,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             try {
               setDeletingPhotoName(photoName);
               await apiService.deleteCheckEvidence(caseId, checkType, photoName);
-              await loadData();
+              await loadData(false);
             } catch (err: any) {
               console.error('Delete photo failed:', err);
               showToast({ type: 'error', title: 'Remove Failed', message: err.message || 'Failed to remove evidence photo' });
@@ -534,7 +556,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         console.warn('Could not get location', e);
       }
     } else {
-      showToast({ type: 'error', title: 'Location Required', message: 'Location permission is required to verify evidence location.' });
+      showToast({ type: 'error', title: 'Location Required', message: 'Location permission is required to verify photo location.' });
       return;
     }
 
@@ -551,8 +573,157 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       long: location?.coords?.longitude?.toString() || '',
     }));
 
-    setPendingPhotos((prev) => [...prev, ...newPhotos]);
-    showToast({ type: 'success', title: 'Photo Added', message: 'Photo added to pending uploads.' });
+    setUploading(true);
+    try {
+      await apiService.uploadCheckEvidence(caseId, checkType, newPhotos);
+      showToast({ type: 'success', title: 'Photo Uploaded', message: 'Visit photo saved successfully.' });
+      await loadData(false);
+    } catch (err: any) {
+      console.error('Upload camera photo error:', err);
+      showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload visit photo.' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUploadDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const asset = result.assets[0];
+      const docFile = {
+        uri: asset.uri,
+        name: asset.name || `document_${Date.now()}`,
+        type: asset.mimeType || 'application/octet-stream',
+      };
+
+      setUploading(true);
+      await apiService.uploadCheckDocument(caseId, checkType, docFile);
+      showToast({ type: 'success', title: 'Document Uploaded', message: 'Document saved successfully.' });
+      await loadData(false);
+    } catch (err: any) {
+      console.error('Document picker error:', err);
+      showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload document.' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUploadWrittenStatementPhoto = async (asset: ImagePicker.ImagePickerAsset) => {
+    const originalName = asset.fileName || `${Date.now()}.jpg`;
+    // Ensure the filename always starts with written_statement_ for backend parsing
+    const safeName = originalName.startsWith('written_statement_')
+      ? originalName
+      : `written_statement_${originalName}`;
+
+    const docFile = {
+      uri: asset.uri,
+      name: safeName,
+    };
+
+    setUploading(true);
+    try {
+      await apiService.uploadCheckDocument(caseId, checkType, docFile);
+      showToast({ type: 'success', title: 'Statement Photo Uploaded', message: 'Written statement photo saved to check documents.' });
+      await loadData(false);
+    } catch (err: any) {
+      console.error('Statement photo upload error:', err);
+      showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload statement photo.' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const pickWrittenStatementGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showToast({ type: 'error', title: 'Permission Denied', message: 'Permission required to select photos.' });
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images' as any,
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) return;
+    await handleUploadWrittenStatementPhoto(result.assets[0]);
+  };
+
+  const takeWrittenStatementCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      showToast({ type: 'error', title: 'Permission Denied', message: 'Camera permission required to take photos.' });
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) return;
+    await handleUploadWrittenStatementPhoto(result.assets[0]);
+  };
+
+  const handleDeleteStatement = (index: number) => {
+    showDialog({
+      type: 'warning',
+      title: 'Remove Statement',
+      message: `Are you sure you want to remove Statement ${index}?`,
+      actions: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setUploading(true);
+              await apiService.deleteCheckStatement(caseId, checkType, index);
+              showToast({ type: 'success', title: 'Statement Removed', message: 'Statement removed successfully.' });
+              await loadData(false);
+            } catch (err: any) {
+              console.error('Delete statement error:', err);
+              showToast({ type: 'error', title: 'Remove Failed', message: err?.message || 'Failed to remove statement.' });
+            } finally {
+              setUploading(false);
+            }
+          },
+        },
+      ],
+    });
+  };
+
+  const handleDeleteDocument = (filename: string, isStatementPhoto: boolean = false) => {
+    showDialog({
+      type: 'warning',
+      title: isStatementPhoto ? 'Remove Statement Photo' : 'Remove Document',
+      message: `Are you sure you want to remove this ${isStatementPhoto ? 'written statement photo' : 'document'}?`,
+      actions: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setUploading(true);
+              await apiService.deleteCheckDocument(caseId, checkType, filename);
+              showToast({ type: 'success', title: 'Removed', message: 'File removed successfully.' });
+              await loadData(false);
+            } catch (err: any) {
+              console.error('Delete document error:', err);
+              showToast({ type: 'error', title: 'Remove Failed', message: err?.message || 'Failed to remove file.' });
+            } finally {
+              setUploading(false);
+            }
+          },
+        },
+      ],
+    });
   };
 
   const DetailRow = ({ label, value }: { label: string; value: any }) => {
@@ -632,7 +803,14 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const caseInfo = data.case || {};
   const checkInfo = data.check || {};
   const evidencePhotos = checkInfo.evidence_photos || [];
+  const writtenStatementPhotos = checkInfo.written_statement_photos || [];
+  const rawDocs = checkInfo.documents || checkInfo.vendor_documents || checkInfo.case_documents || [];
+  const documents = rawDocs.filter((d: any) => {
+    const filename = d.filename || d.name || '';
+    return d.category !== 'statement_photo' && !filename.startsWith('written_statement_');
+  });
   const statementEntries = Array.isArray(checkInfo.statement_entries) ? checkInfo.statement_entries : [];
+  const combinedStatementText = checkInfo.statement || statementEntries.map((e: any) => e.translation_en || e.statement_text || '').filter(Boolean).join('\n\n');
   const statementCount = Number.isFinite(checkInfo.statement_count)
     ? Number(checkInfo.statement_count)
     : statementEntries.length;
@@ -700,10 +878,22 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           <Text style={styles.sectionEyebrow}>Check</Text>
           <Text style={styles.sectionTitle}>{checkTypeLabels[checkType] || 'Check'} details</Text>
           <DetailRow label="Status" value={checkInfo.check_status} />
-          {Object.entries(fieldLabels).map(([field, label]) => (
-            <DetailRow key={field} label={label} value={checkInfo[field]} />
-          ))}
+          {Object.entries(fieldLabels)
+            .filter(([field]) => field !== 'triggers')
+            .map(([field, label]) => (
+              <DetailRow key={field} label={label} value={checkInfo[field]} />
+            ))}
         </View>
+
+        {checkInfo.triggers ? (
+          <View style={[styles.section, { backgroundColor: '#fff5f5', borderColor: '#feb2b2', borderWidth: 1 }]}>
+            <Text style={[styles.sectionEyebrow, { color: '#e53e3e' }]}>Important</Text>
+            <Text style={[styles.sectionTitle, { color: '#c53030' }]}>Triggers</Text>
+            <Text style={{ fontSize: 15, color: '#c53030', marginTop: 8, lineHeight: 22, fontWeight: '500' }}>
+              {checkInfo.triggers}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionEyebrow}>Statement</Text>
@@ -722,8 +912,19 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             <View style={styles.savedStatementsList}>
               {statementEntries.map((entry: any, idx: number) => (
                 <View key={`statement-entry-${idx}`} style={styles.savedStatementCard}>
-                  <Text style={styles.savedStatementTitle}>Statement {entry.index || idx + 1}</Text>
-                  <Text style={styles.savedStatementText}>{entry.translation_en || ''}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.savedStatementTitle}>Statement {entry.index || idx + 1}</Text>
+                    {!isCompleted && (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteStatement(entry.index || idx + 1)}
+                        style={{ padding: 4 }}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialCommunityIcons name="close-circle-outline" size={20} color="#E53935" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <Text style={styles.savedStatementText}>{entry.translation_en || entry.statement_text || ''}</Text>
                   {!!entry.created_at && (
                     <Text style={styles.savedStatementMeta}>
                       Saved: {formatStatementTimestamp(entry.created_at)}
@@ -731,6 +932,39 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                   )}
                 </View>
               ))}
+            </View>
+          )}
+
+          {writtenStatementPhotos.length > 0 && (
+            <View style={{ marginTop: 14 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.text, marginBottom: 8 }}>
+                Written Statement Photos ({writtenStatementPhotos.length})
+              </Text>
+              <View style={styles.photosGrid}>
+                {writtenStatementPhotos.map((photo: any, idx: number) => (
+                  <View key={`statement-photo-${idx}`} style={styles.photoCard}>
+                    <View style={styles.photoImageWrapper}>
+                      <Image
+                        source={{ uri: photo.preview_url || photo.url }}
+                        style={styles.photoImage}
+                        resizeMode="cover"
+                      />
+                      {!isCompleted && (
+                        <TouchableOpacity
+                          style={styles.removePhotoButton}
+                          onPress={() => handleDeleteDocument(photo.filename, true)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.removePhotoButtonText}>×</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <Text style={styles.photoName} numberOfLines={1}>
+                      {photo.filename || `Photo ${idx + 1}`}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
           )}
 
@@ -744,37 +978,21 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
           {!showPreview && canAddStatement && (
             <View style={styles.recordingSection}>
-              {!isRecording && !recordingUri && (
-                <TouchableOpacity
-                  style={styles.recordButton}
-                  onPress={startRecording}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.recordButtonIcon}>🎤</Text>
-                  <Text style={styles.recordButtonText}>
-                    Start Recording
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {isRecording && (
-                <View style={styles.recordingActive}>
-                  <View style={styles.recordingIndicator}>
+              {isRecording ? (
+                <View style={styles.recordingActiveInline}>
+                  <View style={styles.recordingIndicatorInline}>
                     <View style={styles.recordingDot} />
-                    <Text style={styles.recordingText}>Recording...</Text>
+                    <Text style={styles.recordingTextInline}>Rec {formatDuration(recordingDuration)}</Text>
                   </View>
-                  <Text style={styles.durationText}>{formatDuration(recordingDuration)}</Text>
                   <TouchableOpacity
-                    style={styles.stopButton}
+                    style={styles.stopButtonCompact}
                     onPress={stopRecording}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.stopButtonText}>⏹️ Stop Recording</Text>
+                    <Text style={styles.stopButtonTextCompact}>⏹️ Stop</Text>
                   </TouchableOpacity>
                 </View>
-              )}
-
-              {!isRecording && recordingUri && (
+              ) : recordingUri ? (
                 <View style={styles.recordingComplete}>
                   <Text style={styles.recordingCompleteText}>
                     Recording saved ({formatDuration(recordingDuration)})
@@ -799,6 +1017,58 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                         <ActivityIndicator color="#fff" size="small" />
                       ) : (
                         <Text style={styles.processButtonText}>Process Recording</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.recordButtonCompact}
+                  onPress={startRecording}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.recordButtonIconCompact}>🎤</Text>
+                  <Text style={styles.recordButtonTextCompact}>
+                    Start Recording
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {!recordingUri && (
+                <View style={styles.writtenStatementContainer}>
+                  <Text style={styles.writtenStatementLabel}>
+                    📄 Upload photo of written statement:
+                  </Text>
+                  <View style={styles.sideBySideRow}>
+                    <TouchableOpacity
+                      style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]}
+                      onPress={pickWrittenStatementGallery}
+                      disabled={uploading}
+                      activeOpacity={0.8}
+                    >
+                      {uploading ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.smallActionButtonText}>From Gallery</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]}
+                      onPress={takeWrittenStatementCamera}
+                      disabled={uploading}
+                      activeOpacity={0.8}
+                    >
+                      {uploading ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.smallActionButtonText}>Take Photo</Text>
+                        </>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -865,14 +1135,15 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           )}
         </View>
 
+        {/* Visit Photos Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionEyebrow}>Evidence</Text>
+          <Text style={styles.sectionEyebrow}>Visit Photos</Text>
           <Text style={styles.sectionTitle}>
-            Evidence photos ({evidencePhotos.length + pendingPhotos.length})
+            Visit photos ({evidencePhotos.length + pendingPhotos.length})
           </Text>
 
           {evidencePhotos.length === 0 && pendingPhotos.length === 0 ? (
-            <Text style={styles.noEvidenceText}>No evidence uploaded yet</Text>
+            <Text style={styles.noEvidenceText}>No visit photos uploaded yet</Text>
           ) : (
             <View style={styles.photosGrid}>
               {evidencePhotos.map((photo: any, idx: number) => (
@@ -883,7 +1154,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                       style={styles.photoImage}
                       resizeMode="cover"
                       onError={(event) => {
-                        console.warn('Evidence image failed to load:', {
+                        console.warn('Visit photo image failed to load:', {
                           photo,
                           resolvedUri: getEvidencePhotoUri(photo, apiHost),
                           error: event.nativeEvent.error,
@@ -891,21 +1162,21 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                       }}
                     />
                     {!isCompleted && (
-                    <TouchableOpacity
-                      style={[
-                        styles.removePhotoButton,
-                        deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled,
-                      ]}
-                      onPress={() => handleDeletePhoto(photo)}
-                      disabled={deletingPhotoName === getEvidencePhotoName(photo)}
-                      activeOpacity={0.8}
-                    >
-                      {deletingPhotoName === getEvidencePhotoName(photo) ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Text style={styles.removePhotoButtonText}>×</Text>
-                      )}
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.removePhotoButton,
+                          deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled,
+                        ]}
+                        onPress={() => handleDeletePhoto(photo)}
+                        disabled={deletingPhotoName === getEvidencePhotoName(photo)}
+                        activeOpacity={0.8}
+                      >
+                        {deletingPhotoName === getEvidencePhotoName(photo) ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.removePhotoButtonText}>×</Text>
+                        )}
+                      </TouchableOpacity>
                     )}
                   </View>
                   <Text style={styles.photoName} numberOfLines={1}>
@@ -943,64 +1214,151 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
               ))}
             </View>
           )}
+
+          {!isCompleted && (
+            <View style={[styles.sideBySideRow, { marginTop: 14 }]}>
+              <TouchableOpacity
+                style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]}
+                onPress={pickAndUpload}
+                disabled={uploading}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.smallActionButtonText}>Upload from Gallery</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]}
+                onPress={takePhoto}
+                disabled={uploading}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.smallActionButtonText}>Take Photo</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
+
+        {/* Documents Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionEyebrow}>Documents</Text>
+          <Text style={styles.sectionTitle}>
+            Check Documents ({documents.length})
+          </Text>
+
+          {documents.length === 0 ? (
+            <Text style={styles.noEvidenceText}>No documents uploaded for this check yet</Text>
+          ) : (
+            <View style={{ gap: 8, marginTop: 8 }}>
+              {documents.map((doc: any, idx: number) => (
+                <View key={idx} style={styles.docItemCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <MaterialCommunityIcons name="file-document-outline" size={24} color={PRIMARY_BLUE} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.docNameText} numberOfLines={1}>
+                        {doc.filename || `Document ${idx + 1}`}
+                      </Text>
+                      {!!doc.uploaded_at && (
+                        <Text style={styles.docDateText}>
+                          {new Date(doc.uploaded_at).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {doc.preview_url || doc.url ? (
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(doc.preview_url || doc.url)}
+                        style={styles.docViewButton}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.docViewButtonText}>View</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {!isCompleted && (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteDocument(doc.filename, false)}
+                        style={{ padding: 4 }}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialCommunityIcons name="close-circle-outline" size={20} color="#E53935" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {!isCompleted && (
+            <TouchableOpacity
+              style={[styles.smallActionButton, { backgroundColor: '#475569', marginTop: 14 }]}
+              onPress={handleUploadDocument}
+              disabled={uploading}
+              activeOpacity={0.8}
+            >
+              {uploading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="file-upload-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.smallActionButtonText}>Upload Document / File</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <QuestionnaireForm
+          caseId={caseId}
+          checkType={checkType}
+          initialData={checkInfo.questionnaire || {}}
+          statementText={combinedStatementText}
+          caseInfo={caseInfo}
+          checkInfo={checkInfo}
+          onChange={(formData) => {
+            questionnaireDataRef.current = formData;
+          }}
+          disabled={isCompleted}
+        />
+
 
         {!isCompleted && (
-<>
-<View style={styles.uploadSection}>
-          <TouchableOpacity
-            style={styles.uploadButton}
-            onPress={pickAndUpload}
-            disabled={uploading}
-            activeOpacity={0.8}
-          >
-            {uploading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <View style={styles.uploadButtonContent}>
-                <MaterialCommunityIcons name="image-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.uploadButtonText}>Upload from Gallery</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.uploadButton, styles.cameraButton]}
-            onPress={takePhoto}
-            disabled={uploading}
-            activeOpacity={0.8}
-          >
-            {uploading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <View style={styles.uploadButtonContent}>
-                <MaterialCommunityIcons name="camera-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.uploadButtonText}>Take Photo</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {(pendingPhotos.length > 0 || pendingStatements.length > 0) && (
-          <View style={[styles.section, { marginTop: 16, borderColor: theme.colors.primary }]}>
-            <Text style={styles.sectionEyebrow}>Pending Uploads</Text>
-            <Text style={styles.sectionTitle}>Ready to Submit</Text>
-            
-            {pendingPhotos.length > 0 && (
-              <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 4 }}>
-                • {pendingPhotos.length} photo(s)
-              </Text>
-            )}
-            
-            {pendingStatements.length > 0 && (
-              <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 12 }}>
-                • {pendingStatements.length} statement(s)
-              </Text>
-            )}
-
+          <View style={[styles.section, { marginTop: 16 }]}>
             <TouchableOpacity
-              style={[styles.uploadButton, { backgroundColor: PRIMARY_BLUE }]}
-              onPress={submitAllEvidence}
+              style={[styles.uploadButton, { backgroundColor: '#10B981' }]}
+              onPress={async () => {
+                showDialog({
+                  type: 'warning',
+                  title: 'Submit & Complete Check',
+                  message: 'Are you sure you want to mark this check as completed? Admin will be notified to review your submitted check.',
+                  actions: [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Confirm Submit',
+                      onPress: async () => {
+                        try {
+                          setUploading(true);
+                          if (questionnaireDataRef.current && Object.keys(questionnaireDataRef.current).length > 0) {
+                            await apiService.saveQuestionnaire(caseId, checkType, questionnaireDataRef.current);
+                            await clearDraftQuestionnaire(caseId, checkType);
+                          }
+                          await apiService.markCheckCompleted(caseId, checkType);
+                          dispatch(markCheckAsCompleted({ caseId, checkType }));
+                          showToast({ type: 'success', title: 'Check Completed', message: 'Check marked as completed.' });
+                          router.back();
+                        } catch (err: any) {
+                          console.error('Failed to complete check:', err);
+                          showToast({ type: 'error', title: 'Submit Failed', message: err?.message || 'Failed to complete check.' });
+                        } finally {
+                          setUploading(false);
+                        }
+                      },
+                    },
+                  ],
+                });
+              }}
               disabled={uploading}
               activeOpacity={0.8}
             >
@@ -1008,17 +1366,14 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <View style={styles.uploadButtonContent}>
-                  <MaterialCommunityIcons name="cloud-upload-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.uploadButtonText}>Submit Evidence</Text>
+                  <MaterialCommunityIcons name="check-circle-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.uploadButtonText}>Complete &amp; Submit Check</Text>
                 </View>
               )}
             </TouchableOpacity>
           </View>
         )}
-
-      </>
-)}
-</ScrollView>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -1435,11 +1790,124 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   applyButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  recordButtonCompact: {
+    backgroundColor: RECORDING_RED,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'center',
+  },
+  recordButtonTextCompact: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  recordButtonIconCompact: {
+    fontSize: 16,
+  },
+  recordingActiveInline: {
+    backgroundColor: '#FFF3F3',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: RECORDING_RED,
+  },
+  recordingIndicatorInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  recordingTextInline: {
+    fontSize: 14,
+    color: RECORDING_RED,
+    fontWeight: '700',
+  },
+  stopButtonCompact: {
+    backgroundColor: RECORDING_RED,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  stopButtonTextCompact: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  writtenStatementContainer: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.divider,
+  },
+  writtenStatementLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+    marginBottom: 8,
+  },
+  sideBySideRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  smallActionButton: {
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  smallActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  docItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'space-between',
+  },
+  docNameText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  docDateText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  docViewButton: {
+    backgroundColor: PRIMARY_BLUE,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  docViewButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   // Evidence photo styles
   noEvidenceText: {

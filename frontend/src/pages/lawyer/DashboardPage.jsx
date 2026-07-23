@@ -45,32 +45,30 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const fetchData = async (isAutoRefresh = false) => {
+    if (!isAutoRefresh) setLoading(true);
+    setError(null);
+    try {
+      const [statsRes, reportsRes] = await Promise.all([
+        api.get('/lawyer/reports/stats'),
+        api.get('/lawyer/reports'),
+      ]);
+      setStats(statsRes.data || { total: 0, pending: 0, accepted: 0, rejected: 0 });
+      // Get last 5 reports for recent activity
+      setRecentReports((reportsRes.data || []).slice(0, 5));
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
+      setError('Failed to load dashboard data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData(false);
   }, []);
 
   useAutoRefresh(fetchData);
-
-  const fetchData = async (isAutoRefresh = false) => {
-    if (!isAutoRefresh) setLoading(true);
-    setError(null);
-      try {
-        const [statsRes, reportsRes] = await Promise.all([
-          api.get('/lawyer/reports/stats'),
-          api.get('/lawyer/reports'),
-        ]);
-        setStats(statsRes.data || { total: 0, pending: 0, accepted: 0, rejected: 0 });
-        // Get last 5 reports for recent activity
-        setRecentReports((reportsRes.data || []).slice(0, 5));
-      } catch (err) {
-        console.error('Failed to fetch data:', err);
-        setError('Failed to load dashboard data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-
   const statCards = [
     { title: 'Total Reports', value: stats.total, icon: Assessment, color: '#3498db', bgColor: '#e3f2fd' },
     { title: 'Pending Review', value: stats.pending, icon: Pending, color: '#f39c12', bgColor: '#fff3e0' },

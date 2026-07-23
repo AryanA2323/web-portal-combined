@@ -158,6 +158,7 @@ class CreateVerificationSchema(Schema):
     # Common fields for all verification types
     statement: Optional[str] = None
     observations: Optional[str] = None
+    triggers: Optional[str] = None
     
     # Claimant fields
     claimant_name: Optional[str] = None
@@ -383,7 +384,7 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         claimant_income=payload.income,
                         check_status=payload.check_status,
                         statement=payload.statement or '',
-                        observation=payload.observations or '',
+                        triggers=payload.triggers or '',
                     )
                 elif verification_type == 'INSURED_CHECK':
                     insert_insured_check(
@@ -397,7 +398,7 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         permit=payload.permit_insured or '',
                         check_status=payload.check_status,
                         statement=payload.statement or '',
-                        observation=payload.observations or '',
+                        triggers=payload.triggers or '',
                     )
                 elif verification_type == 'DRIVER_CHECK':
                     insert_driver_check(
@@ -410,7 +411,7 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         occupation=payload.occupation or '',
                         check_status=payload.check_status,
                         statement=payload.statement or '',
-                        observation=payload.observations or '',
+                        triggers=payload.triggers or '',
                     )
                 elif verification_type == 'SPOT_CHECK':
                     insert_spot_check(
@@ -423,7 +424,7 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         police_station=payload.police_station or '',
                         accident_brief=payload.accident_brief or '',
                         check_status=payload.check_status,
-                        observations=payload.observations or '',
+                        triggers=payload.triggers or '',
                     )
                 elif verification_type == 'CHARGESHEET':
                     insert_chargesheet(
@@ -437,7 +438,7 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         ipc=payload.ipc_sections or '',
                         check_status=payload.check_status,
                         statement=payload.statement or '',
-                        observations=payload.observations or '',
+                        triggers=payload.triggers or '',
                     )
                 elif verification_type == 'RTI_CHECK':
                     insert_rti_check(

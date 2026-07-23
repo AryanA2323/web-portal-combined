@@ -1,6 +1,12 @@
 import os
+import mimetypes
 from pathlib import Path
 from dotenv import load_dotenv
+
+mimetypes.add_type("audio/mp4", ".m4a")
+mimetypes.add_type("audio/aac", ".aac")
+mimetypes.add_type("audio/mpeg", ".mp3")
+mimetypes.add_type("audio/wav", ".wav")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

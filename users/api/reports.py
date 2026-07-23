@@ -65,6 +65,8 @@ class ReportSchema(Schema):
     assigned_at: Optional[datetime] = None
     reviewed_at: Optional[datetime] = None
     evidence_photos: Optional[List[dict]] = None
+    vendor_documents: Optional[List[dict]] = None
+    case_documents: Optional[List[dict]] = None
 
 
 class ReportListSchema(Schema):
@@ -367,6 +369,44 @@ def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> d
         if request
         else []
     )
+    vendor_documents = []
+    case_documents = []
+    try:
+        from users.api.cases import _fetch_ai_brief_case_context
+        ctx = _fetch_ai_brief_case_context(incident_case_id)
+        if ctx:
+            for doc in ctx.get('vendor_documents', []):
+                doc_url = doc.get('url') or doc.get('file_url') or doc.get('document_url') or doc.get('path')
+                if doc_url:
+                    vendor_documents.append({
+                        'filename': doc.get('filename') or doc.get('name') or 'Vendor Document',
+                        'url': request.build_absolute_uri(doc_url) if request and not doc_url.startswith('http') else doc_url
+                    })
+            for doc in ctx.get('case_documents', []):
+                doc_url = doc.get('url') or doc.get('file_url') or doc.get('document_url') or doc.get('path')
+                if doc_url:
+                    case_documents.append({
+                        'filename': doc.get('filename') or doc.get('name') or 'Case Document',
+                        'url': request.build_absolute_uri(doc_url) if request and not doc_url.startswith('http') else doc_url
+                    })
+            if ctx.get('policy_document'):
+                case_documents.append({
+                    'filename': 'Policy Document',
+                    'url': request.build_absolute_uri(str(ctx['policy_document'])) if request and not str(ctx['policy_document']).startswith('http') else str(ctx['policy_document'])
+                })
+            if ctx.get('petition_document'):
+                case_documents.append({
+                    'filename': 'Petition Document',
+                    'url': request.build_absolute_uri(str(ctx['petition_document'])) if request and not str(ctx['petition_document']).startswith('http') else str(ctx['petition_document'])
+                })
+            if ctx.get('other_document'):
+                case_documents.append({
+                    'filename': 'Other Document',
+                    'url': request.build_absolute_uri(str(ctx['other_document'])) if request and not str(ctx['other_document']).startswith('http') else str(ctx['other_document'])
+                })
+    except Exception as exc:
+        logger.warning(f"Failed to fetch documents for report {report.id}: {exc}")
+
     return {
         'id': report.id,
         'case_id': case.id,
@@ -385,6 +425,8 @@ def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> d
         'assigned_at': report.assigned_at,
         'reviewed_at': report.reviewed_at,
         'evidence_photos': evidence_photos if evidence_photos else None,
+        'vendor_documents': vendor_documents if vendor_documents else None,
+        'case_documents': case_documents if case_documents else None,
     }
 
 
@@ -409,7 +451,7 @@ def report_to_list_schema(report: Report) -> dict:
 
 def _latest_reports_per_case_queryset():
     """Return queryset with only the latest report for each case."""
-    active_case_numbers = _active_incident_case_numbers()
+    active_case_numbers = _verified_incident_case_numbers()
     if not active_case_numbers:
         return Report.objects.none()
 
@@ -432,6 +474,75 @@ def _active_incident_case_numbers() -> List[str]:
     except Exception as exc:
         logger.error(f"Failed to fetch active incident case numbers: {exc}")
         return []
+
+
+def _verified_incident_case_numbers() -> List[str]:
+    """Case numbers where ALL vendor checks have status 'Verified'.
+
+    This mirrors the AI Brief page filter so that the Legal Review page
+    only displays cases whose AI reports are genuinely generated.
+    """
+    check_tables = [
+        'claimant_checks',
+        'insured_checks',
+        'driver_checks',
+        'spot_checks',
+        'chargesheets',
+    ]
+
+    try:
+        with connections['default'].cursor() as cursor:
+            # Get all case ids and their case_numbers
+            cursor.execute("SELECT id, case_number FROM cases")
+            all_cases = {row[0]: row[1] for row in cursor.fetchall() if row and row[0]}
+
+            if not all_cases:
+                return []
+
+            case_ids = list(all_cases.keys())
+            ph = ",".join(["%s"] * len(case_ids))
+
+            verified_case_ids = set(case_ids)
+
+            for table in check_tables:
+                try:
+                    cursor.execute(
+                        f"""
+                        SELECT DISTINCT case_id
+                        FROM {table}
+                        WHERE case_id IN ({ph})
+                          AND (
+                              check_status IS NULL
+                              OR check_status NOT IN ('Verified')
+                          )
+                        """,
+                        case_ids,
+                    )
+                    non_verified = {row[0] for row in cursor.fetchall()}
+                    verified_case_ids -= non_verified
+                except Exception:
+                    pass
+
+            # Also exclude cases that have NO checks at all
+            cases_with_checks = set()
+            for table in check_tables:
+                try:
+                    cursor.execute(
+                        f"SELECT DISTINCT case_id FROM {table} WHERE case_id IN ({ph})",
+                        case_ids,
+                    )
+                    cases_with_checks.update(row[0] for row in cursor.fetchall())
+                except Exception:
+                    pass
+
+            verified_case_ids &= cases_with_checks
+
+            return [all_cases[cid] for cid in verified_case_ids if cid in all_cases]
+
+    except Exception as exc:
+        logger.error(f"Failed to fetch verified incident case numbers: {exc}")
+        return []
+
 
 
 # =============================================================================
@@ -519,6 +630,34 @@ def get_report(request: HttpRequest, report_id: int):
     return report_to_schema(report, request)
 
 
+def _get_insurance_case_by_incident_case_id(incident_case_id: int) -> Optional[InsuranceCase]:
+    """
+    Find InsuranceCase for a given incident-db cases table ID.
+    Always maps via case_number in cases table first to avoid ID collision between tables.
+    """
+    case_number = None
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("SELECT case_number FROM cases WHERE id = %s", [incident_case_id])
+            res = cursor.fetchone()
+            if res and res[0]:
+                case_number = res[0]
+    except Exception as e:
+        logger.warning(f"Error querying cases table for ID {incident_case_id}: {e}")
+
+    if case_number:
+        try:
+            return InsuranceCase.objects.get(case_number=case_number)
+        except InsuranceCase.DoesNotExist:
+            logger.warning(f"InsuranceCase not found for case_number {case_number}")
+
+    # Fallback to direct ID lookup if no case_number match found
+    try:
+        return InsuranceCase.objects.get(id=incident_case_id)
+    except InsuranceCase.DoesNotExist:
+        return None
+
+
 @router.post(
     "/reports",
     response=ReportSchema,
@@ -532,23 +671,7 @@ def create_report(request: HttpRequest, payload: CreateReportSchema):
     if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
         raise HttpError(403, "Access denied")
 
-    # Check if case exists (try by ID from incident-db first, then fallback to case_number lookup)
-    case = None
-    try:
-        case = InsuranceCase.objects.get(id=payload.case_id)
-    except InsuranceCase.DoesNotExist:
-        # If case not found by ID, try to find it by querying the cases table and matching by case_number
-        try:
-            with connections['default'].cursor() as cursor:
-                cursor.execute("SELECT case_number FROM cases WHERE id = %s", [payload.case_id])
-                result = cursor.fetchone()
-                if result:
-                    case_number = result[0]
-                    case = InsuranceCase.objects.get(case_number=case_number)
-                    logger.info(f"Mapped incident-db case ID {payload.case_id} to insurance_case ID {case.id} via case_number {case_number}")
-        except (InsuranceCase.DoesNotExist, Exception) as e:
-            logger.warning(f"Could not map case ID {payload.case_id} to insurance_case: {str(e)}")
-            raise HttpError(404, "Case not found")
+    case = _get_insurance_case_by_incident_case_id(payload.case_id)
 
     if not case:
         raise HttpError(404, "Case not found")
@@ -567,7 +690,7 @@ def create_report(request: HttpRequest, payload: CreateReportSchema):
 
 
 @router.post(
-    "/reports/bulk",
+    "/reports/bulk/",
     response=dict,
     summary="Bulk create reports",
     description="Migrate multiple reports from localStorage to database."
@@ -585,8 +708,11 @@ def bulk_create_reports(request: HttpRequest, payload: BulkCreateReportSchema):
 
     for report_data in payload.reports:
         try:
-            # Check if case exists
-            case = InsuranceCase.objects.get(id=report_data.case_id)
+            case = _get_insurance_case_by_incident_case_id(report_data.case_id)
+            
+            if not case:
+                errors.append(f"Case {report_data.case_id} not found")
+                continue
 
             # Check if report already exists for this case
             if Report.objects.filter(case=case).exists():
