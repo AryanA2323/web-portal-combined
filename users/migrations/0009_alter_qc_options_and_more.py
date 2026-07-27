@@ -6,33 +6,33 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("users", "0008_admin_lawyer"),
+        ("users", "0008_admin_qc"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name="lawyer",
+            name="qc",
             options={"ordering": ["bar_registration_number"]},
         ),
         migrations.RemoveIndex(
-            model_name="lawyer",
+            model_name="qc",
             name="users_lawye_bar_lic_11d881_idx",
         ),
         migrations.AddField(
-            model_name="lawyer",
+            model_name="qc",
             name="bar_registration_number",
             field=models.CharField(default=1, max_length=50, unique=True),
             preserve_default=False,
         ),
         migrations.AddIndex(
-            model_name="lawyer",
+            model_name="qc",
             index=models.Index(
                 fields=["bar_registration_number"],
                 name="users_lawye_bar_reg_83489e_idx",
             ),
         ),
         migrations.RemoveField(
-            model_name="lawyer",
+            model_name="qc",
             name="bar_license_number",
         ),
     ]

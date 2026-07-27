@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='customuser',
             name='role',
-            field=models.CharField(choices=[('ADMIN', 'Admin'), ('VENDOR', 'Vendor'), ('CLIENT', 'Client'), ('LAWYER', 'Lawyer')], db_index=True, default='CLIENT', max_length=10),
+            field=models.CharField(choices=[('ADMIN', 'Admin'), ('VENDOR', 'Vendor'), ('CLIENT', 'Client'), ('QC', 'QC')], db_index=True, default='CLIENT', max_length=10),
         ),
     ]

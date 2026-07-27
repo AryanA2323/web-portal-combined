@@ -195,65 +195,6 @@ class ApiService {
     }
   }
 
-  async getVendorAssignedChecks(): Promise<any> {
-    try {
-      const response = await this.api.get('/vendor-assigned-checks');
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error as AxiosError);
-    }
-  }
-
-  async getVendorCheckDetail(caseId: number, checkType: string): Promise<any> {
-    try {
-      const response = await this.api.get(`/vendor-check-detail/${caseId}/${checkType}`);
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error as AxiosError);
-    }
-  }
-
-  async uploadCheckEvidence(
-    caseId: number,
-    checkType: string,
-    photos: { uri: string; name: string }[]
-  ): Promise<any> {
-    try {
-      const formData = new FormData();
-      for (const photo of photos) {
-        const fileType = photo.name.split('.').pop()?.toLowerCase() || 'jpg';
-        const file: any = {
-          uri: photo.uri,
-          name: photo.name,
-          type: `image/${fileType === 'jpg' ? 'jpeg' : fileType}`,
-        };
-        formData.append('photos', file);
-      }
-      const response = await this.api.post(
-        `/vendor-check-upload/${caseId}/${checkType}`,
-        formData,
-        {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 60000,
-        }
-      );
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error as AxiosError);
-    }
-  }
-
-  async deleteCheckEvidence(caseId: number, checkType: string, filename: string): Promise<any> {
-    try {
-      const response = await this.api.delete(`/vendor-check-evidence/${caseId}/${checkType}`, {
-        params: { filename },
-      });
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error as AxiosError);
-    }
-  }
-
   async uploadCheckDocument(caseId: number, checkType: string, fileAsset: { uri: string; name: string }): Promise<any> {
     try {
       const formData = new FormData();
@@ -349,7 +290,7 @@ class ApiService {
   async uploadCheckEvidence(
     caseId: number,
     checkType: string,
-    photos: { uri: string; name: string }[]
+    photos: { uri: string; name: string; lat?: string; long?: string }[]
   ): Promise<any> {
     try {
       const formData = new FormData();
@@ -372,18 +313,6 @@ class ApiService {
           timeout: 60000,
         }
       );
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error as AxiosError);
-    }
-  }
-
-  async applyStatementText(caseId: number, checkType: string, text: string, transcriptMr?: string): Promise<any> {
-    try {
-      const response = await this.api.post(`/vendor-check-statement-text-apply/${caseId}/${checkType}`, {
-        edited_english_text: text,
-        transcript_mr: transcriptMr,
-      });
       return response.data;
     } catch (error) {
       throw this.handleError(error as AxiosError);
@@ -487,14 +416,12 @@ class ApiService {
     try {
       const formData = new FormData();
 
-      // Add each photo to form data with GPS validation
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         const fileUri = photo.uri;
         const fileName = photo.name;
         const fileType = fileName.split('.').pop()?.toLowerCase() || 'jpg';
 
-        // Create file object for upload
         const file: any = {
           uri: fileUri,
           name: fileName,
@@ -508,7 +435,7 @@ class ApiService {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 60000, // 60 seconds for file upload
+        timeout: 60000,
       });
 
       return response.data;
@@ -535,7 +462,6 @@ class ApiService {
     }
   }
 
-  // Utility methods
   async setTokens(accessToken: string, refreshToken: string | null): Promise<void> {
     await storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
     if (refreshToken) {
@@ -557,14 +483,6 @@ class ApiService {
     }
   }
 
-  // ==========================================================================
-  // Statement Audio Endpoints - Marathi Speech-to-Text with English Translation
-  // ==========================================================================
-
-  /**
-   * Preview audio transcription without applying to statement.
-   * Processes the audio, returns Marathi transcript and English translation.
-   */
   async previewStatementAudio(
     caseId: number,
     checkType: string,
@@ -596,7 +514,7 @@ class ApiService {
         formData,
         {
           headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 120000, // 2 minutes for audio processing
+          timeout: 120000,
         }
       );
       return response.data;
@@ -605,10 +523,6 @@ class ApiService {
     }
   }
 
-  /**
-   * Apply audio transcription to case statement.
-   * Processes audio, translates, and saves to the statement field.
-   */
   async applyStatementAudio(
     caseId: number,
     checkType: string,
@@ -641,7 +555,7 @@ class ApiService {
         formData,
         {
           headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 120000, // 2 minutes for audio processing
+          timeout: 120000,
         }
       );
       return response.data;
@@ -650,10 +564,6 @@ class ApiService {
     }
   }
 
-  /**
-   * Apply manually edited statement text.
-   * Allows vendor to modify the translation before saving.
-   */
   async applyStatementText(
     caseId: number,
     checkType: string,

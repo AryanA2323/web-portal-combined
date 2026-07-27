@@ -25,8 +25,8 @@ router = Router(tags=["Reports"])
 # Schemas
 # =============================================================================
 
-class LawyerSchema(Schema):
-    """Lawyer response schema for assignment dropdown."""
+class QCSchema(Schema):
+    """QC response schema for assignment dropdown."""
     id: int
     username: str
     email: str
@@ -57,8 +57,8 @@ class ReportSchema(Schema):
     category: str
     report_content: str
     status: str
-    assigned_lawyer_id: Optional[int] = None
-    assigned_lawyer_name: Optional[str] = None
+    assigned_qc_id: Optional[int] = None
+    assigned_qc_name: Optional[str] = None
     review_notes: str
     created_at: datetime
     updated_at: datetime
@@ -78,7 +78,7 @@ class ReportListSchema(Schema):
     client_name: Optional[str] = None
     category: str
     status: str
-    assigned_lawyer_name: Optional[str] = None
+    assigned_qc_name: Optional[str] = None
     created_at: datetime
     assigned_at: Optional[datetime] = None
     reviewed_at: Optional[datetime] = None
@@ -95,9 +95,9 @@ class BulkCreateReportSchema(Schema):
     reports: List[CreateReportSchema]
 
 
-class AssignLawyerSchema(Schema):
-    """Schema for assigning a lawyer to a report."""
-    lawyer_id: int
+class AssignQCSchema(Schema):
+    """Schema for assigning a qc to a report."""
+    qc_id: int
 
 
 class ReviewReportSchema(Schema):
@@ -112,8 +112,8 @@ class UpdateReportSchema(Schema):
 
 
 class ReassignReportSchema(Schema):
-    """Schema for reassigning a rejected report to a new lawyer."""
-    lawyer_id: int
+    """Schema for reassigning a rejected report to a new qc."""
+    qc_id: int
 
 
 class ReportStatsSchema(Schema):
@@ -357,7 +357,7 @@ def _get_fallback_location_name(
 def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> dict:
     """Convert Report model to response dict."""
     case = report.case
-    lawyer = report.assigned_lawyer
+    qc = report.assigned_qc
     incident_case_id = _resolve_incident_case_id(case) or case.id
     fallback_location_name = _get_fallback_location_name(case, incident_case_id)
     evidence_photos = (
@@ -417,8 +417,8 @@ def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> d
         'category': case.category,
         'report_content': report.report_content,
         'status': report.status,
-        'assigned_lawyer_id': lawyer.id if lawyer else None,
-        'assigned_lawyer_name': f"{lawyer.first_name} {lawyer.last_name}".strip() or lawyer.username if lawyer else None,
+        'assigned_qc_id': qc.id if qc else None,
+        'assigned_qc_name': f"{qc.first_name} {qc.last_name}".strip() or qc.username if qc else None,
         'review_notes': report.review_notes,
         'created_at': report.created_at,
         'updated_at': report.updated_at,
@@ -433,7 +433,7 @@ def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> d
 def report_to_list_schema(report: Report) -> dict:
     """Convert Report model to list response dict."""
     case = report.case
-    lawyer = report.assigned_lawyer
+    qc = report.assigned_qc
     return {
         'id': report.id,
         'case_number': case.case_number,
@@ -442,7 +442,7 @@ def report_to_list_schema(report: Report) -> dict:
         'client_name': case.client_name,
         'category': case.category,
         'status': report.status,
-        'assigned_lawyer_name': f"{lawyer.first_name} {lawyer.last_name}".strip() or lawyer.username if lawyer else None,
+        'assigned_qc_name': f"{qc.first_name} {qc.last_name}".strip() or qc.username if qc else None,
         'created_at': report.created_at,
         'assigned_at': report.assigned_at,
         'reviewed_at': report.reviewed_at,
@@ -459,7 +459,7 @@ def _latest_reports_per_case_queryset():
         latest_id=Max('id')
     ).values('latest_id')
 
-    return Report.objects.select_related('case', 'assigned_lawyer').filter(
+    return Report.objects.select_related('case', 'assigned_qc').filter(
         id__in=Subquery(latest_report_ids),
         case__case_number__in=active_case_numbers,
     )
@@ -614,15 +614,15 @@ def get_report(request: HttpRequest, report_id: int):
     user = request.auth
 
     try:
-        report = Report.objects.select_related('case', 'assigned_lawyer').get(id=report_id)
+        report = Report.objects.select_related('case', 'assigned_qc').get(id=report_id)
     except Report.DoesNotExist:
         raise HttpError(404, "Report not found")
 
     # Check access
     if user.role in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
         pass  # Admin can access any report
-    elif user.role == CustomUser.Role.LAWYER:
-        if report.assigned_lawyer_id != user.id:
+    elif user.role == CustomUser.Role.QC:
+        if report.assigned_qc_id != user.id:
             raise HttpError(403, "Access denied")
     else:
         raise HttpError(403, "Access denied")
@@ -742,20 +742,20 @@ def bulk_create_reports(request: HttpRequest, payload: BulkCreateReportSchema):
 
 
 @router.get(
-    "/lawyers",
-    response=List[LawyerSchema],
-    summary="List all lawyers",
-    description="Get all active lawyers for assignment (Admin only)."
+    "/qcs",
+    response=List[QCSchema],
+    summary="List all qcs",
+    description="Get all active qcs for assignment (Admin only)."
 )
-def list_lawyers(request: HttpRequest):
-    """List all lawyers for assignment dropdown."""
+def list_qcs(request: HttpRequest):
+    """List all qcs for assignment dropdown."""
     user = request.auth
 
     if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
         raise HttpError(403, "Access denied")
 
-    lawyers = CustomUser.objects.filter(
-        role=CustomUser.Role.LAWYER,
+    qcs = CustomUser.objects.filter(
+        role=CustomUser.Role.QC,
         is_active=True
     ).order_by('first_name', 'last_name', 'username')
 
@@ -768,44 +768,44 @@ def list_lawyers(request: HttpRequest):
             'last_name': l.last_name or '',
             'full_name': f"{l.first_name} {l.last_name}".strip() or l.username,
         }
-        for l in lawyers
+        for l in qcs
     ]
 
 
 @router.post(
     "/reports/{report_id}/assign",
     response=ReportSchema,
-    summary="Assign lawyer to report",
-    description="Assign a lawyer to review a report (Admin only)."
+    summary="Assign qc to report",
+    description="Assign a qc to review a report (Admin only)."
 )
-def assign_lawyer(request: HttpRequest, report_id: int, payload: AssignLawyerSchema):
-    """Assign a lawyer to a report."""
+def assign_qc(request: HttpRequest, report_id: int, payload: AssignQCSchema):
+    """Assign a qc to a report."""
     user = request.auth
 
     if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
         raise HttpError(403, "Access denied")
 
     try:
-        report = Report.objects.select_related('case', 'assigned_lawyer').get(id=report_id)
+        report = Report.objects.select_related('case', 'assigned_qc').get(id=report_id)
     except Report.DoesNotExist:
         raise HttpError(404, "Report not found")
 
-    # Check if lawyer exists and has lawyer role
+    # Check if qc exists and has qc role
     try:
-        lawyer = CustomUser.objects.get(id=payload.lawyer_id, role=CustomUser.Role.LAWYER)
+        qc = CustomUser.objects.get(id=payload.qc_id, role=CustomUser.Role.QC)
     except CustomUser.DoesNotExist:
-        raise HttpError(404, "Lawyer not found")
+        raise HttpError(404, "QC not found")
 
-    if not lawyer.is_active:
-        raise HttpError(400, "Lawyer is not active")
+    if not qc.is_active:
+        raise HttpError(400, "QC is not active")
 
-    # Assign lawyer
-    report.assigned_lawyer = lawyer
+    # Assign qc
+    report.assigned_qc = qc
     report.assigned_at = timezone.now()
     report.status = Report.Status.ASSIGNED
     report.save()
 
-    logger.info(f"Report {report.id} assigned to lawyer {lawyer.username} by {user.username}")
+    logger.info(f"Report {report.id} assigned to qc {qc.username} by {user.username}")
 
     return report_to_schema(report, request)
 
@@ -824,13 +824,13 @@ def update_report_content(request: HttpRequest, report_id: int, payload: UpdateR
         raise HttpError(403, "Access denied")
 
     try:
-        report = Report.objects.select_related('case', 'assigned_lawyer').get(id=report_id)
+        report = Report.objects.select_related('case', 'assigned_qc').get(id=report_id)
     except Report.DoesNotExist:
         raise HttpError(404, "Report not found")
 
     # Allow editing if report is PENDING, REJECTED, or has not been reviewed yet
     if report.status not in [Report.Status.PENDING, Report.Status.REJECTED]:
-        # Allow editing ASSIGNED reports too before lawyer reviews them
+        # Allow editing ASSIGNED reports too before qc reviews them
         pass
 
     report.report_content = payload.report_content
@@ -846,17 +846,17 @@ def update_report_content(request: HttpRequest, report_id: int, payload: UpdateR
     "/reports/{report_id}/reassign",
     response=ReportSchema,
     summary="Reassign rejected report",
-    description="Reassign a rejected report to a different lawyer (Admin only)."
+    description="Reassign a rejected report to a different qc (Admin only)."
 )
 def reassign_report(request: HttpRequest, report_id: int, payload: ReassignReportSchema):
-    """Reassign a rejected report to a different lawyer."""
+    """Reassign a rejected report to a different qc."""
     user = request.auth
 
     if user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
         raise HttpError(403, "Access denied")
 
     try:
-        report = Report.objects.select_related('case', 'assigned_lawyer').get(id=report_id)
+        report = Report.objects.select_related('case', 'assigned_qc').get(id=report_id)
     except Report.DoesNotExist:
         raise HttpError(404, "Report not found")
 
@@ -864,52 +864,52 @@ def reassign_report(request: HttpRequest, report_id: int, payload: ReassignRepor
     if report.status != Report.Status.REJECTED:
         raise HttpError(400, "Can only reassign rejected reports")
 
-    # Check if lawyer exists and has lawyer role
+    # Check if qc exists and has qc role
     try:
-        lawyer = CustomUser.objects.get(id=payload.lawyer_id, role=CustomUser.Role.LAWYER)
+        qc = CustomUser.objects.get(id=payload.qc_id, role=CustomUser.Role.QC)
     except CustomUser.DoesNotExist:
-        raise HttpError(404, "Lawyer not found")
+        raise HttpError(404, "QC not found")
 
-    if not lawyer.is_active:
-        raise HttpError(400, "Lawyer is not active")
+    if not qc.is_active:
+        raise HttpError(400, "QC is not active")
 
-    # Reassign lawyer
-    previous_lawyer = report.assigned_lawyer
-    report.assigned_lawyer = lawyer
+    # Reassign qc
+    previous_qc = report.assigned_qc
+    report.assigned_qc = qc
     report.assigned_at = timezone.now()
     report.reviewed_at = None  # Reset review timestamp
     report.review_notes = ''  # Clear previous review notes
     report.status = Report.Status.ASSIGNED
     report.save()
 
-    logger.info(f"Report {report.id} reassigned from {previous_lawyer.username if previous_lawyer else 'None'} to {lawyer.username} by {user.username}")
+    logger.info(f"Report {report.id} reassigned from {previous_qc.username if previous_qc else 'None'} to {qc.username} by {user.username}")
 
     return report_to_schema(report, request)
 
 
 # =============================================================================
-# Lawyer Endpoints
+# QC Endpoints
 # =============================================================================
 
 @router.get(
-    "/lawyer/reports",
+    "/qc/reports",
     response=List[ReportListSchema],
-    summary="Get lawyer's assigned reports",
-    description="Get all reports assigned to the current lawyer."
+    summary="Get qc's assigned reports",
+    description="Get all reports assigned to the current qc."
 )
-def get_lawyer_reports(request: HttpRequest, status: Optional[str] = None):
-    """Get reports assigned to the current lawyer."""
+def get_qc_reports(request: HttpRequest, status: Optional[str] = None):
+    """Get reports assigned to the current qc."""
     user = request.auth
 
-    if user.role != CustomUser.Role.LAWYER:
+    if user.role != CustomUser.Role.QC:
         raise HttpError(403, "Access denied")
 
     active_case_numbers = _active_incident_case_numbers()
     if not active_case_numbers:
         return []
 
-    queryset = Report.objects.select_related('case', 'assigned_lawyer').filter(
-        assigned_lawyer=user,
+    queryset = Report.objects.select_related('case', 'assigned_qc').filter(
+        assigned_qc=user,
         case__case_number__in=active_case_numbers,
     )
 
@@ -920,21 +920,21 @@ def get_lawyer_reports(request: HttpRequest, status: Optional[str] = None):
 
 
 @router.get(
-    "/lawyer/reports/stats",
+    "/qc/reports/stats",
     response=ReportStatsSchema,
-    summary="Get lawyer's report statistics",
-    description="Get statistics about the lawyer's assigned reports."
+    summary="Get qc's report statistics",
+    description="Get statistics about the qc's assigned reports."
 )
-def get_lawyer_report_stats(request: HttpRequest):
-    """Get lawyer's report statistics."""
+def get_qc_report_stats(request: HttpRequest):
+    """Get qc's report statistics."""
     user = request.auth
 
-    if user.role != CustomUser.Role.LAWYER:
+    if user.role != CustomUser.Role.QC:
         raise HttpError(403, "Access denied")
 
     active_case_numbers = _active_incident_case_numbers()
     base_queryset = Report.objects.filter(
-        assigned_lawyer=user,
+        assigned_qc=user,
         case__case_number__in=active_case_numbers,
     ) if active_case_numbers else Report.objects.none()
 
@@ -954,7 +954,7 @@ def get_lawyer_report_stats(request: HttpRequest):
 
 
 @router.post(
-    "/lawyer/reports/{report_id}/review",
+    "/qc/reports/{report_id}/review",
     response=ReportSchema,
     summary="Review a report",
     description="Accept or reject an assigned report."
@@ -963,13 +963,13 @@ def review_report(request: HttpRequest, report_id: int, payload: ReviewReportSch
     """Approve or reject a report."""
     user = request.auth
 
-    if user.role != CustomUser.Role.LAWYER:
+    if user.role != CustomUser.Role.QC:
         raise HttpError(403, "Access denied")
 
     try:
-        report = Report.objects.select_related('case', 'assigned_lawyer').get(
+        report = Report.objects.select_related('case', 'assigned_qc').get(
             id=report_id,
-            assigned_lawyer=user
+            assigned_qc=user
         )
     except Report.DoesNotExist:
         raise HttpError(404, "Report not found or not assigned to you")
@@ -988,7 +988,7 @@ def review_report(request: HttpRequest, report_id: int, payload: ReviewReportSch
     report.save()
 
     action_label = "approved" if action == 'accept' else 'rejected'
-    logger.info(f"Report {report.id} {action_label} by lawyer {user.username}")
+    logger.info(f"Report {report.id} {action_label} by qc {user.username}")
 
     return report_to_schema(report, request)
 
@@ -1007,21 +1007,21 @@ class LogEntrySchema(Schema):
 
 
 @router.get(
-    "/lawyer/logs",
+    "/qc/logs",
     response=List[LogEntrySchema],
-    summary="Get lawyer's activity logs",
-    description="Get activity logs for the current lawyer's reviewed reports."
+    summary="Get qc's activity logs",
+    description="Get activity logs for the current qc's reviewed reports."
 )
-def get_lawyer_logs(request: HttpRequest):
-    """Get lawyer's activity logs."""
+def get_qc_logs(request: HttpRequest):
+    """Get qc's activity logs."""
     user = request.auth
 
-    if user.role != CustomUser.Role.LAWYER:
+    if user.role != CustomUser.Role.QC:
         raise HttpError(403, "Access denied")
 
-    # Get all reports assigned to this lawyer (both reviewed and pending)
+    # Get all reports assigned to this qc (both reviewed and pending)
     reports = Report.objects.select_related('case').filter(
-        assigned_lawyer=user
+        assigned_qc=user
     ).order_by('-reviewed_at', '-assigned_at', '-created_at')
 
     logs = []

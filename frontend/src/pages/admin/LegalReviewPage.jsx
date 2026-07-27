@@ -91,15 +91,15 @@ const LegalReviewPage = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState([]);
 
-  // Lawyer assignment modal state
-  const [lawyerModalOpen, setLawyerModalOpen] = useState(false);
-  const [lawyers, setLawyers] = useState([]);
-  const [selectedLawyerId, setSelectedLawyerId] = useState('');
-  const [assigningLawyer, setAssigningLawyer] = useState(false);
+  // QC assignment modal state
+  const [qcModalOpen, setQCModalOpen] = useState(false);
+  const [qcs, setQCs] = useState([]);
+  const [selectedQCId, setSelectedQCId] = useState('');
+  const [assigningQC, setAssigningQC] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState(null);
-  const [lawyerModalMode, setLawyerModalMode] = useState('assign');
-  const [lawyersLoading, setLawyersLoading] = useState(false);
-  const [lawyersError, setLawyersError] = useState(null);
+  const [qcModalMode, setQCModalMode] = useState('assign');
+  const [qcsLoading, setQCsLoading] = useState(false);
+  const [qcsError, setQCsError] = useState(null);
 
   // Report detail modal state
   const [reportDetailOpen, setReportDetailOpen] = useState(false);
@@ -133,53 +133,53 @@ const LegalReviewPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
-  // Open lawyer assignment modal
-  const openLawyerModal = async (reportId, mode = 'assign') => {
+  // Open qc assignment modal
+  const openQCModal = async (reportId, mode = 'assign') => {
     setSelectedReportId(reportId);
-    setLawyerModalMode(mode);
-    setSelectedLawyerId('');
-    setLawyersLoading(true);
-    setLawyersError(null);
-    setLawyerModalOpen(true);
+    setQCModalMode(mode);
+    setSelectedQCId('');
+    setQCsLoading(true);
+    setQCsError(null);
+    setQCModalOpen(true);
     try {
-      const res = await api.get('/lawyers');
-      setLawyers(res.data || []);
+      const res = await api.get('/qcs');
+      setQCs(res.data || []);
       if (!res.data || res.data.length === 0) {
-        setLawyersError('No lawyers found in the system.');
+        setQCsError('No qcs found in the system.');
       }
     } catch (err) {
-      console.error('Failed to fetch lawyers:', err);
-      setLawyersError(err.response?.data?.detail || err.message || 'Failed to load lawyers');
-      setLawyers([]);
+      console.error('Failed to fetch qcs:', err);
+      setQCsError(err.response?.data?.detail || err.message || 'Failed to load qcs');
+      setQCs([]);
     } finally {
-      setLawyersLoading(false);
+      setQCsLoading(false);
     }
   };
 
-  // Handle lawyer assignment
-  const handleAssignLawyer = async () => {
-    if (!selectedReportId || !selectedLawyerId) return;
-    setAssigningLawyer(true);
+  // Handle qc assignment
+  const handleAssignQC = async () => {
+    if (!selectedReportId || !selectedQCId) return;
+    setAssigningQC(true);
     try {
-      const endpoint = lawyerModalMode === 'reassign'
+      const endpoint = qcModalMode === 'reassign'
         ? `/reports/${selectedReportId}/reassign`
         : `/reports/${selectedReportId}/assign`;
       const res = await api.post(endpoint, {
-        lawyer_id: selectedLawyerId,
+        qc_id: selectedQCId,
       });
       if (selectedReport?.id === selectedReportId) {
         setSelectedReport(res.data);
         setEditableReportContent(res.data?.report_content || '');
       }
-      setLawyerModalOpen(false);
+      setQCModalOpen(false);
       setSelectedReportId(null);
-      setLawyerModalMode('assign');
+      setQCModalMode('assign');
       await fetchReports();
     } catch (err) {
-      console.error('Failed to assign lawyer:', err);
-      alert(`Failed to ${lawyerModalMode === 'reassign' ? 'reassign' : 'assign'} lawyer. Please try again.`);
+      console.error('Failed to assign qc:', err);
+      alert(`Failed to ${qcModalMode === 'reassign' ? 'reassign' : 'assign'} qc. Please try again.`);
     } finally {
-      setAssigningLawyer(false);
+      setAssigningQC(false);
     }
   };
 
@@ -499,7 +499,7 @@ const LegalReviewPage = () => {
                     Client
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                    Assigned Lawyer
+                    Assigned QC
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
                     Created
@@ -552,7 +552,7 @@ const LegalReviewPage = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {row.assigned_lawyer_name ? (
+                        {row.assigned_qc_name ? (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Avatar
                               sx={{
@@ -565,7 +565,7 @@ const LegalReviewPage = () => {
                               <Gavel sx={{ fontSize: 16 }} />
                             </Avatar>
                             <Typography sx={{ fontSize: '14px', color: '#333' }}>
-                              {row.assigned_lawyer_name}
+                              {row.assigned_qc_name}
                             </Typography>
                           </Box>
                         ) : (
@@ -620,7 +620,7 @@ const LegalReviewPage = () => {
                               variant="outlined"
                               size="small"
                               endIcon={<ChevronRight sx={{ fontSize: 16 }} />}
-                              onClick={() => openLawyerModal(row.id)}
+                              onClick={() => openQCModal(row.id)}
                               sx={{
                                 textTransform: 'none',
                                 borderColor: '#e0e0e0',
@@ -634,7 +634,7 @@ const LegalReviewPage = () => {
                                 },
                               }}
                             >
-                              {row.assigned_lawyer_name ? 'Reassign' : 'Assign Lawyer'}
+                              {row.assigned_qc_name ? 'Reassign' : 'Assign QC'}
                             </Button>
                           )}
                         </Box>
@@ -680,58 +680,58 @@ const LegalReviewPage = () => {
         </Box>
       </Paper>
 
-      {/* Lawyer Assignment Modal */}
+      {/* QC Assignment Modal */}
       <Dialog
-        open={lawyerModalOpen}
-        onClose={() => setLawyerModalOpen(false)}
+        open={qcModalOpen}
+        onClose={() => setQCModalOpen(false)}
         maxWidth="xs"
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 700, fontSize: '18px', pb: 1 }}>
-          {lawyerModalMode === 'reassign' ? 'Reassign Lawyer' : 'Assign Lawyer'}
+          {qcModalMode === 'reassign' ? 'Reassign QC' : 'Assign QC'}
         </DialogTitle>
         <DialogContent>
           <Typography sx={{ fontSize: '13px', color: '#666', mb: 2 }}>
-            {lawyerModalMode === 'reassign'
-              ? 'Select a lawyer to reassign this updated report for legal review.'
-              : 'Select a lawyer to assign for legal review of this report.'}
+            {qcModalMode === 'reassign'
+              ? 'Select a qc to reassign this updated report for legal review.'
+              : 'Select a qc to assign for legal review of this report.'}
           </Typography>
-          {lawyersLoading ? (
+          {qcsLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
               <CircularProgress size={24} />
             </Box>
-          ) : lawyersError ? (
+          ) : qcsError ? (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {lawyersError}
+              {qcsError}
             </Alert>
           ) : (
             <FormControl fullWidth size="small">
               <Select
-                value={selectedLawyerId}
-                onChange={(e) => setSelectedLawyerId(e.target.value)}
+                value={selectedQCId}
+                onChange={(e) => setSelectedQCId(e.target.value)}
                 displayEmpty
                 sx={{ borderRadius: '8px' }}
               >
-                <MenuItem value="" disabled>Select a lawyer</MenuItem>
-                {lawyers.map((lawyer) => (
-                  <MenuItem key={lawyer.id} value={lawyer.id}>
-                    {lawyer.full_name || lawyer.username} ({lawyer.email})
+                <MenuItem value="" disabled>Select a qc</MenuItem>
+                {qcs.map((qc) => (
+                  <MenuItem key={qc.id} value={qc.id}>
+                    {qc.full_name || qc.username} ({qc.email})
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           )}
-          {!lawyersLoading && !lawyersError && lawyers.length === 0 && (
+          {!qcsLoading && !qcsError && qcs.length === 0 && (
             <Typography sx={{ fontSize: '13px', color: '#ff6b6b', mt: 1 }}>
-              No lawyers available. Please add lawyers to the system first.
+              No qcs available. Please add qcs to the system first.
             </Typography>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
             onClick={() => {
-              setLawyerModalOpen(false);
-              setLawyerModalMode('assign');
+              setQCModalOpen(false);
+              setQCModalMode('assign');
             }}
             sx={{ textTransform: 'none', color: '#666' }}
           >
@@ -739,8 +739,8 @@ const LegalReviewPage = () => {
           </Button>
           <Button
             variant="contained"
-            disabled={!selectedLawyerId || assigningLawyer}
-            onClick={handleAssignLawyer}
+            disabled={!selectedQCId || assigningQC}
+            onClick={handleAssignQC}
             sx={{
               textTransform: 'none',
               fontWeight: 600,
@@ -749,7 +749,7 @@ const LegalReviewPage = () => {
               '&:hover': { backgroundColor: '#5568d3' },
             }}
           >
-            {assigningLawyer ? <CircularProgress size={20} color="inherit" /> : lawyerModalMode === 'reassign' ? 'Reassign' : 'Assign'}
+            {assigningQC ? <CircularProgress size={20} color="inherit" /> : qcModalMode === 'reassign' ? 'Reassign' : 'Assign'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -777,10 +777,10 @@ const LegalReviewPage = () => {
                     fontWeight: 600,
                   }}
                 />
-                {selectedReport.assigned_lawyer_name && (
+                {selectedReport.assigned_qc_name && (
                   <Chip
                     icon={<Gavel />}
-                    label={`Assigned: ${selectedReport.assigned_lawyer_name}`}
+                    label={`Assigned: ${selectedReport.assigned_qc_name}`}
                     sx={{ backgroundColor: '#e3f2fd', color: '#1976d2' }}
                   />
                 )}
@@ -996,7 +996,7 @@ const LegalReviewPage = () => {
           {selectedReport?.status === 'REJECTED' && (
             <Button
               variant="outlined"
-              onClick={() => openLawyerModal(selectedReport.id, 'reassign')}
+              onClick={() => openQCModal(selectedReport.id, 'reassign')}
               disabled={savingReportContent || editableReportContent !== selectedReport.report_content}
               sx={{
                 textTransform: 'none',
@@ -1010,7 +1010,7 @@ const LegalReviewPage = () => {
                 },
               }}
             >
-              Reassign Lawyer
+              Reassign QC
             </Button>
           )}
           {selectedReport?.status === 'REJECTED' && (
@@ -1034,7 +1034,7 @@ const LegalReviewPage = () => {
               variant="contained"
               onClick={() => {
                 handleCloseReportDetail();
-                openLawyerModal(selectedReport.id);
+                openQCModal(selectedReport.id);
               }}
               sx={{
                 textTransform: 'none',
@@ -1044,7 +1044,7 @@ const LegalReviewPage = () => {
                 '&:hover': { backgroundColor: '#5568d3' },
               }}
             >
-              {selectedReport.assigned_lawyer_name ? 'Reassign Lawyer' : 'Assign Lawyer'}
+              {selectedReport.assigned_qc_name ? 'Reassign QC' : 'Assign QC'}
             </Button>
           )}
         </DialogActions>

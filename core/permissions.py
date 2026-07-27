@@ -57,31 +57,31 @@ def is_vendor(request: HttpRequest) -> bool:
     )
 
 
-def is_lawyer(request: HttpRequest) -> bool:
+def is_qc(request: HttpRequest) -> bool:
     """
-    Check if the user is a lawyer.
+    Check if the user is a qc.
     
     Args:
         request: The HTTP request object
         
     Returns:
-        bool: True if user is authenticated and is a lawyer
+        bool: True if user is authenticated and is a qc
     """
     return (
         request.user.is_authenticated and 
         hasattr(request.user, 'role') and 
-        request.user.role == 'LAWYER'
+        request.user.role == 'QC'
     )
 
 
-def is_admin_or_lawyer(request: HttpRequest) -> bool:
+def is_admin_or_qc(request: HttpRequest) -> bool:
     """
-    Check if the user is an admin or lawyer.
+    Check if the user is an admin or qc.
     
     Args:
         request: The HTTP request object
         
     Returns:
-        bool: True if user is authenticated and is an admin or lawyer
+        bool: True if user is authenticated and is an admin or qc
     """
-    return is_admin(request) or is_lawyer(request)
+    return is_admin(request) or is_qc(request)

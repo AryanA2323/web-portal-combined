@@ -908,12 +908,14 @@ const CheckDetailPage = () => {
                                   <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={photo.filename || `Evidence ${idx + 1}`}>
                                     {photo.filename || `Evidence_${idx + 1}.jpg`}
                                   </Typography>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
-                                    <Typography sx={{ fontSize: '10.5px', color: '#64748b' }}>
-                                      {fmtDateDisplay(photo.uploaded_at || photo.captured_at || photo.timestamp)}
+                                  <Box sx={{ mt: 1 }}>
+                                    <Typography sx={{ fontSize: '10.5px', color: '#64748b', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                      🕒 {fmtDateDisplay(photo.uploaded_at || photo.captured_at || photo.timestamp)}
                                     </Typography>
-                                    {(photo.latitude != null || photo.longitude != null) && (
-                                      <Chip icon={<PinDrop sx={{ fontSize: 12 }} />} label="GPS Tagged" size="small" color="info" variant="outlined" sx={{ height: '18px', fontSize: '9.5px', fontWeight: 700 }} />
+                                    {(photo.location_name || (photo.latitude != null && photo.longitude != null)) && (
+                                      <Typography sx={{ fontSize: '10.5px', color: '#64748b', mt: 0.5, display: 'flex', alignItems: 'flex-start', gap: 0.5, wordBreak: 'break-word', lineHeight: 1.2 }}>
+                                        📍 {photo.location_name || `${Number(photo.latitude).toFixed(4)}, ${Number(photo.longitude).toFixed(4)}`}
+                                      </Typography>
                                     )}
                                   </Box>
                                 </CardContent>

@@ -2985,28 +2985,28 @@ def get_audit_logs(
                 except Exception as table_exc:
                     logger.warning(f"Skipping vendor assignment logs for table {table_name}: {table_exc}")
 
-            # Lawyer assignment events
+            # QC assignment events
             cursor.execute(
                 """
                 SELECT
                     ic.case_number,
                     r.assigned_at,
-                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'Lawyer') AS lawyer_name
+                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name
                 FROM reports r
                 JOIN insurance_case ic ON ic.id = r.case_id
-                LEFT JOIN users_customuser lu ON lu.id = r.assigned_lawyer_id
+                LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
                 WHERE r.assigned_at IS NOT NULL
                 ORDER BY r.assigned_at DESC
                 LIMIT %s
                 """,
                 [safe_limit],
             )
-            for case_number, assigned_at, lawyer_name in cursor.fetchall():
+            for case_number, assigned_at, qc_name in cursor.fetchall():
                 _add_event(
                     assigned_at,
-                    "LAWYER_ASSIGNED",
+                    "QC_ASSIGNED",
                     "Admin/System",
-                    f"Report assigned to lawyer '{lawyer_name}'",
+                    f"Report assigned to qc '{qc_name}'",
                     case_number,
                     "Legal Review",
                 )
@@ -3037,17 +3037,17 @@ def get_audit_logs(
                     "Reports",
                 )
 
-            # Lawyer review decision events (accept/reject)
+            # QC review decision events (accept/reject)
             cursor.execute(
                 """
                 SELECT
                     ic.case_number,
                     r.reviewed_at,
                     r.status,
-                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'Lawyer') AS lawyer_name
+                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name
                 FROM reports r
                 JOIN insurance_case ic ON ic.id = r.case_id
-                LEFT JOIN users_customuser lu ON lu.id = r.assigned_lawyer_id
+                LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
                 WHERE r.reviewed_at IS NOT NULL
                   AND r.status IN ('ACCEPTED', 'REJECTED')
                 ORDER BY r.reviewed_at DESC
@@ -3055,14 +3055,14 @@ def get_audit_logs(
                 """,
                 [safe_limit],
             )
-            for case_number, reviewed_at, review_status, lawyer_name in cursor.fetchall():
+            for case_number, reviewed_at, review_status, qc_name in cursor.fetchall():
                 status_upper = str(review_status or "").upper()
                 is_accepted = status_upper == "ACCEPTED"
                 _add_event(
                     reviewed_at,
-                    "LAWYER_ACCEPTED_REPORT" if is_accepted else "LAWYER_REJECTED_REPORT",
-                    lawyer_name,
-                    f"Lawyer '{lawyer_name}' {'approved' if is_accepted else 'rejected'} report for case {case_number}",
+                    "QC_ACCEPTED_REPORT" if is_accepted else "QC_REJECTED_REPORT",
+                    qc_name,
+                    f"QC '{qc_name}' {'approved' if is_accepted else 'rejected'} report for case {case_number}",
                     case_number,
                     "Legal Review",
                 )

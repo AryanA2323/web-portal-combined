@@ -31,7 +31,7 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
-            name='Lawyer',
+            name='QC',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('bar_license_number', models.CharField(max_length=50, unique=True)),
@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
                 ('is_active', models.BooleanField(default=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('user', models.OneToOneField(limit_choices_to={'role': 'LAWYER'}, on_delete=django.db.models.deletion.CASCADE, related_name='lawyer_profile', to=settings.AUTH_USER_MODEL)),
+                ('user', models.OneToOneField(limit_choices_to={'role': 'QC'}, on_delete=django.db.models.deletion.CASCADE, related_name='qc_profile', to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'ordering': ['bar_license_number'],

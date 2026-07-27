@@ -106,6 +106,8 @@ const QUESTIONNAIRE_LABELS = {
   deceased_injury_income: 'Deceased / Injured Income',
   monthly_income: 'Monthly Income of Claimant',
   hr_manager: 'Name & No. of Company HR / Manager',
+  fir_date: 'FIR Date',
+  reason_if_delayed: 'Reason if Delayed',
   date_of_accident: 'Date of Accident',
   time_of_accident: 'Time of Accident',
   description_of_accident: 'Description of Accident',
@@ -114,7 +116,7 @@ const QUESTIONNAIRE_LABELS = {
 
 const KNOWN_Q_KEYS = new Set(Object.keys({
   relation: 1, claim_type: 1, deceased_injury_name: 1, deceased_injury_income: 1,
-  monthly_income: 1, hr_manager: 1, date_of_accident: 1, time_of_accident: 1,
+  monthly_income: 1, hr_manager: 1, fir_date: 1, reason_if_delayed: 1, date_of_accident: 1, time_of_accident: 1,
   description_of_accident: 1, investigation_datetime: 1,
 }));
 
@@ -1438,14 +1440,14 @@ const CasesPage = () => {
                             <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#4a5568', fontSize: '11px' }}>
                               {photo.filename || `Photo ${pIdx + 1}`}
                             </Typography>
-                            {photo.timestamp && (
+                            {(photo.timestamp || photo.created_at || photo.uploaded_at || photo.date) && (
                               <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5 }}>
-                                🕒 {new Date(photo.timestamp).toLocaleString()}
+                                🕒 {new Date(photo.timestamp || photo.created_at || photo.uploaded_at || photo.date).toLocaleString()}
                               </Typography>
                             )}
-                            {(photo.location_name || (photo.latitude && photo.longitude)) && (
+                            {(photo.location_name || photo.location || (photo.latitude != null && photo.longitude != null && photo.latitude !== '' && photo.longitude !== '')) && (
                               <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5, wordBreak: 'break-word', lineHeight: 1.2 }}>
-                                📍 {photo.location_name || `${photo.latitude.toFixed(4)}, ${photo.longitude.toFixed(4)}`}
+                                📍 {photo.location_name || photo.location || `${Number(photo.latitude).toFixed(4)}, ${Number(photo.longitude).toFixed(4)}`}
                               </Typography>
                             )}
                           </Box>
@@ -1516,15 +1518,17 @@ const CasesPage = () => {
                   >
                     Reject &amp; Reassign
                   </Button>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    disabled={reviewLoading}
-                    onClick={() => handleReviewSubmit('accept')}
-                    sx={{ textTransform: 'none', fontWeight: 700, bgcolor: '#48bb78', '&:hover': { bgcolor: '#38a169' } }}
-                  >
-                    Accept Check
-                  </Button>
+                  {reviewData?.check?.check_status !== 'Verified' && reviewData?.check?.check_status !== 'Accepted' && (
+                    <Button
+                      variant="contained"
+                      color="success"
+                      disabled={reviewLoading}
+                      onClick={() => handleReviewSubmit('accept')}
+                      sx={{ textTransform: 'none', fontWeight: 700, bgcolor: '#48bb78', '&:hover': { bgcolor: '#38a169' } }}
+                    >
+                      Accept Check
+                    </Button>
+                  )}
                 </>
               )}
             </Box>
@@ -2026,6 +2030,16 @@ const CasesPage = () => {
                                           <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#334155' }}>
                                             {photo.filename || `Photo ${pIdx + 1}`}
                                           </Typography>
+                                          {(photo.timestamp || photo.created_at || photo.uploaded_at || photo.date) && (
+                                            <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5 }}>
+                                              🕒 {new Date(photo.timestamp || photo.created_at || photo.uploaded_at || photo.date).toLocaleString()}
+                                            </Typography>
+                                          )}
+                                          {(photo.location_name || photo.location || (photo.latitude != null && photo.longitude != null && photo.latitude !== '' && photo.longitude !== '')) && (
+                                            <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5, wordBreak: 'break-word', lineHeight: 1.2 }}>
+                                              📍 {photo.location_name || photo.location || `${Number(photo.latitude).toFixed(4)}, ${Number(photo.longitude).toFixed(4)}`}
+                                            </Typography>
+                                          )}
                                         </Box>
                                       </Paper>
                                     </Grid>
@@ -2097,6 +2111,16 @@ const CasesPage = () => {
                                   <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#334155' }}>
                                     {photo.filename || `Photo ${i + 1}`}
                                   </Typography>
+                                  {(photo.timestamp || photo.created_at || photo.uploaded_at) && (
+                                    <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5 }}>
+                                      🕒 {new Date(photo.timestamp || photo.created_at || photo.uploaded_at).toLocaleString()}
+                                    </Typography>
+                                  )}
+                                  {(photo.location_name || (photo.latitude != null && photo.longitude != null && photo.latitude !== '' && photo.longitude !== '')) && (
+                                    <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5, wordBreak: 'break-word', lineHeight: 1.2 }}>
+                                      📍 {photo.location_name || `${Number(photo.latitude).toFixed(4)}, ${Number(photo.longitude).toFixed(4)}`}
+                                    </Typography>
+                                  )}
                                 </Box>
                               </Paper>
                             </Grid>
@@ -2161,6 +2185,48 @@ const CasesPage = () => {
             color={statusConfirmAction === 'Completed' ? 'error' : 'success'}
           >
             Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog for Check Accept */}
+      <Dialog open={confirmAcceptOpen} onClose={() => setConfirmAcceptOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: '#1e293b' }}>Confirm Acceptance</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ color: '#475569' }}>
+            Are you sure you want to accept this check?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => setConfirmAcceptOpen(false)} variant="outlined" sx={{ color: '#64748b', borderColor: '#cbd5e1', '&:hover': { backgroundColor: '#f1f5f9', borderColor: '#94a3b8' } }}>Cancel</Button>
+          <Button
+            onClick={() => handleReviewSubmit('accept')}
+            variant="contained"
+            color="success"
+            disabled={reviewLoading}
+          >
+            {reviewLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Confirm Accept'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog for Check Reject */}
+      <Dialog open={confirmRejectOpen} onClose={() => setConfirmRejectOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: '#1e293b' }}>Confirm Rejection</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ color: '#475569' }}>
+            Are you sure you want to reject and reassign this check?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => setConfirmRejectOpen(false)} variant="outlined" sx={{ color: '#64748b', borderColor: '#cbd5e1', '&:hover': { backgroundColor: '#f1f5f9', borderColor: '#94a3b8' } }}>Cancel</Button>
+          <Button
+            onClick={() => handleReviewSubmit('reject')}
+            variant="contained"
+            color="error"
+            disabled={reviewLoading}
+          >
+            {reviewLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Confirm Reject'}
           </Button>
         </DialogActions>
       </Dialog>

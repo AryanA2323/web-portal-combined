@@ -137,7 +137,7 @@ const SuperAdminDashboard = () => {
       SUPER_ADMIN: 'secondary',
       VENDOR: 'warning',
       CLIENT: 'info',
-      LAWYER: 'success',
+      QC: 'success',
     };
     return colors[role] || 'default';
   };

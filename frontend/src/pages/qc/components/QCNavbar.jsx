@@ -2,7 +2,7 @@ import { AppBar, Toolbar, Typography, IconButton, Box } from '@mui/material';
 import { Notifications } from '@mui/icons-material';
 import { useAuth } from '../../../context/AuthContext';
 
-const LawyerNavbar = () => {
+const QCNavbar = () => {
   const { user } = useAuth();
 
   return (
@@ -19,7 +19,7 @@ const LawyerNavbar = () => {
           <Typography variant="h6" sx={{ color: '#ecf0f1', fontWeight: 600 }}>
             {user?.first_name && user?.last_name
               ? `${user.first_name} ${user.last_name}, Esq.`
-              : 'Lawyer Portal'}
+              : 'QC Portal'}
           </Typography>
         </Box>
 
@@ -33,4 +33,4 @@ const LawyerNavbar = () => {
   );
 };
 
-export default LawyerNavbar;
+export default QCNavbar;

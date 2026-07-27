@@ -32,7 +32,7 @@ import {
   Assignment,
   InsertDriveFile,
 } from '@mui/icons-material';
-import LawyerLayout from './components/LawyerLayout';
+import QCLayout from './components/QCLayout';
 import api from '../../services/api';
 import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
 
@@ -95,8 +95,8 @@ const ReportsPage = () => {
     setError(null);
     try {
       const [reportsRes, statsRes] = await Promise.all([
-        api.get('/lawyer/reports'),
-        api.get('/lawyer/reports/stats'),
+        api.get('/qc/reports'),
+        api.get('/qc/reports/stats'),
       ]);
       setReports(reportsRes.data || []);
       setStats(statsRes.data || { total: 0, pending: 0, accepted: 0, rejected: 0 });
@@ -142,7 +142,7 @@ const ReportsPage = () => {
     }
     setSubmitting(true);
     try {
-      await api.post(`/lawyer/reports/${selectedReport.id}/review`, {
+      await api.post(`/qc/reports/${selectedReport.id}/review`, {
         action: 'accept',
         notes: reviewNotes.trim(),
       });
@@ -165,7 +165,7 @@ const ReportsPage = () => {
     }
     setSubmitting(true);
     try {
-      await api.post(`/lawyer/reports/${selectedReport.id}/review`, {
+      await api.post(`/qc/reports/${selectedReport.id}/review`, {
         action: 'reject',
         notes: reviewNotes.trim(),
       });
@@ -240,7 +240,7 @@ const ReportsPage = () => {
   );
 
   return (
-    <LawyerLayout>
+    <QCLayout>
       <Box sx={{ p: 3 }}>
         <Box sx={{ mb: 3 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -497,7 +497,7 @@ const ReportsPage = () => {
                         const watermarkLines = getEvidenceWatermarkLines(photo);
                         return (
                           <Box
-                            key={`lawyer-evidence-${idx}`}
+                            key={`qc-evidence-${idx}`}
                             sx={{
                               borderRadius: '8px',
                               overflow: 'hidden',
@@ -530,7 +530,7 @@ const ReportsPage = () => {
                                 >
                                   {watermarkLines.map((line, lineIndex) => (
                                     <Typography
-                                      key={`lawyer-watermark-${idx}-${lineIndex}`}
+                                      key={`qc-watermark-${idx}-${lineIndex}`}
                                       sx={{
                                         fontSize: '12px',
                                         lineHeight: 1.35,
@@ -686,7 +686,7 @@ const ReportsPage = () => {
           </DialogActions>
         </Dialog>
       </Box>
-    </LawyerLayout>
+    </QCLayout>
   );
 };
 

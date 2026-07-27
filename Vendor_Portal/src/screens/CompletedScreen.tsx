@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   Animated,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -53,7 +55,26 @@ export default function CompletedScreen() {
   const introAnim = useRef(new Animated.Value(0)).current;
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { cases: checks, isLoading } = useSelector((state: RootState) => state.cases);
-  const activeChecks = useMemo(() => checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified'), [checks]);
+  
+  const [fromDate, setFromDate] = useState<Date | null>(null);
+  const [toDate, setToDate] = useState<Date | null>(null);
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker] = useState(false);
+
+  const activeChecks = useMemo(() => {
+    let filtered = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified');
+    
+    if (fromDate) {
+      filtered = filtered.filter((c: any) => new Date(c.updated_at) >= fromDate);
+    }
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      filtered = filtered.filter((c: any) => new Date(c.updated_at) <= endOfDay);
+    }
+    
+    return filtered;
+  }, [checks, fromDate, toDate]);
   // Refresh data every time the screen comes into focus
   useFocusEffect(
     useCallback(() => {
@@ -186,11 +207,74 @@ export default function CompletedScreen() {
             },
           ]}
         >
-          <Text style={styles.userName}>Completed Cases</Text>
+          <Text style={styles.userName}>Completed Checks</Text>
 
-
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 10 }}>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 12, borderRadius: 12, flex: 1 }}>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Total Completed</Text>
+              <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold' }}>{activeChecks.length}</Text>
+            </View>
+            
+            <View style={{ flex: 2, flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.15)', padding: 10, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => setShowFromPicker(true)}
+              >
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>From Date</Text>
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
+                  {fromDate ? fromDate.toLocaleDateString() : 'Select Date'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.15)', padding: 10, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => setShowToPicker(true)}
+              >
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>To Date</Text>
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
+                  {toDate ? toDate.toLocaleDateString() : 'Select Date'}
+                </Text>
+              </TouchableOpacity>
+              
+              {(fromDate || toDate) && (
+                <TouchableOpacity
+                  style={{ justifyContent: 'center', padding: 8 }}
+                  onPress={() => { setFromDate(null); setToDate(null); }}
+                >
+                  <MaterialCommunityIcons name="close-circle" size={20} color="rgba(255,255,255,0.7)" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
         </Animated.View>
       </LinearGradient>
+
+      {showFromPicker && (
+        <DateTimePicker
+          value={fromDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowFromPicker(false);
+            if (event.type === 'set' && selectedDate) {
+              setFromDate(selectedDate);
+            }
+          }}
+        />
+      )}
+      {showToPicker && (
+        <DateTimePicker
+          value={toDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowToPicker(false);
+            if (event.type === 'set' && selectedDate) {
+              setToDate(selectedDate);
+            }
+          }}
+        />
+      )}
 
       <ScrollView
         style={styles.content}

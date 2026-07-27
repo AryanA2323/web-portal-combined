@@ -3,7 +3,7 @@ import { Gavel, Logout } from '@mui/icons-material';
 import { useAuth } from '../../context';
 import { useNavigate } from 'react-router-dom';
 
-const LawyerDashboard = () => {
+const QCDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -19,11 +19,11 @@ const LawyerDashboard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Gavel />
-              <Typography variant="h6">Lawyer Portal</Typography>
+              <Typography variant="h6">QC Portal</Typography>
             </div>
             <div className="flex items-center gap-4">
               <Typography variant="body2">
-                Welcome, {user?.email || 'Lawyer'}
+                Welcome, {user?.email || 'QC'}
               </Typography>
               <Button
                 variant="outlined"
@@ -42,7 +42,7 @@ const LawyerDashboard = () => {
       <Container maxWidth="lg" className="py-8">
         <Paper className="p-6 rounded-xl">
           <Typography variant="h4" className="mb-4 text-green-800">
-            Lawyer Dashboard
+            QC Dashboard
           </Typography>
           <Typography variant="body1" className="text-gray-600">
             ⚖️ Manage legal cases and incidents here.
@@ -53,4 +53,4 @@ const LawyerDashboard = () => {
   );
 };
 
-export default LawyerDashboard;
+export default QCDashboard;

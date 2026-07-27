@@ -1,4 +1,4 @@
 export * from './auth';
 export * from './dashboards';
 export * from './admin';
-export * from './lawyer';
+export * from './qc';

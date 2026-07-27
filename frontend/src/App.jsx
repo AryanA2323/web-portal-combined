@@ -20,10 +20,10 @@ import {
   ClientsPage,
 } from './pages/admin';
 import {
-  DashboardPage as LawyerDashboardPage,
-  ReportsPage as LawyerReportsPage,
-  LogsPage as LawyerLogsPage,
-} from './pages/lawyer';
+  DashboardPage as QCDashboardPage,
+  ReportsPage as QCReportsPage,
+  LogsPage as QCLogsPage,
+} from './pages/qc';
 
 // Create MUI theme
 const theme = createTheme({
@@ -101,28 +101,28 @@ function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/verify-2fa" element={<TwoFactorPage />} />
             
-            {/* Protected Routes - Lawyer */}
+            {/* Protected Routes - QC */}
             <Route
-              path="/lawyer/dashboard"
+              path="/qc/dashboard"
               element={
-                <ProtectedRoute allowedRoles={['lawyer']}>
-                  <LawyerDashboardPage />
+                <ProtectedRoute allowedRoles={['qc']}>
+                  <QCDashboardPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/lawyer/reports"
+              path="/qc/reports"
               element={
-                <ProtectedRoute allowedRoles={['lawyer']}>
-                  <LawyerReportsPage />
+                <ProtectedRoute allowedRoles={['qc']}>
+                  <QCReportsPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/lawyer/logs"
+              path="/qc/logs"
               element={
-                <ProtectedRoute allowedRoles={['lawyer']}>
-                  <LawyerLogsPage />
+                <ProtectedRoute allowedRoles={['qc']}>
+                  <QCLogsPage />
                 </ProtectedRoute>
               }
             />

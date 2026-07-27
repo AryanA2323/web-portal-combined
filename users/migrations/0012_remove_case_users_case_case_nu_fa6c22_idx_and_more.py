@@ -55,7 +55,7 @@ class Migration(migrations.Migration):
                     ("ADMIN", "Admin"),
                     ("VENDOR", "Vendor"),
                     ("CLIENT", "Client"),
-                    ("LAWYER", "Lawyer"),
+                    ("QC", "QC"),
                 ],
                 db_index=True,
                 default="CLIENT",

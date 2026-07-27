@@ -61,18 +61,7 @@ const reportStatusColors = {
   'Report Not Generated': '#ff922b',
 };
 
-const loadStoredReports = () => {
-  try {
-    const raw = localStorage.getItem(REPORT_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-};
 
-const saveStoredReports = (reports) => {
-  localStorage.setItem(REPORT_STORAGE_KEY, JSON.stringify(reports));
-};
 
 const getEvidencePhotoUrl = (photo) => {
   if (!photo) return '';
@@ -218,52 +207,24 @@ const AIBriefPage = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState([]);
-  const [reportsByCase, setReportsByCase] = useState(() => loadStoredReports());
+  const [reportsByCase, setReportsByCase] = useState({});
   const [activeReportCaseId, setActiveReportCaseId] = useState(null);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [viewReportDialogOpen, setViewReportDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState('');
-  const [lawyers, setLawyers] = useState([]);
-  const [selectedLawyer, setSelectedLawyer] = useState(null);
+  const [qcs, setQCs] = useState([]);
+  const [selectedQC, setSelectedQC] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleteReportDialogOpen, setDeleteReportDialogOpen] = useState(false);
   const [deletingReport, setDeletingReport] = useState(false);
   const [downloadMenuAnchorEl, setDownloadMenuAnchorEl] = useState(null);
 
-  useEffect(() => {
-    saveStoredReports(reportsByCase);
-  }, [reportsByCase]);
-
-  // Migrate localStorage reports to database on mount
-  useEffect(() => {
-    const migrateReports = async () => {
-      const storedReports = loadStoredReports();
-      const reportEntries = Object.entries(storedReports);
-
-      if (reportEntries.length === 0) return;
-
-      const reportsToMigrate = reportEntries.map(([caseId, report]) => ({
-        case_id: parseInt(caseId, 10),
-        report_content: report.reportText || '',
-      })).filter(r => r.report_content);
-
-      if (reportsToMigrate.length === 0) return;
-
-      try {
-        await api.post('/reports/bulk/', { reports: reportsToMigrate });
-      } catch (err) {
-        console.error('Failed to migrate reports to database:', err);
-      }
-    };
-
-    migrateReports();
-  }, []);
 
   useEffect(() => {
     fetchVendors();
-    fetchLawyers();
+    fetchQCs();
   }, []);
 
   useEffect(() => {
@@ -271,12 +232,12 @@ const AIBriefPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, rowsPerPage, statusFilter, caseTypeFilter, vendorFilter, vendors]);
 
-  const fetchLawyers = async (isAutoRefresh = false) => {
+  const fetchQCs = async (isAutoRefresh = false) => {
     try {
-      const response = await api.get('/lawyers');
-      setLawyers(response.data || []);
+      const response = await api.get('/qcs');
+      setQCs(response.data || []);
     } catch (err) {
-      console.error('Failed to fetch lawyers:', err);
+      console.error('Failed to fetch qcs:', err);
     }
   };
 
@@ -345,7 +306,7 @@ const AIBriefPage = () => {
 
   useAutoRefresh(fetchCases);
   useAutoRefresh(fetchVendors);
-  useAutoRefresh(fetchLawyers);
+  useAutoRefresh(fetchQCs);
 
   const rows = useMemo(() => {
     let filteredCases = cases.filter((row) => {
@@ -500,7 +461,7 @@ const AIBriefPage = () => {
       // Save report to database for legal review
       let reportId = null;
       try {
-        const saveResponse = await api.post('/reports/', {
+        const saveResponse = await api.post('/reports', {
           case_id: selectedCase.id,
           report_content: response.data.report_text,
         });
@@ -537,6 +498,30 @@ const AIBriefPage = () => {
       setError(err.response?.data?.detail || err.response?.data?.error || 'Failed to generate AI brief report.');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleOpenReportView = async (rowId, reportId) => {
+    try {
+      // Set modal open with whatever we have first so it feels responsive
+      setActiveReportCaseId(rowId);
+      setViewReportDialogOpen(true);
+      
+      // Fetch full report content
+      const response = await api.get(`/reports/${reportId}`);
+      setReportsByCase((prev) => ({
+        ...prev,
+        [rowId]: {
+          ...prev[rowId],
+          reportText: response.data.report_content,
+          vendorStatements: response.data.vendor_statements || [],
+          evidencePhotos: response.data.evidence_photos || [],
+          vendorDocuments: response.data.vendor_documents || [],
+          caseDocuments: response.data.case_documents || [],
+        },
+      }));
+    } catch (err) {
+      console.error('Failed to fetch full report details:', err);
     }
   };
 
@@ -872,9 +857,9 @@ const AIBriefPage = () => {
     }
   };
 
-  const handleAssignLawyer = async () => {
-    if (!activeReport || !selectedLawyer) {
-      setError('Please select a lawyer to assign.');
+  const handleAssignQC = async () => {
+    if (!activeReport || !selectedQC) {
+      setError('Please select a qc to assign.');
       return;
     }
 
@@ -908,16 +893,16 @@ const AIBriefPage = () => {
 
     try {
       await api.post(`/reports/${reportId}/assign`, {
-        lawyer_id: selectedLawyer.id,
+        qc_id: selectedQC.id,
       });
 
-      setSelectedLawyer(null);
+      setSelectedQC(null);
       setViewReportDialogOpen(false);
-      setSuccess(`Report assigned to ${selectedLawyer.full_name} successfully.`);
+      setSuccess(`Report assigned to ${selectedQC.full_name} successfully.`);
       fetchCases();
     } catch (err) {
-      console.error('Failed to assign lawyer:', err);
-      setError(err.response?.data?.detail || 'Failed to assign lawyer.');
+      console.error('Failed to assign qc:', err);
+      setError(err.response?.data?.detail || 'Failed to assign qc.');
     } finally {
       setSubmitting(false);
     }
@@ -1179,8 +1164,7 @@ const AIBriefPage = () => {
                       }}
                       onClick={() => {
                         if (report) {
-                          setActiveReportCaseId(row.id);
-                          setViewReportDialogOpen(true);
+                          handleOpenReportView(row.id, report.id);
                         } else {
                           setSelected(rowSelected ? [] : [row.id]);
                         }
@@ -1261,8 +1245,7 @@ const AIBriefPage = () => {
                           onClick={(event) => {
                             event.stopPropagation();
                             if (report) {
-                              setActiveReportCaseId(row.id);
-                              setViewReportDialogOpen(true);
+                              handleOpenReportView(row.id, report.id);
                             } else {
                               setSelected(rowSelected ? [] : [row.id]);
                             }
@@ -1346,7 +1329,7 @@ const AIBriefPage = () => {
         onClose={() => {
           setViewReportDialogOpen(false);
           setEditMode(false);
-          setSelectedLawyer(null);
+          setSelectedQC(null);
           setDownloadMenuAnchorEl(null);
         }}
         maxWidth="md"
@@ -1607,22 +1590,22 @@ const AIBriefPage = () => {
               {!editMode && (
                 <Box sx={{ mt: 3 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
-                    Assign to Lawyer for Review
+                    Assign to QC for Review
                   </Typography>
                   <FormControl fullWidth>
                     <Select
-                      value={selectedLawyer?.id || ''}
+                      value={selectedQC?.id || ''}
                       onChange={(e) => {
-                        const lawyer = lawyers.find((l) => l.id === e.target.value);
-                        setSelectedLawyer(lawyer);
+                        const qc = qcs.find((l) => l.id === e.target.value);
+                        setSelectedQC(qc);
                       }}
                       displayEmpty
                       sx={{ mb: 2 }}
                     >
-                      <MenuItem value="">Select a lawyer</MenuItem>
-                      {lawyers.map((lawyer) => (
-                        <MenuItem key={lawyer.id} value={lawyer.id}>
-                          {lawyer.full_name} ({lawyer.email})
+                      <MenuItem value="">Select a qc</MenuItem>
+                      {qcs.map((qc) => (
+                        <MenuItem key={qc.id} value={qc.id}>
+                          {qc.full_name} ({qc.email})
                         </MenuItem>
                       ))}
                     </Select>
@@ -1641,7 +1624,7 @@ const AIBriefPage = () => {
             onClick={() => {
               setViewReportDialogOpen(false);
               setEditMode(false);
-              setSelectedLawyer(null);
+              setSelectedQC(null);
             }}
             sx={{ textTransform: 'none' }}
           >
@@ -1710,8 +1693,8 @@ const AIBriefPage = () => {
               </Button>
               <Button
                 variant="contained"
-                onClick={handleAssignLawyer}
-                disabled={submitting || !selectedLawyer}
+                onClick={handleAssignQC}
+                disabled={submitting || !selectedQC}
                 sx={{
                   backgroundColor: '#667eea',
                   textTransform: 'none',
@@ -1719,7 +1702,7 @@ const AIBriefPage = () => {
                   '&:hover': { backgroundColor: '#5568d3' },
                 }}
               >
-                {submitting ? <CircularProgress size={20} color="inherit" /> : 'Assign to Lawyer'}
+                {submitting ? <CircularProgress size={20} color="inherit" /> : 'Assign to QC'}
               </Button>
             </>
           )}

@@ -45,7 +45,7 @@ def update_admin_roles(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0009_alter_lawyer_options_and_more'),
+        ('users', '0009_alter_qc_options_and_more'),
     ]
 
     operations = [

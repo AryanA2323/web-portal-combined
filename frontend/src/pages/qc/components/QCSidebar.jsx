@@ -24,12 +24,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 const DRAWER_WIDTH = 240;
 
 const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: Dashboard, path: '/lawyer/dashboard' },
-  { id: 'reports', label: 'Reports', icon: Assessment, path: '/lawyer/reports' },
-  { id: 'logs', label: 'Logs', icon: History, path: '/lawyer/logs' },
+  { id: 'dashboard', label: 'Dashboard', icon: Dashboard, path: '/qc/dashboard' },
+  { id: 'reports', label: 'Reports', icon: Assessment, path: '/qc/reports' },
+  { id: 'logs', label: 'Logs', icon: History, path: '/qc/logs' },
 ];
 
-const LawyerSidebar = () => {
+const QCSidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -53,7 +53,7 @@ const LawyerSidebar = () => {
         <Gavel sx={{ color: '#3498db', fontSize: 32 }} />
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '16px', lineHeight: 1.2, color: '#ecf0f1' }}>
-            LAWYER PORTAL
+            QC PORTAL
           </Typography>
         </Box>
       </Box>
@@ -142,7 +142,7 @@ const LawyerSidebar = () => {
                 textTransform: 'capitalize',
               }}
             >
-              {user?.role || 'Lawyer'}
+              {user?.role || 'QC'}
             </Typography>
           </Box>
         </Box>
@@ -171,4 +171,4 @@ const LawyerSidebar = () => {
   );
 };
 
-export default LawyerSidebar;
+export default QCSidebar;

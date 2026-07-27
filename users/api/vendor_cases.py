@@ -780,6 +780,14 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                 val = check_row[i]
                 if hasattr(val, 'isoformat'):
                     val = val.isoformat()
+                
+                # Parse questionnaire if it's a string
+                if field == 'questionnaire' and isinstance(val, str):
+                    try:
+                        val = json.loads(val)
+                    except json.JSONDecodeError:
+                        pass
+                
                 check_detail[field] = val
 
             # Parse evidence JSON list

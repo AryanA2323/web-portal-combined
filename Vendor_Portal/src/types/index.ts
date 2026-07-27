@@ -52,6 +52,9 @@ export interface Case {
   source?: string;
   workflow_type?: string;
   investigation_progress?: number;
+  case_id?: number;
+  check_type?: string;
+  check_status?: string;
 }
 
 export interface CasesResponse {

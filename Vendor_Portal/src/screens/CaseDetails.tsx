@@ -162,6 +162,8 @@ const getEvidencePhotoUri = (photo: any, apiHost: string): string => {
   return encodeURI(`${apiHost}${normalizedPath}`);
 };
 
+const EMPTY_OBJECT = {};
+
 export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const router = useRouter();
   const dispatch = useDispatch();
@@ -790,7 +792,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 <Text style={styles.retryText}>Assigned Checks</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.retryButton} onPress={loadData}>
+              <TouchableOpacity style={styles.retryButton} onPress={() => loadData()}>
                 <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
             )}
@@ -810,7 +812,16 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     return d.category !== 'statement_photo' && !filename.startsWith('written_statement_');
   });
   const statementEntries = Array.isArray(checkInfo.statement_entries) ? checkInfo.statement_entries : [];
-  const combinedStatementText = checkInfo.statement || statementEntries.map((e: any) => e.translation_en || e.statement_text || '').filter(Boolean).join('\n\n');
+  const combinedStatementText = statementEntries.length > 0
+    ? statementEntries
+        .map((e: any, idx: number) => {
+          const txt = (e.translation_en || e.statement_text || '').trim();
+          if (!txt) return '';
+          return statementEntries.length > 1 ? `Statement ${e.index || idx + 1}:\n${txt}` : txt;
+        })
+        .filter(Boolean)
+        .join('\n\n')
+    : (checkInfo.statement || '');
   const statementCount = Number.isFinite(checkInfo.statement_count)
     ? Number(checkInfo.statement_count)
     : statementEntries.length;
@@ -866,12 +877,10 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           <DetailRow label="Category" value={caseInfo.category} />
           <DetailRow label="Case Type" value={caseInfo.case_type} />
           <DetailRow label="Case Status" value={caseInfo.full_case_status} />
-          <DetailRow label="SLA" value={caseInfo.sla} />
           <DetailRow label="TAT Days" value={caseInfo.tat_days} />
           <DetailRow label="Receive Date" value={caseInfo.case_receive_date} />
           <DetailRow label="Due Date" value={caseInfo.case_due_date} />
           <DetailRow label="Scope of Work" value={caseInfo.scope_of_work} />
-          <DetailRow label="IR Status" value={caseInfo.investigation_report_status} />
         </View>
 
         <View style={styles.section}>
@@ -1216,19 +1225,9 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           )}
 
           {!isCompleted && (
-            <View style={[styles.sideBySideRow, { marginTop: 14 }]}>
+            <View style={{ marginTop: 14 }}>
               <TouchableOpacity
-                style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]}
-                onPress={pickAndUpload}
-                disabled={uploading}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.smallActionButtonText}>Upload from Gallery</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]}
+                style={[styles.smallActionButton, { backgroundColor: '#2E9B62' }]}
                 onPress={takePhoto}
                 disabled={uploading}
                 activeOpacity={0.8}
@@ -1313,7 +1312,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         <QuestionnaireForm
           caseId={caseId}
           checkType={checkType}
-          initialData={checkInfo.questionnaire || {}}
+          initialData={checkInfo.questionnaire || EMPTY_OBJECT}
           statementText={combinedStatementText}
           caseInfo={caseInfo}
           checkInfo={checkInfo}

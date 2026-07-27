@@ -26,7 +26,7 @@ router = Router(tags=["User Management"])
 def sync_role_specific_profile(user):
     """Ensure role-specific profile rows exist for users created by Super Admin."""
     try:
-        from users.models import Admin, Lawyer, Vendor
+        from users.models import Admin, QC, Vendor
 
         if user.role == 'ADMIN':
             Admin.objects.get_or_create(
@@ -37,8 +37,8 @@ def sync_role_specific_profile(user):
                     'contact_email': user.email,
                 },
             )
-        elif user.role == 'LAWYER':
-            Lawyer.objects.get_or_create(
+        elif user.role == 'QC':
+            QC.objects.get_or_create(
                 user=user,
                 defaults={
                     'bar_registration_number': f"BAR_{user.id}",
@@ -113,7 +113,7 @@ def create_user(request, payload: UserCreateSchema):
     - password: Password (minimum 8 characters)
     - first_name: Optional first name
     - last_name: Optional last name
-    - role: User role (SUPER_ADMIN, ADMIN, VENDOR, CLIENT, LAWYER)
+    - role: User role (SUPER_ADMIN, ADMIN, VENDOR, CLIENT, QC)
     """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
@@ -123,7 +123,7 @@ def create_user(request, payload: UserCreateSchema):
     
     # Validate role
     role_upper = payload.role.upper() if payload.role else 'CLIENT'
-    valid_roles = ['SUPER_ADMIN', 'ADMIN', 'VENDOR', 'CLIENT', 'LAWYER']
+    valid_roles = ['SUPER_ADMIN', 'ADMIN', 'VENDOR', 'CLIENT', 'QC']
     if role_upper not in valid_roles:
         return 400, {"error": f"Invalid role. Must be one of: {', '.join(valid_roles)}", "code": "INVALID_ROLE"}
     
@@ -199,7 +199,7 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
     
     Payload can include:
     - first_name, last_name, email: Basic user info
-    - role: User role (SUPER_ADMIN, ADMIN, VENDOR, CLIENT, LAWYER)
+    - role: User role (SUPER_ADMIN, ADMIN, VENDOR, CLIENT, QC)
     - sub_role: Admin sub-role (SUPER_ADMIN, CASE_HANDLER, etc.)
     - permissions: Array of allowed page paths
     - is_active: Enable/disable user account
@@ -231,7 +231,7 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
     # Update role and sub_role
     if payload.role is not None:
         role_upper = payload.role.upper()
-        valid_roles = ['SUPER_ADMIN', 'ADMIN', 'VENDOR', 'CLIENT', 'LAWYER']
+        valid_roles = ['SUPER_ADMIN', 'ADMIN', 'VENDOR', 'CLIENT', 'QC']
         if role_upper not in valid_roles:
             return 400, {"error": f"Invalid role. Must be one of: {', '.join(valid_roles)}", "code": "INVALID_ROLE"}
         user.role = role_upper

@@ -240,9 +240,17 @@ export default function NotificationsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.kicker}>Vendor portal</Text>
-          <Text style={styles.title}>Alerts</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity 
+            onPress={() => router.back()} 
+            style={{ padding: 8, marginLeft: -8, marginRight: 12, backgroundColor: '#F1F5F9', borderRadius: 999 }}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.kicker}>Vendor portal</Text>
+            <Text style={styles.title}>Alerts</Text>
+          </View>
         </View>
         <View style={styles.unreadBadge}>
           <MaterialCommunityIcons name="bell-badge-outline" size={18} color={theme.colors.primary} />

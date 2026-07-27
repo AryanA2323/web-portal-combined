@@ -22,7 +22,7 @@ import {
   DialogActions,
 } from '@mui/material';
 import { Search, FilterList, FileDownload, Description } from '@mui/icons-material';
-import LawyerLayout from './components/LawyerLayout';
+import QCLayout from './components/QCLayout';
 import api from '../../services/api';
 
 const LogsPage = () => {
@@ -42,7 +42,7 @@ const LogsPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/lawyer/logs');
+      const res = await api.get('/qc/logs');
       setLogs(res.data || []);
     } catch (err) {
       console.error('Failed to fetch logs:', err);
@@ -100,7 +100,7 @@ const LogsPage = () => {
   );
 
   return (
-    <LawyerLayout>
+    <QCLayout>
       <Box sx={{ p: 3 }}>
         <Box sx={{ mb: 3 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -356,7 +356,7 @@ const LogsPage = () => {
           </DialogActions>
         </Dialog>
       </Box>
-    </LawyerLayout>
+    </QCLayout>
   );
 };
 

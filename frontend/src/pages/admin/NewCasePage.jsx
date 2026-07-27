@@ -20,8 +20,8 @@ import {
   MenuItem,
   Chip,
 } from '@mui/material';
-import { 
-  Save, 
+import {
+  Save,
   ArrowBack,
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -166,7 +166,7 @@ const NewCasePage = () => {
     chargesheet_check_status: 'WIP',
     chargesheet_statement: '',
     chargesheet_triggers: '',
-    
+
     // Claimant fields
     claimant_name: '',
     claimant_contact: '',
@@ -175,7 +175,7 @@ const NewCasePage = () => {
     fir_number_claimant: '',
     court_name: '',
     mv_act: '',
-    
+
     // Insured fields
     insured_name: '',
     insured_contact: '',
@@ -184,7 +184,7 @@ const NewCasePage = () => {
     policy_period: '',
     rc_number: '',
     permit_insured: '',
-    
+
     // Driver fields
     driver_name: '',
     driver_contact: '',
@@ -193,7 +193,7 @@ const NewCasePage = () => {
     permit_driver: '',
     occupation: '',
     driver_and_insured_same: false,
-    
+
     // Spot fields
     time_of_accident: '',
     place_of_accident: '',
@@ -202,7 +202,7 @@ const NewCasePage = () => {
     spot_city: '',
     police_station: '',
     accident_brief: '',
-    
+
     // Chargesheet fields
     chargesheet_city: '',
     fir_delay_in_days: '',
@@ -314,13 +314,13 @@ const NewCasePage = () => {
         ...prev,
         [name]: type === 'checkbox' ? checked : value
       };
-      
+
       if (name === 'driver_same_as_insured' && checked) {
         newData.driver_name = newData.insured_name || '';
         newData.driver_contact = newData.insured_contact || '';
         newData.driver_address = newData.insured_address || '';
       }
-      
+
       return newData;
     });
   };
@@ -558,7 +558,7 @@ const NewCasePage = () => {
 
       // Create verification records only for selected types
       const verificationsToCreate = [];
-      
+
       if (selectedVerifications.claimant) {
         verificationsToCreate.push({
           case_id: caseId,
@@ -686,15 +686,15 @@ const NewCasePage = () => {
       for (const verification of verificationsToCreate) {
         const verificationResponse = await api.post('/verifications', verification);
         const verificationId = verificationResponse.data.id;
-        
-       // Upload files for this verification if any
+
+        // Upload files for this verification if any
         const verificationType = verification.check_type.toLowerCase();
         if (verificationFiles[verificationType] && verificationFiles[verificationType].length > 0) {
           const formData = new FormData();
           verificationFiles[verificationType].forEach((file) => {
             formData.append('files', file);
           });
-          
+
           try {
             await api.post(`/verifications/${verificationId}/upload`, formData, {
               headers: {
@@ -720,19 +720,19 @@ const NewCasePage = () => {
           }
         }
       }
-      
+
       setSuccess(`Case created successfully! Case Number: ${response.data.case_number}`);
-      
+
       // Redirect to cases page after 2 seconds
       setTimeout(() => {
         navigate('/admin/cases');
       }, 2000);
-      
+
     } catch (error) {
       console.error('Failed to create case:', error);
       console.error('Error response:', error.response);
       console.error('Error data:', error.response?.data);
-      
+
       // Show detailed error message
       let errorMessage = 'Failed to create case. Please try again.';
       if (error.response?.data) {
@@ -1048,7 +1048,7 @@ const NewCasePage = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
                   <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
                   <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>
-                    Scope of Work
+                    Special Instructions
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 3, width: '100%', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
@@ -1057,7 +1057,7 @@ const NewCasePage = () => {
                     <TextField
                       fullWidth
                       size="small"
-                      label="Scope of Work"
+                      label="Special Instructions"
                       name="scope_of_work"
                       value={commonFields.scope_of_work}
                       onChange={handleCommonFieldChange}
@@ -1155,10 +1155,10 @@ const NewCasePage = () => {
             </Typography>
             <Grid container spacing={2} sx={{ mb: 4 }}>
               <Grid item xs={12} sm={6} md={4}>
-                <Card 
+                <Card
                   elevation={selectedVerifications.claimant ? 4 : 1}
-                  sx={{ 
-                    p: 2, 
+                  sx={{
+                    p: 2,
                     cursor: 'pointer',
                     border: selectedVerifications.claimant ? '2px solid #1976d2' : '2px solid transparent',
                     transition: 'all 0.3s',
@@ -1187,10 +1187,10 @@ const NewCasePage = () => {
                 </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
-                <Card 
+                <Card
                   elevation={selectedVerifications.insured ? 4 : 1}
-                  sx={{ 
-                    p: 2, 
+                  sx={{
+                    p: 2,
                     cursor: 'pointer',
                     border: selectedVerifications.insured ? '2px solid #2e7d32' : '2px solid transparent',
                     transition: 'all 0.3s',
@@ -1219,10 +1219,10 @@ const NewCasePage = () => {
                 </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
-                <Card 
+                <Card
                   elevation={selectedVerifications.driver ? 4 : 1}
-                  sx={{ 
-                    p: 2, 
+                  sx={{
+                    p: 2,
                     cursor: 'pointer',
                     border: selectedVerifications.driver ? '2px solid #ed6c02' : '2px solid transparent',
                     transition: 'all 0.3s',
@@ -1251,10 +1251,10 @@ const NewCasePage = () => {
                 </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
-                <Card 
+                <Card
                   elevation={selectedVerifications.spot ? 4 : 1}
-                  sx={{ 
-                    p: 2, 
+                  sx={{
+                    p: 2,
                     cursor: 'pointer',
                     border: selectedVerifications.spot ? '2px solid #9c27b0' : '2px solid transparent',
                     transition: 'all 0.3s',
@@ -1283,10 +1283,10 @@ const NewCasePage = () => {
                 </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
-                <Card 
+                <Card
                   elevation={selectedVerifications.chargesheet ? 4 : 1}
-                  sx={{ 
-                    p: 2, 
+                  sx={{
+                    p: 2,
                     cursor: 'pointer',
                     border: selectedVerifications.chargesheet ? '2px solid #d32f2f' : '2px solid transparent',
                     transition: 'all 0.3s',
@@ -1315,10 +1315,10 @@ const NewCasePage = () => {
                 </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
-                <Card 
+                <Card
                   elevation={selectedVerifications.rti ? 4 : 1}
-                  sx={{ 
-                    p: 2, 
+                  sx={{
+                    p: 2,
                     cursor: 'pointer',
                     border: selectedVerifications.rti ? '2px solid #00695c' : '2px solid transparent',
                     transition: 'all 0.3s',
@@ -1347,10 +1347,10 @@ const NewCasePage = () => {
                 </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
-                <Card 
+                <Card
                   elevation={selectedVerifications.rto ? 4 : 1}
-                  sx={{ 
-                    p: 2, 
+                  sx={{
+                    p: 2,
                     cursor: 'pointer',
                     border: selectedVerifications.rto ? '2px solid #4527a0' : '2px solid transparent',
                     transition: 'all 0.3s',
@@ -1381,707 +1381,732 @@ const NewCasePage = () => {
             </Grid>
 
             {/* Show verification fields only if at least one verification is selected */}
-            {(selectedVerifications.claimant || selectedVerifications.insured || 
-              selectedVerifications.driver || selectedVerifications.spot || 
+            {(selectedVerifications.claimant || selectedVerifications.insured ||
+              selectedVerifications.driver || selectedVerifications.spot ||
               selectedVerifications.chargesheet || selectedVerifications.rti ||
               selectedVerifications.rto) && (
-              <>
-                <Divider sx={{ my: 4 }} />
+                <>
+                  <Divider sx={{ my: 4 }} />
 
-                {/* Claimant Check Fields */}
-                {selectedVerifications.claimant && (
-                  <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
-                    <Box sx={{ bgcolor: '#1976d2', color: 'white', p: 2 }}>
-                      <Typography variant="h6" fontWeight="600">Claimant Check</Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.85 }}>Personal details, dependents &amp; findings</Typography>
-                    </Box>
-                    <Box sx={{ p: 3 }}>
-
-                      {/* ── Personal Details ─────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#1976d2' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#1976d2', letterSpacing: '1px', lineHeight: 1 }}>Personal Details</Typography>
+                  {/* Claimant Check Fields */}
+                  {selectedVerifications.claimant && (
+                    <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+                      <Box sx={{ bgcolor: '#1976d2', color: 'white', p: 2 }}>
+                        <Typography variant="h6" fontWeight="600">Claimant Check</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.85 }}>Personal details, dependents &amp; findings</Typography>
                       </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Claimant Name" name="claimant_name"
-                            value={verificationData.claimant_name} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Claimant Contact" name="claimant_contact"
-                            value={verificationData.claimant_contact} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Claimant Address" name="claimant_address"
-                            value={verificationData.claimant_address} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
+                      <Box sx={{ p: 3 }}>
 
-                      <Divider sx={{ mb: 2.5 }} />
+                        {/* ── Personal Details ─────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#1976d2' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#1976d2', letterSpacing: '1px', lineHeight: 1 }}>Personal Details</Typography>
+                        </Box>
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Claimant Name" name="claimant_name"
+                              value={verificationData.claimant_name} onChange={handleVerificationChange}
+                              required
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Claimant Contact" name="claimant_contact"
+                              value={verificationData.claimant_contact} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Claimant Address" name="claimant_address"
+                              value={verificationData.claimant_address} onChange={handleVerificationChange}
+                              required
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                        </Grid>
 
-                      {/* ── Dependents ───────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Dependents &amp; Income</Typography>
-                      </Box>
-                      {dependents.map((dependent, index) => (
-                        <Grid container spacing={2} alignItems="center" sx={{ mb: 1.5 }} key={index}>
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── Dependents ───────────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Dependents &amp; Income</Typography>
+                        </Box>
+                        {dependents.map((dependent, index) => (
+                          <Grid container spacing={2} alignItems="center" sx={{ mb: 1.5 }} key={index}>
+                            <Grid item xs={12} sm={3}>
+                              <TextField fullWidth size="small" label="Dependent Name"
+                                value={dependent.dependent_name}
+                                onChange={(e) => handleDependentChange(index, 'dependent_name', e.target.value)}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Grid>
+                            <Grid item xs={12} sm={3}>
+                              <TextField fullWidth size="small" label="Dependent Contact"
+                                value={dependent.dependent_contact}
+                                onChange={(e) => handleDependentChange(index, 'dependent_contact', e.target.value)}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Grid>
+                            <Grid item xs={12} sm={5}>
+                              <TextField fullWidth size="small" label="Dependent Address"
+                                value={dependent.dependent_address}
+                                onChange={(e) => handleDependentChange(index, 'dependent_address', e.target.value)}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Grid>
+                            <Grid item xs={12} sm={1}>
+                              <IconButton color="error" onClick={() => handleRemoveDependent(index)} size="small"><DeleteIcon /></IconButton>
+                            </Grid>
+                          </Grid>
+                        ))}
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
                           <Grid item xs={12} sm={3}>
-                            <TextField fullWidth size="small" label="Dependent Name"
-                              value={dependent.dependent_name}
-                              onChange={(e) => handleDependentChange(index, 'dependent_name', e.target.value)}
+                            <TextField fullWidth size="small" label="Income" name="income" type="number"
+                              value={verificationData.income} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={3} sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Button startIcon={<AddIcon />} onClick={handleAddDependent} variant="outlined" size="small" sx={{ borderRadius: '8px' }}>Add Dependent</Button>
+                          </Grid>
+                        </Grid>
+
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── Status & Findings ────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 2.5, width: '100%', mb: 3, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Statement" name="claimant_statement"
+                              value={verificationData.claimant_statement} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This field will be filled by the vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Triggers" name="claimant_triggers"
+                              value={verificationData.claimant_triggers} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This is the trigger note for vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        </Box>
+
+                      </Box>
+                    </Card>
+                  )}
+
+                  {/* Insured Check Fields */}
+                  {selectedVerifications.insured && (
+                    <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+                      <Box sx={{ bgcolor: '#2e7d32', color: 'white', p: 2 }}>
+                        <Typography variant="h6" fontWeight="600">Insured Check</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.85 }}>Personal details, policy &amp; vehicle information</Typography>
+                      </Box>
+                      <Box sx={{ p: 3 }}>
+
+                        {/* ── Personal Details ─────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Personal Details</Typography>
+                        </Box>
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Insured Name" name="insured_name"
+                              value={verificationData.insured_name} onChange={handleVerificationChange}
+                              required
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Insured Contact" name="insured_contact"
+                              value={verificationData.insured_contact} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Insured Address" name="insured_address"
+                              value={verificationData.insured_address} onChange={handleVerificationChange}
+                              required
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                        </Grid>
+
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── Policy & Vehicle ─────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Policy &amp; Vehicle</Typography>
+                        </Box>
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={3}>
+                            <TextField fullWidth size="small" label="Policy Number" name="policy_number"
+                              value={verificationData.policy_number} onChange={handleVerificationChange}
+
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Grid>
                           <Grid item xs={12} sm={3}>
-                            <TextField fullWidth size="small" label="Dependent Contact"
-                              value={dependent.dependent_contact}
-                              onChange={(e) => handleDependentChange(index, 'dependent_contact', e.target.value)}
+                            <TextField fullWidth size="small" label="Policy Period" name="policy_period"
+                              value={verificationData.policy_period} onChange={handleVerificationChange}
+
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Grid>
-                          <Grid item xs={12} sm={5}>
-                            <TextField fullWidth size="small" label="Dependent Address"
-                              value={dependent.dependent_address}
-                              onChange={(e) => handleDependentChange(index, 'dependent_address', e.target.value)}
+                          <Grid item xs={12} sm={3}>
+                            <TextField fullWidth size="small" label="RC Number" name="rc_number"
+                              value={verificationData.rc_number} onChange={handleVerificationChange}
+
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Grid>
-                          <Grid item xs={12} sm={1}>
-                            <IconButton color="error" onClick={() => handleRemoveDependent(index)} size="small"><DeleteIcon /></IconButton>
+                          <Grid item xs={12} sm={3}>
+                            <TextField fullWidth size="small" label="Permit" name="permit_insured"
+                              value={verificationData.permit_insured} onChange={handleVerificationChange}
+
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Grid>
                         </Grid>
-                      ))}
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={3}>
-                          <TextField fullWidth size="small" label="Income" name="income" type="number"
-                            value={verificationData.income} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={3} sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Button startIcon={<AddIcon />} onClick={handleAddDependent} variant="outlined" size="small" sx={{ borderRadius: '8px' }}>Add Dependent</Button>
-                        </Grid>
-                      </Grid>
 
-                      <Divider sx={{ mb: 2.5 }} />
+                        <Divider sx={{ mb: 2.5 }} />
 
-                      {/* ── Status & Findings ────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Statement" name="claimant_statement"
-                            value={verificationData.claimant_statement} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Triggers" name="claimant_triggers"
-                            value={verificationData.claimant_triggers} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                    </Box>
-                  </Card>
-                )}
-
-                {/* Insured Check Fields */}
-                {selectedVerifications.insured && (
-                  <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
-                    <Box sx={{ bgcolor: '#2e7d32', color: 'white', p: 2 }}>
-                      <Typography variant="h6" fontWeight="600">Insured Check</Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.85 }}>Personal details, policy &amp; vehicle information</Typography>
-                    </Box>
-                    <Box sx={{ p: 3 }}>
-
-                      {/* ── Personal Details ─────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2e7d32' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Personal Details</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Insured Name" name="insured_name"
-                            value={verificationData.insured_name} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Insured Contact" name="insured_contact"
-                            value={verificationData.insured_contact} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Insured Address" name="insured_address"
-                            value={verificationData.insured_address} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Policy & Vehicle ─────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Policy &amp; Vehicle</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={3}>
-                          <TextField fullWidth size="small" label="Policy Number" name="policy_number"
-                            value={verificationData.policy_number} onChange={handleVerificationChange}
-                            
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={3}>
-                          <TextField fullWidth size="small" label="Policy Period" name="policy_period"
-                            value={verificationData.policy_period} onChange={handleVerificationChange}
-                            
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={3}>
-                          <TextField fullWidth size="small" label="RC Number" name="rc_number"
-                            value={verificationData.rc_number} onChange={handleVerificationChange}
-                            
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={3}>
-                          <TextField fullWidth size="small" label="Permit" name="permit_insured"
-                            value={verificationData.permit_insured} onChange={handleVerificationChange}
-                            
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Status & Findings ────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
-                      </Box>
-                      <Grid container spacing={2.5}>
-                        
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Statement" name="insured_statement"
-                            value={verificationData.insured_statement} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Triggers" name="insured_triggers"
-                            value={verificationData.insured_triggers} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                    </Box>
-                  </Card>
-                )}
-
-                {/* Driver Check Fields */}
-                {selectedVerifications.driver && (
-                  <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
-                    <Box sx={{ bgcolor: '#ed6c02', color: 'white', p: 2 }}>
-                      <Typography variant="h6" fontWeight="600">Driver Check</Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.85 }}>Personal details, license &amp; vehicle permit</Typography>
-                    </Box>
-                    <Box sx={{ p: 3 }}>
-
-                      {/* ── Personal Details ─────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#ed6c02' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#ed6c02', letterSpacing: '1px', lineHeight: 1 }}>Personal Details</Typography>
-                      </Box>
-                      <FormControlLabel
-                        control={<Checkbox checked={verificationData.driver_same_as_insured || false} onChange={handleVerificationChange} name="driver_same_as_insured" sx={{ '&.Mui-checked': { color: '#6a1b9a' } }} />}
-                        label="Driver is same as Insured"
-                        sx={{ mb: 2 }}
-                      />
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Driver Name" name="driver_name"
-                            value={verificationData.driver_name} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Driver Contact" name="driver_contact"
-                            value={verificationData.driver_contact} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Driver Address" name="driver_address"
-                            value={verificationData.driver_address} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── License & Work ────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>License &amp; Work</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Driving License (DL)" name="dl_number"
-                            value={verificationData.dl_number} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Permit" name="permit_driver"
-                            value={verificationData.permit_driver} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Occupation" name="occupation"
-                            value={verificationData.occupation} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Status & Findings ────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
-                      </Box>
-                      <Grid container spacing={2.5}>
-                        
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Statement" name="driver_statement"
-                            value={verificationData.driver_statement} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Triggers" name="driver_triggers"
-                            value={verificationData.driver_triggers} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                    </Box>
-                  </Card>
-                )}
-
-                {/* Spot Check Fields */}
-                {selectedVerifications.spot && (
-                  <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
-                    <Box sx={{ bgcolor: '#9c27b0', color: 'white', p: 2 }}>
-                      <Typography variant="h6" fontWeight="600">Spot Check</Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.85 }}>Accident location, FIR details &amp; findings</Typography>
-                    </Box>
-                    <Box sx={{ p: 3 }}>
-
-                      {/* ── Accident Location ────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#9c27b0' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#9c27b0', letterSpacing: '1px', lineHeight: 1 }}>Accident Location</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Time of Accident" name="time_of_accident"
-                            value={verificationData.time_of_accident} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="Place of Accident" name="place_of_accident"
-                            value={verificationData.place_of_accident} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="District" name="district"
-                            value={verificationData.district} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── FIR & Police ─────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>FIR &amp; Police</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth size="small" label="FIR Number" name="fir_number_spot"
-                            value={verificationData.fir_number_spot} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth size="small" required>
-                            <Select name="spot_city" value={verificationData.spot_city}
-                              displayEmpty
-                              renderValue={(selected) => selected || <span className="required-placeholder">Select City</span>}
-                              onChange={(e) => {
-                                handleVerificationChange(e);
-                                setVerificationData(prev => ({ ...prev, police_station: '' }));
-                              }}
-                              sx={{ borderRadius: '8px' }}>
-                              <MenuItem value=""><em>Select City</em></MenuItem>
-                              {courtCities.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth size="small" required>
-                            <Select name="police_station" value={verificationData.police_station}
-                              displayEmpty
-                              renderValue={(selected) => selected || <span className="required-placeholder">Select Police Station</span>}
-                              onChange={handleVerificationChange}
-                              sx={{ borderRadius: '8px' }}
-                              disabled={!verificationData.spot_city}>
-                              <MenuItem value=""><em>Select Police Station</em></MenuItem>
-                              {spotPoliceStations.map(ps => <MenuItem key={ps} value={ps}>{ps}</MenuItem>)}
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth size="small" label="Accident Brief" name="accident_brief"
-                            value={verificationData.accident_brief} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Status & Findings ────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Statement" name="spot_statement"
-                            value={verificationData.spot_statement} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Triggers" name="spot_triggers"
-                            value={verificationData.spot_triggers} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                    </Box>
-                  </Card>
-                )}
-
-                {/* Chargesheet Fields */}
-                {selectedVerifications.chargesheet && (
-                  <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
-                    <Box sx={{ bgcolor: '#d32f2f', color: 'white', p: 2 }}>
-                      <Typography variant="h6" fontWeight="600">Chargesheet Check</Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.85 }}>Legal references, sections &amp; findings</Typography>
-                    </Box>
-                    <Box sx={{ p: 3 }}>
-
-                      {/* ── Legal Reference ───────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#d32f2f' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#d32f2f', letterSpacing: '1px', lineHeight: 1 }}>Legal Reference</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth size="small" label="FIR Number" name="fir_number_claimant"
-                            value={verificationData.fir_number_claimant} onChange={handleVerificationChange}
-                            required
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth size="small" required>
-                            <Select name="chargesheet_city" value={verificationData.chargesheet_city}
-                              displayEmpty
-                              renderValue={(selected) => selected || <span className="required-placeholder">Select City</span>}
-                              onChange={(e) => {
-                                handleVerificationChange(e);
-                                setVerificationData(prev => ({ ...prev, court_name: '' }));
-                              }}
-                              sx={{ borderRadius: '8px' }}>
-                              <MenuItem value=""><em>Select City</em></MenuItem>
-                              {courtCities.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth size="small" required>
-                            <Select name="court_name" value={verificationData.court_name}
-                              displayEmpty
-                              renderValue={(selected) => selected || <span className="required-placeholder">Select Court Name</span>}
-                              onChange={handleVerificationChange}
-                              sx={{ borderRadius: '8px' }}
-                              disabled={!verificationData.chargesheet_city}>
-                              <MenuItem value=""><em>Select Court</em></MenuItem>
-                              {chargesheetCourts.map(ct => <MenuItem key={ct} value={ct}>{ct}</MenuItem>)}
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth size="small" label="MV Act" name="mv_act"
-                            value={verificationData.mv_act} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Chargesheet Details ───────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Chargesheet Details</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="FIR Delay (Days)" name="fir_delay_in_days" type="number"
-                            value={verificationData.fir_delay_in_days} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="BSN Sections" name="bsn_sections"
-                            value={verificationData.bsn_sections} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth size="small" label="IPC Sections" name="ipc_sections"
-                            value={verificationData.ipc_sections} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Status & Findings ────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
-                      </Box>
-                      <Grid container spacing={2.5}>
-                        
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Statement" name="chargesheet_statement"
-                            value={verificationData.chargesheet_statement} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Triggers" name="chargesheet_triggers"
-                            value={verificationData.chargesheet_triggers} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
-
-                    </Box>
-                  </Card>
-                )}
-
-                {/* RTI Check Fields */}
-                {selectedVerifications.rti && (
-                  <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
-                    <Box sx={{ bgcolor: '#00695c', color: 'white', p: 2 }}>
-                      <Typography variant="h6" fontWeight="600">RTI Check</Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.85 }}>Right to Information — select items to verify</Typography>
-                    </Box>
-                    <Box sx={{ p: 3 }}>
-
-                      {/* ── Checklist Items ─────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#00695c' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#00695c', letterSpacing: '1px', lineHeight: 1 }}>Checklist</Typography>
-                      </Box>
-
-                      {/* Chargesheet */}
-                      <Box sx={{ mb: 2 }}>
-                        <FormControlLabel
-                          control={<Checkbox name="rti_chargesheet_checked" checked={verificationData.rti_chargesheet_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
-                          label={<Typography fontWeight="bold">Chargesheet</Typography>}
-                        />
-                        {verificationData.rti_chargesheet_checked && (
-                          <Box sx={{ ml: 4, mt: 0.5 }}>
-                            <TextField fullWidth size="small" label="FIR Number" name="rti_fir_number"
-                              value={verificationData.rti_fir_number} onChange={handleVerificationChange}
+                        {/* ── Status & Findings ────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 2.5, width: '100%', mb: 3, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Statement" name="insured_statement"
+                              value={verificationData.insured_statement} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This field will be filled by the vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
-                        )}
-                      </Box>
-
-                      {/* DL */}
-                      <Box sx={{ mb: 2 }}>
-                        <FormControlLabel
-                          control={<Checkbox name="rti_dl_checked" checked={verificationData.rti_dl_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
-                          label={<Typography fontWeight="bold">DL</Typography>}
-                        />
-                        {verificationData.rti_dl_checked && (
-                          <Box sx={{ ml: 4, mt: 0.5 }}>
-                            <TextField fullWidth size="small" label="DL Number" name="rti_dl_number"
-                              value={verificationData.rti_dl_number} onChange={handleVerificationChange}
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Triggers" name="insured_triggers"
+                              value={verificationData.insured_triggers} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This is the trigger note for vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
-                        )}
-                      </Box>
+                        </Box>
 
-                      {/* Permit */}
-                      <Box sx={{ mb: 2 }}>
+                      </Box>
+                    </Card>
+                  )}
+
+                  {/* Driver Check Fields */}
+                  {selectedVerifications.driver && (
+                    <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+                      <Box sx={{ bgcolor: '#ed6c02', color: 'white', p: 2 }}>
+                        <Typography variant="h6" fontWeight="600">Driver Check</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.85 }}>Personal details, license &amp; vehicle permit</Typography>
+                      </Box>
+                      <Box sx={{ p: 3 }}>
+
+                        {/* ── Personal Details ─────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#ed6c02' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#ed6c02', letterSpacing: '1px', lineHeight: 1 }}>Personal Details</Typography>
+                        </Box>
                         <FormControlLabel
-                          control={<Checkbox name="rti_permit_checked" checked={verificationData.rti_permit_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
-                          label={<Typography fontWeight="bold">Permit</Typography>}
+                          control={<Checkbox checked={verificationData.driver_same_as_insured || false} onChange={handleVerificationChange} name="driver_same_as_insured" sx={{ '&.Mui-checked': { color: '#6a1b9a' } }} />}
+                          label="Driver is same as Insured"
+                          sx={{ mb: 2 }}
                         />
-                        {verificationData.rti_permit_checked && (
-                          <Box sx={{ ml: 4, mt: 0.5 }}>
-                            <TextField fullWidth size="small" label="Permit Number" name="rti_permit_number"
-                              value={verificationData.rti_permit_number} onChange={handleVerificationChange}
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Driver Name" name="driver_name"
+                              value={verificationData.driver_name} onChange={handleVerificationChange}
+                              required
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                          </Box>
-                        )}
-                      </Box>
-
-                      {/* RC */}
-                      <Box sx={{ mb: 2 }}>
-                        <FormControlLabel
-                          control={<Checkbox name="rti_rc_checked" checked={verificationData.rti_rc_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
-                          label={<Typography fontWeight="bold">RC</Typography>}
-                        />
-                        {verificationData.rti_rc_checked && (
-                          <Box sx={{ ml: 4, mt: 0.5 }}>
-                            <TextField fullWidth size="small" label="RC Number" name="rti_rc_number"
-                              value={verificationData.rti_rc_number} onChange={handleVerificationChange}
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Driver Contact" name="driver_contact"
+                              value={verificationData.driver_contact} onChange={handleVerificationChange}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                          </Box>
-                        )}
-                      </Box>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Remarks ──────────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
-                      </Box>
-                      <Grid container spacing={2.5}>
-                        
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Remarks" name="rti_remarks"
-                            value={verificationData.rti_remarks} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Driver Address" name="driver_address"
+                              value={verificationData.driver_address} onChange={handleVerificationChange}
+                              required
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
                         </Grid>
-                      </Grid>
 
-                    </Box>
-                  </Card>
-                )}
+                        <Divider sx={{ mb: 2.5 }} />
 
-                {/* RTO Check Fields */}
-                {selectedVerifications.rto && (
-                  <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
-                    <Box sx={{ bgcolor: '#4527a0', color: 'white', p: 2 }}>
-                      <Typography variant="h6" fontWeight="600">RTO Check</Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.85 }}>Regional Transport Office — verify documents at RTO</Typography>
-                    </Box>
-                    <Box sx={{ p: 3 }}>
-
-                      {/* ── RTO Office Info ─────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#4527a0' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#4527a0', letterSpacing: '1px', lineHeight: 1 }}>RTO Office</Typography>
-                      </Box>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth size="small" label="RTO Name / Address" name="rto_name"
-                            value={verificationData.rto_name} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                        {/* ── License & Work ────────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>License &amp; Work</Typography>
+                        </Box>
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Driving License (DL)" name="dl_number"
+                              value={verificationData.dl_number} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Permit" name="permit_driver"
+                              value={verificationData.permit_driver} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Occupation" name="occupation"
+                              value={verificationData.occupation} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
                         </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth size="small" label="RTO Address" name="rto_address"
-                            value={verificationData.rto_address} onChange={handleVerificationChange}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Grid>
-                      </Grid>
 
-                      <Divider sx={{ mb: 2.5 }} />
+                        <Divider sx={{ mb: 2.5 }} />
 
-                      {/* ── Checklist Items ─────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#4527a0' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#4527a0', letterSpacing: '1px', lineHeight: 1 }}>Checklist</Typography>
-                      </Box>
-
-                      {/* DL */}
-                      <Box sx={{ mb: 2 }}>
-                        <FormControlLabel
-                          control={<Checkbox name="rto_dl_checked" checked={verificationData.rto_dl_checked} onChange={handleVerificationChange} sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }} />}
-                          label={<Typography fontWeight="bold">DL</Typography>}
-                        />
-                        {verificationData.rto_dl_checked && (
-                          <Box sx={{ ml: 4, mt: 0.5 }}>
-                            <TextField fullWidth size="small" label="DL Number" name="rto_dl_number"
-                              value={verificationData.rto_dl_number} onChange={handleVerificationChange}
+                        {/* ── Status & Findings ────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 2.5, width: '100%', mb: 3, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Statement" name="driver_statement"
+                              value={verificationData.driver_statement} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This field will be filled by the vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
-                        )}
-                      </Box>
-
-                      {/* Permit */}
-                      <Box sx={{ mb: 2 }}>
-                        <FormControlLabel
-                          control={<Checkbox name="rto_permit_checked" checked={verificationData.rto_permit_checked} onChange={handleVerificationChange} sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }} />}
-                          label={<Typography fontWeight="bold">Permit</Typography>}
-                        />
-                        {verificationData.rto_permit_checked && (
-                          <Box sx={{ ml: 4, mt: 0.5 }}>
-                            <TextField fullWidth size="small" label="Permit Number" name="rto_permit_number"
-                              value={verificationData.rto_permit_number} onChange={handleVerificationChange}
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Triggers" name="driver_triggers"
+                              value={verificationData.driver_triggers} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This is the trigger note for vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
-                        )}
-                      </Box>
+                        </Box>
 
-                      {/* RC */}
-                      <Box sx={{ mb: 2 }}>
-                        <FormControlLabel
-                          control={<Checkbox name="rto_rc_checked" checked={verificationData.rto_rc_checked} onChange={handleVerificationChange} sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }} />}
-                          label={<Typography fontWeight="bold">RC</Typography>}
-                        />
-                        {verificationData.rto_rc_checked && (
-                          <Box sx={{ ml: 4, mt: 0.5 }}>
-                            <TextField fullWidth size="small" label="RC Number" name="rto_rc_number"
-                              value={verificationData.rto_rc_number} onChange={handleVerificationChange}
+                      </Box>
+                    </Card>
+                  )}
+
+                  {/* Spot Check Fields */}
+                  {selectedVerifications.spot && (
+                    <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+                      <Box sx={{ bgcolor: '#9c27b0', color: 'white', p: 2 }}>
+                        <Typography variant="h6" fontWeight="600">Spot Check</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.85 }}>Accident location, FIR details &amp; findings</Typography>
+                      </Box>
+                      <Box sx={{ p: 3 }}>
+
+                        {/* ── Accident Location ────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#9c27b0' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#9c27b0', letterSpacing: '1px', lineHeight: 1 }}>Accident Location</Typography>
+                        </Box>
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Time of Accident" name="time_of_accident"
+                              value={verificationData.time_of_accident} onChange={handleVerificationChange}
+                              required
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                          </Box>
-                        )}
-                      </Box>
-
-                      <Divider sx={{ mb: 2.5 }} />
-
-                      {/* ── Remarks ──────────────────────────────────────── */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
-                        <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
-                      </Box>
-                      <Grid container spacing={2.5}>
-                        
-                        <Grid item xs={12}>
-                          <TextField fullWidth size="small" label="Remarks" name="rto_remarks"
-                            value={verificationData.rto_remarks} onChange={handleVerificationChange}
-                            multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Place of Accident" name="place_of_accident"
+                              value={verificationData.place_of_accident} onChange={handleVerificationChange}
+                              required
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="District" name="district"
+                              value={verificationData.district} onChange={handleVerificationChange}
+                              required
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
                         </Grid>
-                      </Grid>
 
-                    </Box>
-                  </Card>
-                )}
-              </>
-            )}
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── FIR & Police ─────────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>FIR &amp; Police</Typography>
+                        </Box>
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={6}>
+                            <TextField fullWidth size="small" label="FIR Number" name="fir_number_spot"
+                              value={verificationData.fir_number_spot} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth size="small" required>
+                              <Select name="spot_city" value={verificationData.spot_city}
+                                displayEmpty
+                                renderValue={(selected) => selected || <span className="required-placeholder">Select City</span>}
+                                onChange={(e) => {
+                                  handleVerificationChange(e);
+                                  setVerificationData(prev => ({ ...prev, police_station: '' }));
+                                }}
+                                sx={{ borderRadius: '8px' }}>
+                                <MenuItem value=""><em>Select City</em></MenuItem>
+                                {courtCities.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth size="small" required>
+                              <Select name="police_station" value={verificationData.police_station}
+                                displayEmpty
+                                renderValue={(selected) => selected || <span className="required-placeholder">Select Police Station</span>}
+                                onChange={handleVerificationChange}
+                                sx={{ borderRadius: '8px' }}
+                                disabled={!verificationData.spot_city}>
+                                <MenuItem value=""><em>Select Police Station</em></MenuItem>
+                                {spotPoliceStations.map(ps => <MenuItem key={ps} value={ps}>{ps}</MenuItem>)}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField fullWidth size="small" label="Accident Brief" name="accident_brief"
+                              value={verificationData.accident_brief} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                        </Grid>
+
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── Status & Findings ────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 2.5, width: '100%', mb: 3, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Statement" name="spot_statement"
+                              value={verificationData.spot_statement} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This field will be filled by the vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Triggers" name="spot_triggers"
+                              value={verificationData.spot_triggers} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This is the trigger note for vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        </Box>
+
+                      </Box>
+                    </Card>
+                  )}
+
+                  {/* Chargesheet Fields */}
+                  {selectedVerifications.chargesheet && (
+                    <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+                      <Box sx={{ bgcolor: '#d32f2f', color: 'white', p: 2 }}>
+                        <Typography variant="h6" fontWeight="600">Chargesheet Check</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.85 }}>Legal references, sections &amp; findings</Typography>
+                      </Box>
+                      <Box sx={{ p: 3 }}>
+
+                        {/* ── Legal Reference ───────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#d32f2f' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#d32f2f', letterSpacing: '1px', lineHeight: 1 }}>Legal Reference</Typography>
+                        </Box>
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={6}>
+                            <TextField fullWidth size="small" label="FIR Number" name="fir_number_claimant"
+                              value={verificationData.fir_number_claimant} onChange={handleVerificationChange}
+                              required
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth size="small" required>
+                              <Select name="chargesheet_city" value={verificationData.chargesheet_city}
+                                displayEmpty
+                                renderValue={(selected) => selected || <span className="required-placeholder">Select City</span>}
+                                onChange={(e) => {
+                                  handleVerificationChange(e);
+                                  setVerificationData(prev => ({ ...prev, court_name: '' }));
+                                }}
+                                sx={{ borderRadius: '8px' }}>
+                                <MenuItem value=""><em>Select City</em></MenuItem>
+                                {courtCities.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth size="small" required>
+                              <Select name="court_name" value={verificationData.court_name}
+                                displayEmpty
+                                renderValue={(selected) => selected || <span className="required-placeholder">Select Court Name</span>}
+                                onChange={handleVerificationChange}
+                                sx={{ borderRadius: '8px' }}
+                                disabled={!verificationData.chargesheet_city}>
+                                <MenuItem value=""><em>Select Court</em></MenuItem>
+                                {chargesheetCourts.map(ct => <MenuItem key={ct} value={ct}>{ct}</MenuItem>)}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField fullWidth size="small" label="MV Act" name="mv_act"
+                              value={verificationData.mv_act} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                        </Grid>
+
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── Chargesheet Details ───────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Chargesheet Details</Typography>
+                        </Box>
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="FIR Delay (Days)" name="fir_delay_in_days" type="number"
+                              value={verificationData.fir_delay_in_days} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="BSN Sections" name="bsn_sections"
+                              value={verificationData.bsn_sections} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="IPC Sections" name="ipc_sections"
+                              value={verificationData.ipc_sections} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                        </Grid>
+
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── Status & Findings ────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>Status &amp; triggers</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 2.5, width: '100%', mb: 3, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Statement" name="chargesheet_statement"
+                              value={verificationData.chargesheet_statement} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This field will be filled by the vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField fullWidth size="small" label="Triggers" name="chargesheet_triggers"
+                              value={verificationData.chargesheet_triggers} onChange={handleVerificationChange}
+                              multiline rows={3}
+                              helperText="Note: This is the trigger note for vendor."
+                              FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Box>
+                        </Box>
+
+                      </Box>
+                    </Card>
+                  )}
+
+                  {/* RTI Check Fields */}
+                  {selectedVerifications.rti && (
+                    <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+                      <Box sx={{ bgcolor: '#00695c', color: 'white', p: 2 }}>
+                        <Typography variant="h6" fontWeight="600">RTI Check</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.85 }}>Right to Information — select items to verify</Typography>
+                      </Box>
+                      <Box sx={{ p: 3 }}>
+
+                        {/* ── Checklist Items ─────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#00695c' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#00695c', letterSpacing: '1px', lineHeight: 1 }}>Checklist</Typography>
+                        </Box>
+
+                        {/* Chargesheet */}
+                        <Box sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={<Checkbox name="rti_chargesheet_checked" checked={verificationData.rti_chargesheet_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
+                            label={<Typography fontWeight="bold">Chargesheet</Typography>}
+                          />
+                          {verificationData.rti_chargesheet_checked && (
+                            <Box sx={{ ml: 4, mt: 0.5 }}>
+                              <TextField fullWidth size="small" label="FIR Number" name="rti_fir_number"
+                                value={verificationData.rti_fir_number} onChange={handleVerificationChange}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Box>
+                          )}
+                        </Box>
+
+                        {/* DL */}
+                        <Box sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={<Checkbox name="rti_dl_checked" checked={verificationData.rti_dl_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
+                            label={<Typography fontWeight="bold">DL</Typography>}
+                          />
+                          {verificationData.rti_dl_checked && (
+                            <Box sx={{ ml: 4, mt: 0.5 }}>
+                              <TextField fullWidth size="small" label="DL Number" name="rti_dl_number"
+                                value={verificationData.rti_dl_number} onChange={handleVerificationChange}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Box>
+                          )}
+                        </Box>
+
+                        {/* Permit */}
+                        <Box sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={<Checkbox name="rti_permit_checked" checked={verificationData.rti_permit_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
+                            label={<Typography fontWeight="bold">Permit</Typography>}
+                          />
+                          {verificationData.rti_permit_checked && (
+                            <Box sx={{ ml: 4, mt: 0.5 }}>
+                              <TextField fullWidth size="small" label="Permit Number" name="rti_permit_number"
+                                value={verificationData.rti_permit_number} onChange={handleVerificationChange}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Box>
+                          )}
+                        </Box>
+
+                        {/* RC */}
+                        <Box sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={<Checkbox name="rti_rc_checked" checked={verificationData.rti_rc_checked} onChange={handleVerificationChange} sx={{ color: '#00695c', '&.Mui-checked': { color: '#00695c' } }} />}
+                            label={<Typography fontWeight="bold">RC</Typography>}
+                          />
+                          {verificationData.rti_rc_checked && (
+                            <Box sx={{ ml: 4, mt: 0.5 }}>
+                              <TextField fullWidth size="small" label="RC Number" name="rti_rc_number"
+                                value={verificationData.rti_rc_number} onChange={handleVerificationChange}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Box>
+                          )}
+                        </Box>
+
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── Remarks ──────────────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
+                        </Box>
+                        <Grid container spacing={2.5}>
+
+                          <Grid item xs={12}>
+                            <TextField fullWidth size="small" label="Remarks" name="rti_remarks"
+                              value={verificationData.rti_remarks} onChange={handleVerificationChange}
+                              multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                        </Grid>
+
+                      </Box>
+                    </Card>
+                  )}
+
+                  {/* RTO Check Fields */}
+                  {selectedVerifications.rto && (
+                    <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+                      <Box sx={{ bgcolor: '#4527a0', color: 'white', p: 2 }}>
+                        <Typography variant="h6" fontWeight="600">RTO Check</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.85 }}>Regional Transport Office — verify documents at RTO</Typography>
+                      </Box>
+                      <Box sx={{ p: 3 }}>
+
+                        {/* ── RTO Office Info ─────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#4527a0' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#4527a0', letterSpacing: '1px', lineHeight: 1 }}>RTO Office</Typography>
+                        </Box>
+                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={6}>
+                            <TextField fullWidth size="small" label="RTO Name / Address" name="rto_name"
+                              value={verificationData.rto_name} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField fullWidth size="small" label="RTO Address" name="rto_address"
+                              value={verificationData.rto_address} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                        </Grid>
+
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── Checklist Items ─────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#4527a0' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#4527a0', letterSpacing: '1px', lineHeight: 1 }}>Checklist</Typography>
+                        </Box>
+
+                        {/* DL */}
+                        <Box sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={<Checkbox name="rto_dl_checked" checked={verificationData.rto_dl_checked} onChange={handleVerificationChange} sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }} />}
+                            label={<Typography fontWeight="bold">DL</Typography>}
+                          />
+                          {verificationData.rto_dl_checked && (
+                            <Box sx={{ ml: 4, mt: 0.5 }}>
+                              <TextField fullWidth size="small" label="DL Number" name="rto_dl_number"
+                                value={verificationData.rto_dl_number} onChange={handleVerificationChange}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Box>
+                          )}
+                        </Box>
+
+                        {/* Permit */}
+                        <Box sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={<Checkbox name="rto_permit_checked" checked={verificationData.rto_permit_checked} onChange={handleVerificationChange} sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }} />}
+                            label={<Typography fontWeight="bold">Permit</Typography>}
+                          />
+                          {verificationData.rto_permit_checked && (
+                            <Box sx={{ ml: 4, mt: 0.5 }}>
+                              <TextField fullWidth size="small" label="Permit Number" name="rto_permit_number"
+                                value={verificationData.rto_permit_number} onChange={handleVerificationChange}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Box>
+                          )}
+                        </Box>
+
+                        {/* RC */}
+                        <Box sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={<Checkbox name="rto_rc_checked" checked={verificationData.rto_rc_checked} onChange={handleVerificationChange} sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }} />}
+                            label={<Typography fontWeight="bold">RC</Typography>}
+                          />
+                          {verificationData.rto_rc_checked && (
+                            <Box sx={{ ml: 4, mt: 0.5 }}>
+                              <TextField fullWidth size="small" label="RC Number" name="rto_rc_number"
+                                value={verificationData.rto_rc_number} onChange={handleVerificationChange}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            </Box>
+                          )}
+                        </Box>
+
+                        <Divider sx={{ mb: 2.5 }} />
+
+                        {/* ── Remarks ──────────────────────────────────────── */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
+                          <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>Remarks &amp; Status</Typography>
+                        </Box>
+                        <Grid container spacing={2.5}>
+
+                          <Grid item xs={12}>
+                            <TextField fullWidth size="small" label="Remarks" name="rto_remarks"
+                              value={verificationData.rto_remarks} onChange={handleVerificationChange}
+                              multiline rows={3} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                        </Grid>
+
+                      </Box>
+                    </Card>
+                  )}
+                </>
+              )}
 
             <Divider sx={{ my: 3 }} />
 

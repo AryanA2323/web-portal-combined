@@ -12,7 +12,7 @@ class CustomUser(AbstractUser):
         ADMIN = 'ADMIN', 'Admin'
         VENDOR = 'VENDOR', 'Vendor'
         CLIENT = 'CLIENT', 'Client'
-        LAWYER = 'LAWYER', 'Lawyer'
+        QC = 'QC', 'QC'
     
     class AdminSubRole(models.TextChoices):
         CASE_HANDLER = 'CASE_HANDLER', 'Case Handler'
@@ -323,14 +323,14 @@ class Admin(models.Model):
         return f"Admin: {self.user.username} ({self.department})"
 
 
-class Lawyer(models.Model):
-    """Lawyer model for legal professionals."""
+class QC(models.Model):
+    """QC model for legal professionals."""
     
     user = models.OneToOneField(
         CustomUser,
         on_delete=models.CASCADE,
-        related_name='lawyer_profile',
-        limit_choices_to={'role': CustomUser.Role.LAWYER},
+        related_name='qc_profile',
+        limit_choices_to={'role': CustomUser.Role.QC},
     )
     bar_registration_number = models.CharField(max_length=50, unique=True)
     specialization = models.CharField(max_length=255, blank=True)
@@ -360,7 +360,7 @@ class Lawyer(models.Model):
         ordering = ['bar_registration_number']
     
     def __str__(self):
-        return f"Lawyer: {self.user.username} ({self.specialization})"
+        return f"QC: {self.user.username} ({self.specialization})"
 
 
 class AuthToken(models.Model):
@@ -850,19 +850,19 @@ class Report(models.Model):
         default=Status.PENDING,
         db_index=True,
     )
-    assigned_lawyer = models.ForeignKey(
+    assigned_qc = models.ForeignKey(
         CustomUser,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='assigned_reports',
-        limit_choices_to={'role': CustomUser.Role.LAWYER},
+        limit_choices_to={'role': CustomUser.Role.QC},
     )
     assigned_at = models.DateTimeField(null=True, blank=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_notes = models.TextField(
         blank=True,
-        help_text='Lawyer review notes or rejection reason'
+        help_text='QC review notes or rejection reason'
     )
     created_by = models.ForeignKey(
         CustomUser,
@@ -878,7 +878,7 @@ class Report(models.Model):
         db_table = 'reports'
         indexes = [
             models.Index(fields=['case', 'status']),
-            models.Index(fields=['assigned_lawyer', 'status']),
+            models.Index(fields=['assigned_qc', 'status']),
             models.Index(fields=['status']),
             models.Index(fields=['created_at']),
         ]

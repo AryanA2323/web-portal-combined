@@ -263,7 +263,8 @@ def insert_claimant_check(case_id,
                           dependants=None, case_documents=None,
                           vendor_documents=None,
                           check_status='Not Initiated',
-                          statement='', triggers=''):
+                          statement='', triggers='',
+                          fir_date=None, reason_if_delayed=''):
     """Insert into incident_case_db.claimant_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
     dependants: list of dicts [{dependent_name, dependent_contact, dependent_address, relationship, age}, ...]
@@ -280,6 +281,7 @@ def insert_claimant_check(case_id,
                      claimant_address, claimant_income,
                      dependants, case_documents, vendor_documents,
                      check_status, statement, triggers,
+                     fir_date, reason_if_delayed,
                      claimant_lat, claimant_lng,
                      created_at, updated_at)
                 VALUES
@@ -287,6 +289,7 @@ def insert_claimant_check(case_id,
                      %s, %s,
                      %s, %s, %s,
                      %s, %s, %s,
+                     %s, %s,
                      NULL, NULL,
                      NOW(), NOW())
                 RETURNING id
@@ -296,6 +299,7 @@ def insert_claimant_check(case_id,
                 json.dumps(dependants or []), json.dumps(case_documents or []),
                 json.dumps(vendor_documents or []),
                 check_status, statement, triggers,
+                fir_date, reason_if_delayed,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted claimant_check id={row_id} for case={case_id}")

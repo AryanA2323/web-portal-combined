@@ -131,7 +131,7 @@ const ReportsPage = () => {
       || String(report.claim_number || '').toLowerCase().includes(query)
       || String(report.client_name || '').toLowerCase().includes(query)
       || String(report.case_title || '').toLowerCase().includes(query)
-      || String(report.assigned_lawyer_name || '').toLowerCase().includes(query)
+      || String(report.assigned_qc_name || '').toLowerCase().includes(query)
     ));
   }, [reports, searchTerm]);
 
@@ -187,7 +187,7 @@ const ReportsPage = () => {
         { label: 'Claim Number', value: response?.data?.claim_number || row.claim_number || '-' },
         { label: 'Client Name', value: response?.data?.client_name || row.client_name || '-' },
         { label: 'Category', value: response?.data?.category || row.category || '-' },
-        { label: 'Assigned Lawyer', value: response?.data?.assigned_lawyer_name || row.assigned_lawyer_name || '-' },
+        { label: 'Assigned QC', value: response?.data?.assigned_qc_name || row.assigned_qc_name || '-' },
         { label: 'Reviewed On', value: formatDate(response?.data?.reviewed_at || row.reviewed_at || row.created_at) },
       ];
 
@@ -426,11 +426,11 @@ const ReportsPage = () => {
         <Box sx={{ p: 2.5, borderBottom: '1px solid #e0e0e0' }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#333' }}>
-              Lawyer Approved Reports
+              QC Approved Reports
             </Typography>
 
             <TextField
-              placeholder="Search case/client/lawyer..."
+              placeholder="Search case/client/qc..."
               size="small"
               value={searchTerm}
               onChange={(e) => {
@@ -475,7 +475,7 @@ const ReportsPage = () => {
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Claim Number</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Client Name</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Category</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Assigned Lawyer</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Assigned QC</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Approved On</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Download</TableCell>
@@ -503,7 +503,7 @@ const ReportsPage = () => {
                     <TableCell>{row.claim_number || '-'}</TableCell>
                     <TableCell>{row.client_name || '-'}</TableCell>
                     <TableCell>{row.category || '-'}</TableCell>
-                    <TableCell>{row.assigned_lawyer_name || '-'}</TableCell>
+                    <TableCell>{row.assigned_qc_name || '-'}</TableCell>
                     <TableCell>
                       <Chip
                         size="small"

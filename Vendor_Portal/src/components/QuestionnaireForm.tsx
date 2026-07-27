@@ -33,6 +33,8 @@ const CHECK_FIELDS: Record<string, FieldConfig[]> = {
     { key: 'deceased_injury_income', label: 'Deceased / Injured Income', icon: 'currency-inr', placeholder: 'e.g. ₹ 25,000 / month' },
     { key: 'monthly_income', label: 'Monthly Income of Claimant', icon: 'cash-multiple', placeholder: 'e.g. ₹ 20,000 / month' },
     { key: 'hr_manager', label: 'Name & No. of Company HR / Manager', icon: 'card-account-phone-outline', placeholder: 'e.g. Rajesh Kumar - 9876543210' },
+    { key: 'fir_date', label: 'FIR Date', type: 'date', icon: 'calendar-alert', placeholder: 'Select FIR Date' },
+    { key: 'reason_if_delayed', label: 'Reason if Delayed', type: 'multiline', icon: 'text-box-search-outline', placeholder: 'State reason if FIR was delayed' },
     { key: 'date_of_accident', label: 'Date of Accident', type: 'date', icon: 'calendar-outline', placeholder: 'Select Date' },
     { key: 'time_of_accident', label: 'Time of Accident', type: 'time', icon: 'clock-outline', placeholder: 'Select Time' },
     { key: 'description_of_accident', label: 'Description of Accident', type: 'multiline', icon: 'text-box-outline', autoPopulateKey: 'statement', placeholder: 'Auto-populated from audio transcript or type manually' },
@@ -110,26 +112,80 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
     let isMounted = true;
 
     const loadFormValues = async () => {
-      // 1. Try to restore local draft first
-      const draft = await getDraftQuestionnaire(caseId, checkType);
-      const defaults: Record<string, string> = { ...(initialData || {}), ...(draft || {}) };
+      // 1. Parse initial data safely in case it is a JSON string from backend
+      let parsedInitialData = initialData;
+      if (typeof initialData === 'string') {
+        try {
+          parsedInitialData = JSON.parse(initialData);
+        } catch (e) {
+          console.warn('Failed to parse initialData', e);
+          parsedInitialData = {};
+        }
+      }
+
+      // 2. Try to restore local draft (skip drafts for completed checks)
+      const draft = disabled ? null : await getDraftQuestionnaire(caseId, checkType);
+
+      // Merge checkInfo, parsedInitialData, and draft
+      const defaults: Record<string, any> = {
+        ...(checkInfo || {}),
+        ...(parsedInitialData || {}),
+        ...(draft || {}),
+      };
+
+      const finalFormData: Record<string, string> = {};
 
       fields.forEach((field) => {
-        if (!defaults[field.key] || defaults[field.key].trim() === '') {
-          if (field.autoPopulateKey === 'statement' && statementText) {
-            defaults[field.key] = statementText;
+        const dbVal = (parsedInitialData && parsedInitialData[field.key] != null)
+          ? parsedInitialData[field.key]
+          : (checkInfo && checkInfo[field.key] != null)
+            ? checkInfo[field.key]
+            : null;
+
+        const draftVal = (!disabled && draft && draft[field.key] != null) ? draft[field.key] : null;
+
+        // DB value takes precedence if non-empty, otherwise fallback to draft if non-empty
+        let val = (dbVal != null && String(dbVal).trim() !== '')
+          ? dbVal
+          : (draftVal != null && String(draftVal).trim() !== '')
+            ? draftVal
+            : null;
+
+        // Fallbacks for common checkInfo field aliases
+        if (val == null || String(val).trim() === '') {
+          if (field.key === 'monthly_income' && checkInfo?.claimant_income) {
+            val = checkInfo.claimant_income;
+          } else if (field.key === 'deceased_injury_income' && checkInfo?.claimant_income) {
+            val = checkInfo.claimant_income;
+          } else if (field.key === 'deceased_injury_name' && checkInfo?.claimant_name) {
+            val = checkInfo.claimant_name;
           }
         }
+
+        let valStr = val != null ? String(val) : '';
+
+        if (!valStr || valStr.trim() === '') {
+          if (field.autoPopulateKey === 'statement' && statementText) {
+            valStr = statementText;
+          }
+        }
+
+        finalFormData[field.key] = valStr;
       });
 
-      // Auto-populate description_of_accident if blank but statementText exists
-      if (statementText && (!defaults.description_of_accident || defaults.description_of_accident === '')) {
-        defaults.description_of_accident = statementText;
+      // Auto-populate description_of_accident if blank, or if it matches single statement / statementText
+      if (statementText && (
+        !finalFormData.description_of_accident ||
+        finalFormData.description_of_accident.trim() === '' ||
+        finalFormData.description_of_accident === checkInfo?.statement ||
+        finalFormData.description_of_accident.startsWith('Statement 1:')
+      )) {
+        finalFormData.description_of_accident = statementText;
       }
 
       if (isMounted) {
-        setFormData(defaults);
-        onChange(defaults);
+        setFormData(finalFormData);
+        onChange(finalFormData);
       }
     };
 
@@ -138,9 +194,10 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [caseId, checkType, initialData, statementText]);
+  }, [caseId, checkType, initialData, statementText, checkInfo, disabled]);
 
   const handleChange = (key: string, value: string) => {
+    if (disabled) return;
     setFormData((prev) => {
       const updated = { ...prev, [key]: value };
       onChange(updated);
@@ -214,7 +271,9 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
       </View>
       
       <Text style={styles.sectionSubtitle}>
-        Fill out all required details below. Details are saved as draft locally and uploaded upon check submission.
+        {disabled
+          ? 'View saved questionnaire responses for this check.'
+          : 'Fill out all required details below. Details are saved as draft locally and uploaded upon check submission.'}
       </Text>
 
       <View style={styles.formGrid}>
@@ -222,18 +281,19 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
           const isFocused = focusedKey === field.key;
           const isAutoPopulated = field.autoPopulateKey === 'statement' && !!statementText;
           const isPickerField = field.type === 'date' || field.type === 'time' || field.type === 'datetime';
+          const fieldValue = formData[field.key] || '';
 
           return (
             <View key={field.key} style={styles.fieldContainer}>
               <View style={styles.labelRow}>
                 <Text style={styles.label}>{field.label}</Text>
-                {isAutoPopulated && (
+                {isAutoPopulated && !disabled && (
                   <View style={styles.autoTag}>
                     <MaterialCommunityIcons name="text-recognition" size={12} color="#0D9488" />
                     <Text style={styles.autoTagText}>Auto Transcript</Text>
                   </View>
                 )}
-                {isPickerField && (
+                {isPickerField && !disabled && (
                   <View style={[styles.autoTag, { backgroundColor: '#E0F2FE' }]}>
                     <MaterialCommunityIcons
                       name={field.type === 'time' ? 'clock-outline' : 'calendar-month-outline'}
@@ -247,12 +307,29 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                 )}
               </View>
 
-              {isPickerField && Platform.OS === 'web' ? (
+              {disabled ? (
+                <View style={[styles.inputWrapper, styles.disabledInputWrapper]}>
+                  <MaterialCommunityIcons
+                    name={(field.icon as any) || 'text'}
+                    size={20}
+                    color="#64748B"
+                    style={field.type === 'multiline' ? { marginTop: 4 } : undefined}
+                  />
+                  <Text
+                    style={[
+                      styles.input,
+                      styles.readOnlyText,
+                      !fieldValue && styles.emptyReadOnlyText,
+                    ]}
+                  >
+                    {fieldValue || 'Not specified'}
+                  </Text>
+                </View>
+              ) : isPickerField && Platform.OS === 'web' ? (
                 <View
                   style={[
                     styles.inputWrapper,
                     isFocused && styles.inputWrapperFocused,
-                    disabled && styles.disabledInputWrapper,
                   ]}
                 >
                   <MaterialCommunityIcons
@@ -263,7 +340,7 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                   {field.type === 'date' && (
                     <input
                       type="date"
-                      value={formData[field.key] ? formData[field.key].split('/').reverse().join('-') : ''}
+                      value={fieldValue ? fieldValue.split('/').reverse().join('-') : ''}
                       onChange={(e) => {
                         const val = e.target.value; // YYYY-MM-DD
                         if (val) {
@@ -273,7 +350,6 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                           handleChange(field.key, '');
                         }
                       }}
-                      disabled={disabled}
                       style={{
                         flex: 1,
                         border: 'none',
@@ -283,16 +359,15 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                         color: '#0F172A',
                         backgroundColor: 'transparent',
                         fontFamily: 'inherit',
-                        cursor: disabled ? 'not-allowed' : 'pointer',
+                        cursor: 'pointer',
                       }}
                     />
                   )}
                   {field.type === 'time' && (
                     <input
                       type="time"
-                      value={formData[field.key] || ''}
+                      value={fieldValue}
                       onChange={(e) => handleChange(field.key, e.target.value)}
-                      disabled={disabled}
                       style={{
                         flex: 1,
                         border: 'none',
@@ -302,16 +377,15 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                         color: '#0F172A',
                         backgroundColor: 'transparent',
                         fontFamily: 'inherit',
-                        cursor: disabled ? 'not-allowed' : 'pointer',
+                        cursor: 'pointer',
                       }}
                     />
                   )}
                   {field.type === 'datetime' && (
                     <input
                       type="datetime-local"
-                      value={formData[field.key] || ''}
+                      value={fieldValue}
                       onChange={(e) => handleChange(field.key, e.target.value)}
-                      disabled={disabled}
                       style={{
                         flex: 1,
                         border: 'none',
@@ -321,7 +395,7 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                         color: '#0F172A',
                         backgroundColor: 'transparent',
                         fontFamily: 'inherit',
-                        cursor: disabled ? 'not-allowed' : 'pointer',
+                        cursor: 'pointer',
                       }}
                     />
                   )}
@@ -330,10 +404,7 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={() => handleOpenPicker(field)}
-                  style={[
-                    styles.inputWrapper,
-                    disabled && styles.disabledInputWrapper,
-                  ]}
+                  style={styles.inputWrapper}
                 >
                   <MaterialCommunityIcons
                     name={field.icon as any}
@@ -343,11 +414,10 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                   <Text
                     style={[
                       styles.input,
-                      !formData[field.key] && { color: '#94A3B8' },
-                      disabled && styles.disabledInput,
+                      !fieldValue && { color: '#94A3B8' },
                     ]}
                   >
-                    {formData[field.key] || field.placeholder || `Select ${field.label}`}
+                    {fieldValue || field.placeholder || `Select ${field.label}`}
                   </Text>
                   <MaterialCommunityIcons
                     name={field.type === 'time' ? 'clock-edit-outline' : 'calendar-edit'}
@@ -361,7 +431,6 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                     styles.inputWrapper,
                     field.type === 'multiline' && styles.multilineWrapper,
                     isFocused && styles.inputWrapperFocused,
-                    disabled && styles.disabledInputWrapper,
                   ]}
                 >
                   {field.icon && (
@@ -376,17 +445,15 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                     style={[
                       styles.input,
                       field.type === 'multiline' && styles.multilineInput,
-                      disabled && styles.disabledInput,
                     ]}
                     placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
                     placeholderTextColor="#94A3B8"
-                    value={formData[field.key] || ''}
+                    value={fieldValue}
                     onChangeText={(val) => handleChange(field.key, val)}
                     onFocus={() => setFocusedKey(field.key)}
                     onBlur={() => setFocusedKey(null)}
                     multiline={field.type === 'multiline'}
                     numberOfLines={field.type === 'multiline' ? 4 : 1}
-                    editable={!disabled}
                   />
                 </View>
               )}
@@ -530,5 +597,15 @@ const styles = StyleSheet.create({
   },
   disabledInput: {
     color: '#64748B',
+  },
+  readOnlyText: {
+    color: '#0F172A',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  emptyReadOnlyText: {
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    fontWeight: '400',
   },
 });

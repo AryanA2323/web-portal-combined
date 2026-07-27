@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Card, CardContent, Divider, CircularProgress, Alert } from '@mui/material';
 import { Assessment, CheckCircle, Pending, Cancel, Description, CheckCircleOutline, CancelOutlined } from '@mui/icons-material';
-import LawyerLayout from './components/LawyerLayout';
+import QCLayout from './components/QCLayout';
 import api from '../../services/api';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 
@@ -50,8 +50,8 @@ const DashboardPage = () => {
     setError(null);
     try {
       const [statsRes, reportsRes] = await Promise.all([
-        api.get('/lawyer/reports/stats'),
-        api.get('/lawyer/reports'),
+        api.get('/qc/reports/stats'),
+        api.get('/qc/reports'),
       ]);
       setStats(statsRes.data || { total: 0, pending: 0, accepted: 0, rejected: 0 });
       // Get last 5 reports for recent activity
@@ -116,7 +116,7 @@ const DashboardPage = () => {
   };
 
   return (
-    <LawyerLayout>
+    <QCLayout>
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" fontWeight={700} sx={{ mb: 3, color: '#2c3e50' }}>
           Dashboard
@@ -181,7 +181,7 @@ const DashboardPage = () => {
           </Paper>
         </Box>
       </Box>
-    </LawyerLayout>
+    </QCLayout>
   );
 };
 

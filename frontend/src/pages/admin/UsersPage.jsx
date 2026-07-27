@@ -336,7 +336,7 @@ const UsersPage = () => {
         return 'secondary';
       case 'VENDOR':
         return 'warning';
-      case 'LAWYER':
+      case 'QC':
         return 'success';
       case 'CLIENT':
         return 'info';
@@ -428,7 +428,7 @@ const UsersPage = () => {
               <MenuItem value="SUPER_ADMIN">Super Admins</MenuItem>
               <MenuItem value="ADMIN">Admins</MenuItem>
               <MenuItem value="VENDOR">Vendors</MenuItem>
-              <MenuItem value="LAWYER">Lawyers</MenuItem>
+              <MenuItem value="QC">QCs</MenuItem>
             </Select>
           </FormControl>
         </Box>
@@ -559,7 +559,7 @@ const UsersPage = () => {
                       <MenuItem value="ADMIN">Admin</MenuItem>
                       <MenuItem value="SUPER_ADMIN">Super Admin</MenuItem>
                       <MenuItem value="VENDOR">Vendor</MenuItem>
-                      <MenuItem value="LAWYER">Lawyer</MenuItem>
+                      <MenuItem value="QC">QC</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -949,9 +949,9 @@ const UsersPage = () => {
                             <Typography variant="body2">Vendor portal access</Typography>
                           </Box>
                         </MenuItem>
-                        <MenuItem value="LAWYER">
+                        <MenuItem value="QC">
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Chip label="Lawyer" size="small" color="success" />
+                            <Chip label="QC" size="small" color="success" />
                             <Typography variant="body2">Legal case management</Typography>
                           </Box>
                         </MenuItem>

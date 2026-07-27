@@ -1,19 +1,19 @@
 // Role configuration
 export const ROLES = {
-  LAWYER: 'lawyer',
+  QC: 'qc',
   ADMIN: 'admin',
   SUPER_ADMIN: 'super_admin', // Support for sub-role being returned as main role
 };
 
 // Role display information
 export const ROLE_CONFIG = {
-  [ROLES.LAWYER]: {
-    label: 'Lawyer',
+  [ROLES.QC]: {
+    label: 'QC',
     description: 'Manage legal cases and incidents',
     color: '#2e7d32',
     bgColor: '#e8f5e9',
     icon: 'Gavel',
-    dashboardPath: '/lawyer/dashboard',
+    dashboardPath: '/qc/dashboard',
   },
   [ROLES.ADMIN]: {
     label: 'Admin',

@@ -31,7 +31,7 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
       super_admin: '/super-admin/dashboard',
       vendor: '/vendor/dashboard',
       client: '/client/dashboard',
-      lawyer: '/lawyer/dashboard',
+      qc: '/qc/dashboard',
     };
     
     const targetPath = roleRedirects[userRole] || '/login';

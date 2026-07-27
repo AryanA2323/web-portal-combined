@@ -50,10 +50,7 @@
       "reactCompiler": true
     },
     "updates": {
-      "url": "https://u.expo.dev/0c9954ca-ac4a-4923-860b-1f28b7542ce7"
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
+      "enabled": false
     },
     "extra": {
       "apiBaseUrl": "",

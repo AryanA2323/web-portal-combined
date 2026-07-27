@@ -158,7 +158,7 @@ def _create_role_specific_profile(user):
     Create or update role-specific profile when user logs in.
     Routes data to appropriate table based on user role.
     """
-    from users.models import Admin, Lawyer, Vendor
+    from users.models import Admin, QC, Vendor
     
     try:
         if user.role == 'ADMIN':
@@ -174,9 +174,9 @@ def _create_role_specific_profile(user):
             if created:
                 logger.info(f"Created admin profile for user: {user.username}")
             
-        elif user.role == 'LAWYER':
-            # Create/update lawyer profile
-            lawyer_profile, created = Lawyer.objects.get_or_create(
+        elif user.role == 'QC':
+            # Create/update qc profile
+            qc_profile, created = QC.objects.get_or_create(
                 user=user,
                 defaults={
                     'bar_registration_number': f"BAR_{user.id}",
@@ -185,7 +185,7 @@ def _create_role_specific_profile(user):
                 }
             )
             if created:
-                logger.info(f"Created lawyer profile for user: {user.username}")
+                logger.info(f"Created qc profile for user: {user.username}")
             
         elif user.role == 'VENDOR':
             # Create/update vendor profile
@@ -224,12 +224,12 @@ def register_user(request, payload: UserCreateSchema):
     - **password**: Password (minimum 8 characters)
     - **first_name**: Optional first name
     - **last_name**: Optional last name
-    - **role**: User role (CLIENT, VENDOR, ADMIN, or LAWYER)
+    - **role**: User role (CLIENT, VENDOR, ADMIN, or QC)
     
     Returns user info and authentication token on success.
     """
     # Validate role
-    valid_roles = ['CLIENT', 'VENDOR', 'ADMIN', 'LAWYER']
+    valid_roles = ['CLIENT', 'VENDOR', 'ADMIN', 'QC']
     role = payload.role.upper() if payload.role else 'CLIENT'
     
     if role not in valid_roles:

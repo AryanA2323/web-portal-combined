@@ -11,7 +11,7 @@ import { Gavel, AdminPanelSettings } from '@mui/icons-material';
 import { ROLE_CONFIG, ROLES } from '../../utils/constants';
 
 const roleIcons = {
-  [ROLES.LAWYER]: Gavel,
+  [ROLES.QC]: Gavel,
   [ROLES.ADMIN]: AdminPanelSettings,
 };
 

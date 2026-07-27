@@ -28,10 +28,10 @@ const eventTypeColor = {
   CASE_CREATED: '#4c6ef5',
   USER_CREATED: '#0ca678',
   VENDOR_ASSIGNED: '#ff922b',
-  LAWYER_ASSIGNED: '#9c36b5',
+  QC_ASSIGNED: '#9c36b5',
   AI_REPORT_GENERATED: '#2b8a3e',
-  LAWYER_ACCEPTED_REPORT: '#2f9e44',
-  LAWYER_REJECTED_REPORT: '#e03131',
+  QC_ACCEPTED_REPORT: '#2f9e44',
+  QC_REJECTED_REPORT: '#e03131',
 };
 
 const formatEventType = (value) => {

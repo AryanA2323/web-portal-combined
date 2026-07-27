@@ -1,1 +1,1 @@
-export { default as LawyerDashboard } from './LawyerDashboard';
+export { default as QCDashboard } from './QCDashboard';
