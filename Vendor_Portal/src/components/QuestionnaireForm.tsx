@@ -40,12 +40,70 @@ const CHECK_FIELDS: Record<string, FieldConfig[]> = {
     { key: 'description_of_accident', label: 'Description of Accident', type: 'multiline', icon: 'text-box-outline', autoPopulateKey: 'statement', placeholder: 'Auto-populated from audio transcript or type manually' },
     { key: 'investigation_datetime', label: 'Date & Time of Investigation', type: 'datetime', icon: 'calendar-clock-outline', placeholder: 'Select Date & Time' },
   ],
+  insured: [
+    { key: 'insured_name', label: 'Insured Name', icon: 'account-outline' },
+    { key: 'insured_address', label: 'Insured Address', icon: 'map-marker-outline', type: 'multiline' },
+    { key: 'insured_contact', label: 'Contact Number', icon: 'phone-outline' },
+    { key: 'vehicle_number', label: 'Vehicle Number', icon: 'car-outline' },
+    { key: 'vehicle_type', label: 'Vehicle Type', icon: 'car-info', placeholder: 'e.g. Private or Transport' },
+    { key: 'rc', label: 'RC Number', icon: 'card-account-details-outline' },
+    { key: 'rc_expiry', label: 'RC Expiry Date', type: 'date', icon: 'calendar-clock' },
+    { key: 'driver_name', label: 'Driver Name', icon: 'steering' },
+    { key: 'driver_contact', label: 'Driver Contact', icon: 'phone-outline' },
+    { key: 'dl', label: 'DL Number', icon: 'card-account-details-outline' },
+    { key: 'dl_expiry', label: 'DL Expiry Date', type: 'date', icon: 'calendar-clock' },
+    { key: 'insurance_holder_name', label: 'Insurance Holder Name', icon: 'shield-account-outline' },
+    { key: 'policy_expiry_date', label: 'Policy Expiry Date', type: 'date', icon: 'calendar-clock' },
+    { key: 'different_owner_reason', label: 'Reason if Owner Different', type: 'multiline', icon: 'text-box-search-outline' },
+    { key: 'date_of_accident', label: 'Date of Accident', type: 'date', icon: 'calendar-outline', placeholder: 'Select Date' },
+    { key: 'time_of_accident', label: 'Time of Accident', type: 'time', icon: 'clock-outline', placeholder: 'Select Time' },
+    { key: 'description_of_accident', label: 'Description of Accident', type: 'multiline', icon: 'text-box-outline', autoPopulateKey: 'statement', placeholder: 'Auto-populated from audio transcript' },
+    { key: 'investigation_datetime', label: 'Date & Time of Investigation', type: 'datetime', icon: 'calendar-clock-outline' },
+  ],
+  driver: [
+    { key: 'driver_name', label: 'Driver Name', icon: 'steering' },
+    { key: 'driver_address', label: 'Driver Address', icon: 'map-marker-outline', type: 'multiline' },
+    { key: 'driver_contact', label: 'Contact Number', icon: 'phone-outline' },
+    { key: 'driver_relation', label: 'Relation with Insured', icon: 'account-multiple-outline' },
+    { key: 'insured_name', label: 'Insured Name', icon: 'account-outline' },
+    { key: 'insured_contact', label: 'Insured Contact', icon: 'phone-outline' },
+    { key: 'vehicle_number', label: 'Vehicle Number', icon: 'car-outline' },
+    { key: 'vehicle_type', label: 'Vehicle Type', icon: 'car-info', placeholder: 'e.g. Private or Transport' },
+    { key: 'dl', label: 'DL Number', icon: 'card-account-details-outline' },
+    { key: 'dl_expiry', label: 'DL Expiry Date', type: 'date', icon: 'calendar-clock' },
+    { key: 'insurance_holder_name', label: 'Insurance Holder Name', icon: 'shield-account-outline' },
+    { key: 'different_owner_reason', label: 'Reason if other than Insured', type: 'multiline', icon: 'text-box-search-outline' },
+    { key: 'date_of_accident', label: 'Date of Accident', type: 'date', icon: 'calendar-outline', placeholder: 'Select Date' },
+    { key: 'time_of_accident', label: 'Time of Accident', type: 'time', icon: 'clock-outline', placeholder: 'Select Time' },
+    { key: 'description_of_accident', label: 'Description of Accident', type: 'multiline', icon: 'text-box-outline', autoPopulateKey: 'statement', placeholder: 'Auto-populated from audio transcript' },
+    { key: 'investigation_datetime', label: 'Date & Time of Investigation', type: 'datetime', icon: 'calendar-clock-outline' },
+  ],
+  insured_cum_driver: [
+    { key: 'insured_name', label: 'Insured / Driver Name', icon: 'account-outline' },
+    { key: 'insured_address', label: 'Insured / Driver Address', icon: 'map-marker-outline', type: 'multiline' },
+    { key: 'insured_contact', label: 'Contact Number', icon: 'phone-outline' },
+    { key: 'driver_relation', label: 'Relation with Insured', icon: 'account-multiple-outline', placeholder: 'e.g. Self' },
+    { key: 'vehicle_number', label: 'Vehicle Number', icon: 'car-outline' },
+    { key: 'vehicle_type', label: 'Vehicle Type', icon: 'car-info', placeholder: 'e.g. Private or Transport' },
+    { key: 'rc', label: 'RC Number', icon: 'card-account-details-outline' },
+    { key: 'rc_expiry', label: 'RC Expiry Date', type: 'date', icon: 'calendar-clock' },
+    { key: 'dl', label: 'DL Number', icon: 'card-account-details-outline' },
+    { key: 'dl_expiry', label: 'DL Expiry Date', type: 'date', icon: 'calendar-clock' },
+    { key: 'insurance_holder_name', label: 'Insurance Holder Name', icon: 'shield-account-outline' },
+    { key: 'policy_expiry_date', label: 'Policy Expiry Date', type: 'date', icon: 'calendar-clock' },
+    { key: 'different_owner_reason', label: 'Reason if Owner Different', type: 'multiline', icon: 'text-box-search-outline' },
+    { key: 'date_of_accident', label: 'Date of Accident', type: 'date', icon: 'calendar-outline', placeholder: 'Select Date' },
+    { key: 'time_of_accident', label: 'Time of Accident', type: 'time', icon: 'clock-outline', placeholder: 'Select Time' },
+    { key: 'description_of_accident', label: 'Description of Accident', type: 'multiline', icon: 'text-box-outline', autoPopulateKey: 'statement', placeholder: 'Auto-populated from audio transcript' },
+    { key: 'investigation_datetime', label: 'Date & Time of Investigation', type: 'datetime', icon: 'calendar-clock-outline' },
+  ],
 };
 
 const normalizeCheckType = (type: string): string => {
   if (!type) return 'claimant';
   const lower = type.toLowerCase().trim();
   if (lower.includes('claimant')) return 'claimant';
+  if (lower.includes('insured cum driver')) return 'insured_cum_driver';
   if (lower.includes('insured')) return 'insured';
   if (lower.includes('driver')) return 'driver';
   if (lower.includes('spot')) return 'spot';
@@ -88,14 +146,31 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
   onChange,
   disabled = false,
 }) => {
-  const normType = normalizeCheckType(checkType);
+  let normType = normalizeCheckType(checkType);
+  const [isSameAsDriverFlag, setIsSameAsDriverFlag] = useState<boolean>(() => {
+    let parsedInitialData = initialData;
+    if (typeof initialData === 'string') {
+      try { parsedInitialData = JSON.parse(initialData); } catch (e) { parsedInitialData = {}; }
+    }
+    return Boolean(
+      checkInfo?.insured_cum_driver ||
+      checkInfo?.driver_and_insured_same ||
+      parsedInitialData?.insured_cum_driver === 'true' ||
+      parsedInitialData?.insured_cum_driver === true ||
+      parsedInitialData?.driver_and_insured_same === 'true' ||
+      parsedInitialData?.driver_and_insured_same === true
+    );
+  });
 
-  // Per user directive: only show Questionnaire for claimant check right now
-  if (normType !== 'claimant') {
+  if ((normType === 'insured' || normType === 'driver') && isSameAsDriverFlag) {
+    normType = 'insured_cum_driver';
+  }
+
+  if (!['claimant', 'insured', 'driver', 'insured_cum_driver'].includes(normType)) {
     return null;
   }
 
-  const fields = CHECK_FIELDS['claimant'];
+  const fields = CHECK_FIELDS[normType] || [];
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
@@ -125,6 +200,14 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
 
       // 2. Try to restore local draft (skip drafts for completed checks)
       const draft = disabled ? null : await getDraftQuestionnaire(caseId, checkType);
+
+      if (isMounted && draft && ('insured_cum_driver' in draft || 'driver_and_insured_same' in draft)) {
+        const draftFlag = draft.insured_cum_driver === 'true' || draft.insured_cum_driver === true || draft.driver_and_insured_same === 'true' || draft.driver_and_insured_same === true;
+        if (draftFlag !== isSameAsDriverFlag) {
+          setIsSameAsDriverFlag(draftFlag);
+          return; // State change will trigger re-render and re-execute this effect with correct normType
+        }
+      }
 
       // Merge checkInfo, parsedInitialData, and draft
       const defaults: Record<string, any> = {
@@ -159,6 +242,11 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
             val = checkInfo.claimant_income;
           } else if (field.key === 'deceased_injury_name' && checkInfo?.claimant_name) {
             val = checkInfo.claimant_name;
+          } else if (normType === 'insured_cum_driver') {
+            // If they are the same person, fallback to driver equivalents if insured is missing
+            if (field.key === 'insured_name' && checkInfo?.driver_name) val = checkInfo.driver_name;
+            if (field.key === 'insured_address' && checkInfo?.driver_address) val = checkInfo.driver_address;
+            if (field.key === 'insured_contact' && checkInfo?.driver_contact) val = checkInfo.driver_contact;
           }
         }
 
@@ -183,6 +271,25 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
         finalFormData.description_of_accident = statementText;
       }
 
+      // Preserve the same as driver flag in the form data
+      if (isSameAsDriverFlag) {
+        finalFormData['insured_cum_driver'] = 'true';
+        finalFormData['driver_and_insured_same'] = 'true';
+      }
+
+      // Restore negative_status (only if it matches one of the valid negative statuses)
+      const validStatuses = ['Non co-operative', 'Non Traceable', 'Shifted'];
+      const nsDbVal = checkInfo?.negative_status;
+      const nsDraftVal = draft?.negative_status;
+      
+      let nsValToUse = '';
+      if (nsDbVal && validStatuses.includes(String(nsDbVal).trim())) {
+        nsValToUse = String(nsDbVal).trim();
+      } else if (nsDraftVal && validStatuses.includes(String(nsDraftVal).trim())) {
+        nsValToUse = String(nsDraftVal).trim();
+      }
+      finalFormData['negative_status'] = nsValToUse;
+
       if (isMounted) {
         setFormData(finalFormData);
         onChange(finalFormData);
@@ -194,12 +301,22 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [caseId, checkType, initialData, statementText, checkInfo, disabled]);
+  }, [caseId, checkType, initialData, statementText, checkInfo, disabled, isSameAsDriverFlag]);
 
   const handleChange = (key: string, value: string) => {
     if (disabled) return;
     setFormData((prev) => {
       const updated = { ...prev, [key]: value };
+      
+      if (normType === 'insured_cum_driver') {
+        if (key === 'insured_name') updated.driver_name = value;
+        if (key === 'insured_address') updated.driver_address = value;
+        if (key === 'insured_contact') updated.driver_contact = value;
+        if (key === 'driver_relation') {
+          // just keep it
+        }
+      }
+      
       onChange(updated);
       saveDraftQuestionnaire(caseId, checkType, updated);
       return updated;
@@ -258,218 +375,329 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
   };
 
   return (
-    <View style={styles.section}>
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.sectionEyebrow}>VERIFICATION FORM</Text>
-          <Text style={styles.sectionTitle}>Questionnaire</Text>
-        </View>
-        <View style={styles.badge}>
-          <MaterialCommunityIcons name="clipboard-check-outline" size={16} color={theme.colors.primary || '#0F5FA8'} />
-          <Text style={styles.badgeText}>Claimant Details</Text>
-        </View>
-      </View>
-      
-      <Text style={styles.sectionSubtitle}>
-        {disabled
-          ? 'View saved questionnaire responses for this check.'
-          : 'Fill out all required details below. Details are saved as draft locally and uploaded upon check submission.'}
-      </Text>
-
-      <View style={styles.formGrid}>
-        {fields.map((field) => {
-          const isFocused = focusedKey === field.key;
-          const isAutoPopulated = field.autoPopulateKey === 'statement' && !!statementText;
-          const isPickerField = field.type === 'date' || field.type === 'time' || field.type === 'datetime';
-          const fieldValue = formData[field.key] || '';
-
-          return (
-            <View key={field.key} style={styles.fieldContainer}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>{field.label}</Text>
-                {isAutoPopulated && !disabled && (
-                  <View style={styles.autoTag}>
-                    <MaterialCommunityIcons name="text-recognition" size={12} color="#0D9488" />
-                    <Text style={styles.autoTagText}>Auto Transcript</Text>
-                  </View>
-                )}
-                {isPickerField && !disabled && (
-                  <View style={[styles.autoTag, { backgroundColor: '#E0F2FE' }]}>
-                    <MaterialCommunityIcons
-                      name={field.type === 'time' ? 'clock-outline' : 'calendar-month-outline'}
-                      size={12}
-                      color="#0284C7"
-                    />
-                    <Text style={[styles.autoTagText, { color: '#0284C7' }]}>
-                      {field.type === 'date' ? 'Calendar' : field.type === 'time' ? 'Clock' : 'Calendar & Clock'}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {disabled ? (
-                <View style={[styles.inputWrapper, styles.disabledInputWrapper]}>
-                  <MaterialCommunityIcons
-                    name={(field.icon as any) || 'text'}
-                    size={20}
-                    color="#64748B"
-                    style={field.type === 'multiline' ? { marginTop: 4 } : undefined}
-                  />
-                  <Text
-                    style={[
-                      styles.input,
-                      styles.readOnlyText,
-                      !fieldValue && styles.emptyReadOnlyText,
-                    ]}
-                  >
-                    {fieldValue || 'Not specified'}
-                  </Text>
-                </View>
-              ) : isPickerField && Platform.OS === 'web' ? (
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    isFocused && styles.inputWrapperFocused,
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name={field.icon as any}
-                    size={20}
-                    color={isFocused ? (theme.colors.primary || '#0F5FA8') : '#94A3B8'}
-                  />
-                  {field.type === 'date' && (
-                    <input
-                      type="date"
-                      value={fieldValue ? fieldValue.split('/').reverse().join('-') : ''}
-                      onChange={(e) => {
-                        const val = e.target.value; // YYYY-MM-DD
-                        if (val) {
-                          const parts = val.split('-');
-                          handleChange(field.key, `${parts[2]}/${parts[1]}/${parts[0]}`);
-                        } else {
-                          handleChange(field.key, '');
-                        }
-                      }}
-                      style={{
-                        flex: 1,
-                        border: 'none',
-                        outline: 'none',
-                        fontSize: '15px',
-                        fontWeight: '500',
-                        color: '#0F172A',
-                        backgroundColor: 'transparent',
-                        fontFamily: 'inherit',
-                        cursor: 'pointer',
-                      }}
-                    />
-                  )}
-                  {field.type === 'time' && (
-                    <input
-                      type="time"
-                      value={fieldValue}
-                      onChange={(e) => handleChange(field.key, e.target.value)}
-                      style={{
-                        flex: 1,
-                        border: 'none',
-                        outline: 'none',
-                        fontSize: '15px',
-                        fontWeight: '500',
-                        color: '#0F172A',
-                        backgroundColor: 'transparent',
-                        fontFamily: 'inherit',
-                        cursor: 'pointer',
-                      }}
-                    />
-                  )}
-                  {field.type === 'datetime' && (
-                    <input
-                      type="datetime-local"
-                      value={fieldValue}
-                      onChange={(e) => handleChange(field.key, e.target.value)}
-                      style={{
-                        flex: 1,
-                        border: 'none',
-                        outline: 'none',
-                        fontSize: '15px',
-                        fontWeight: '500',
-                        color: '#0F172A',
-                        backgroundColor: 'transparent',
-                        fontFamily: 'inherit',
-                        cursor: 'pointer',
-                      }}
-                    />
-                  )}
-                </View>
-              ) : isPickerField ? (
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => handleOpenPicker(field)}
-                  style={styles.inputWrapper}
-                >
-                  <MaterialCommunityIcons
-                    name={field.icon as any}
-                    size={20}
-                    color={theme.colors.primary || '#0F5FA8'}
-                  />
-                  <Text
-                    style={[
-                      styles.input,
-                      !fieldValue && { color: '#94A3B8' },
-                    ]}
-                  >
-                    {fieldValue || field.placeholder || `Select ${field.label}`}
-                  </Text>
-                  <MaterialCommunityIcons
-                    name={field.type === 'time' ? 'clock-edit-outline' : 'calendar-edit'}
-                    size={18}
-                    color={theme.colors.primary || '#0F5FA8'}
-                  />
-                </TouchableOpacity>
-              ) : (
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    field.type === 'multiline' && styles.multilineWrapper,
-                    isFocused && styles.inputWrapperFocused,
-                  ]}
-                >
-                  {field.icon && (
-                    <MaterialCommunityIcons
-                      name={field.icon as any}
-                      size={20}
-                      color={isFocused ? (theme.colors.primary || '#0F5FA8') : '#94A3B8'}
-                      style={field.type === 'multiline' ? { marginTop: 10 } : undefined}
-                    />
-                  )}
-                  <TextInput
-                    style={[
-                      styles.input,
-                      field.type === 'multiline' && styles.multilineInput,
-                    ]}
-                    placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
-                    placeholderTextColor="#94A3B8"
-                    value={fieldValue}
-                    onChangeText={(val) => handleChange(field.key, val)}
-                    onFocus={() => setFocusedKey(field.key)}
-                    onBlur={() => setFocusedKey(null)}
-                    multiline={field.type === 'multiline'}
-                    numberOfLines={field.type === 'multiline' ? 4 : 1}
-                  />
-                </View>
-              )}
+    <View>
+      {(checkType.toLowerCase().includes('insured') || checkType.toLowerCase().includes('driver')) && (
+        <View style={[styles.section, { padding: 16, marginBottom: 16, backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1 }]}>
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'flex-start' }}
+            onPress={() => {
+              if (disabled) return;
+              const nextVal = !isSameAsDriverFlag;
+              setIsSameAsDriverFlag(nextVal);
+              
+              setFormData((prev) => {
+                const updated: any = {
+                  ...prev,
+                  insured_cum_driver: nextVal ? 'true' : 'false',
+                  driver_and_insured_same: nextVal ? 'true' : 'false'
+                };
+                if (nextVal) {
+                  if (updated.insured_name && !updated.driver_name) updated.driver_name = updated.insured_name;
+                  if (updated.insured_address && !updated.driver_address) updated.driver_address = updated.insured_address;
+                  if (updated.insured_contact && !updated.driver_contact) updated.driver_contact = updated.insured_contact;
+                }
+                onChange(updated);
+                saveDraftQuestionnaire(caseId, checkType, updated);
+                return updated;
+              });
+            }}
+            disabled={disabled}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name={isSameAsDriverFlag ? "checkbox-marked" : "checkbox-blank-outline"}
+              size={24}
+              color={isSameAsDriverFlag ? "#16A34A" : "#52525B"}
+              style={{ marginTop: -2 }}
+            />
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#166534', marginBottom: 4 }}>
+                Insured Same as Driver
+              </Text>
+              <Text style={{ fontSize: 13, color: '#166534', lineHeight: 18 }}>
+                Check this if the driver is the same as the insured. Both checks will be submitted simultaneously.
+              </Text>
             </View>
-          );
-        })}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Negative Check Status Section */}
+      <View style={[styles.section, { marginBottom: 16 }]}>
+        <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Negative Check Status</Text>
+        
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {['Non co-operative', 'Non Traceable', 'Shifted'].map((status) => {
+            const isSelected = formData.negative_status === status;
+            return (
+              <TouchableOpacity
+                key={status}
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isSelected ? '#FEE2E2' : '#F1F5F9',
+                  paddingHorizontal: 6,
+                  paddingVertical: 10,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: isSelected ? '#EF4444' : '#E2E8F0',
+                }}
+                onPress={() => {
+                  setFormData((prev: any) => {
+                    const newStatus = prev.negative_status === status ? '' : status;
+                    const updated = { ...prev, negative_status: newStatus };
+                    onChange(updated);
+                    saveDraftQuestionnaire(caseId, checkType, updated);
+                    return updated;
+                  });
+                }}
+                disabled={disabled}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons
+                  name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"}
+                  size={18}
+                  color={isSelected ? "#EF4444" : "#64748B"}
+                />
+                <Text 
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  style={{ 
+                    marginLeft: 4, 
+                    fontSize: 12, 
+                    fontWeight: isSelected ? '700' : '500', 
+                    color: isSelected ? '#991B1B' : '#475569' 
+                  }}
+                >
+                  {status}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {['Non co-operative', 'Non Traceable', 'Shifted'].includes(formData.negative_status || '') && (
+          <View style={{ marginTop: 16 }}>
+            <Text style={[styles.label, { marginBottom: 6 }]}>Vendor Feedback / Reason</Text>
+            <View style={[styles.inputWrapper, { height: 'auto', minHeight: 90, alignItems: 'flex-start', paddingVertical: 10 }]}>
+              <MaterialCommunityIcons name="comment-text-outline" size={20} color="#64748B" style={{ marginTop: 2, marginRight: 8 }} />
+              <TextInput
+                style={[styles.input, { height: 'auto', minHeight: 70, textAlignVertical: 'top' }]}
+                placeholder="Enter vendor feedback or reason for negative status..."
+                placeholderTextColor="#94A3B8"
+                multiline
+                numberOfLines={4}
+                value={formData.vendor_feedback || ''}
+                onChangeText={(val) => handleChange('vendor_feedback', val)}
+                editable={!disabled}
+              />
+            </View>
+          </View>
+        )}
       </View>
 
-      {/* Render Native DateTimePicker when active */}
-      {pickerState && Platform.OS !== 'web' && (
-        <DateTimePicker
-          value={pickerState.tempDate}
-          mode={pickerState.mode}
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleNativePickerChange}
-        />
+      {!['Non co-operative', 'Non Traceable', 'Shifted'].includes(formData.negative_status || '') && (
+        <View style={styles.section}>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.sectionEyebrow}>VERIFICATION FORM</Text>
+              <Text style={styles.sectionTitle}>Questionnaire</Text>
+            </View>
+            <View style={styles.badge}>
+              <MaterialCommunityIcons name="clipboard-check-outline" size={16} color={theme.colors.primary || '#0F5FA8'} />
+              <Text style={styles.badgeText}>{normType === 'insured' ? 'Insured Details' : normType === 'driver' ? 'Driver Details' : normType === 'insured_cum_driver' ? 'Insured & Driver Details' : 'Claimant Details'}</Text>
+            </View>
+          </View>
+          
+          <Text style={styles.sectionSubtitle}>
+            {disabled
+              ? 'View saved questionnaire responses for this check.'
+              : 'Fill out all required details below. Details are saved as draft locally and uploaded upon check submission.'}
+          </Text>
+
+          <View style={styles.formGrid}>
+            {fields.map((field) => {
+              const isPopulatedInDB = checkInfo && checkInfo[field.key] != null && String(checkInfo[field.key]).trim() !== '';
+              if (isPopulatedInDB && !disabled) {
+                return null;
+              }
+
+              const isFocused = focusedKey === field.key;
+              const isAutoPopulated = field.autoPopulateKey === 'statement' && !!statementText;
+              const isPickerField = field.type === 'date' || field.type === 'time' || field.type === 'datetime';
+              const fieldValue = formData[field.key] || '';
+
+              return (
+                <View key={field.key} style={styles.fieldContainer}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.label}>{field.label}</Text>
+                    {isAutoPopulated && !disabled && (
+                      <View style={styles.autoTag}>
+                        <MaterialCommunityIcons name="text-recognition" size={12} color="#0D9488" />
+                        <Text style={styles.autoTagText}>Auto Transcript</Text>
+                      </View>
+                    )}
+                    {isPickerField && !disabled && (
+                      <View style={[styles.autoTag, { backgroundColor: '#E0F2FE' }]}>
+                        <MaterialCommunityIcons
+                          name={field.type === 'time' ? 'clock-outline' : 'calendar-month-outline'}
+                          size={12}
+                          color="#0284C7"
+                        />
+                        <Text style={[styles.autoTagText, { color: '#0284C7' }]}>
+                          {field.type === 'date' ? 'Calendar' : field.type === 'time' ? 'Clock' : 'Calendar & Clock'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {disabled ? (
+                    <View style={[styles.inputWrapper, styles.disabledInputWrapper]}>
+                      <MaterialCommunityIcons
+                        name={(field.icon as any) || 'text'}
+                        size={20}
+                        color="#64748B"
+                      />
+                      <Text style={styles.readOnlyText}>
+                        {fieldValue || 'N/A'}
+                      </Text>
+                    </View>
+                  ) : Platform.OS === 'web' && isPickerField ? (
+                    <View style={[styles.inputWrapper, isFocused && styles.inputWrapperFocused]}>
+                      <MaterialCommunityIcons
+                        name={field.icon as any}
+                        size={20}
+                        color={isFocused ? (theme.colors.primary || '#0F5FA8') : '#94A3B8'}
+                      />
+                      {field.type === 'date' && (
+                        <input
+                          type="date"
+                          value={fieldValue}
+                          onChange={(e) => handleChange(field.key, e.target.value)}
+                          style={{
+                            flex: 1,
+                            border: 'none',
+                            outline: 'none',
+                            fontSize: '15px',
+                            fontWeight: '500',
+                            color: '#0F172A',
+                            backgroundColor: 'transparent',
+                            fontFamily: 'inherit',
+                            cursor: 'pointer',
+                          }}
+                        />
+                      )}
+                      {field.type === 'time' && (
+                        <input
+                          type="time"
+                          value={fieldValue}
+                          onChange={(e) => handleChange(field.key, e.target.value)}
+                          style={{
+                            flex: 1,
+                            border: 'none',
+                            outline: 'none',
+                            fontSize: '15px',
+                            fontWeight: '500',
+                            color: '#0F172A',
+                            backgroundColor: 'transparent',
+                            fontFamily: 'inherit',
+                            cursor: 'pointer',
+                          }}
+                        />
+                      )}
+                      {field.type === 'datetime' && (
+                        <input
+                          type="datetime-local"
+                          value={fieldValue}
+                          onChange={(e) => handleChange(field.key, e.target.value)}
+                          style={{
+                            flex: 1,
+                            border: 'none',
+                            outline: 'none',
+                            fontSize: '15px',
+                            fontWeight: '500',
+                            color: '#0F172A',
+                            backgroundColor: 'transparent',
+                            fontFamily: 'inherit',
+                            cursor: 'pointer',
+                          }}
+                        />
+                      )}
+                    </View>
+                  ) : isPickerField ? (
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => handleOpenPicker(field)}
+                      style={styles.inputWrapper}
+                    >
+                      <MaterialCommunityIcons
+                        name={field.icon as any}
+                        size={20}
+                        color={theme.colors.primary || '#0F5FA8'}
+                      />
+                      <Text
+                        style={[
+                          styles.input,
+                          !fieldValue && { color: '#94A3B8' },
+                        ]}
+                      >
+                        {fieldValue || field.placeholder || `Select ${field.label}`}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name={field.type === 'time' ? 'clock-edit-outline' : 'calendar-edit'}
+                        size={18}
+                        color={theme.colors.primary || '#0F5FA8'}
+                      />
+                    </TouchableOpacity>
+                  ) : (
+                    <View
+                      style={[
+                        styles.inputWrapper,
+                        field.type === 'multiline' && styles.multilineWrapper,
+                        isFocused && styles.inputWrapperFocused,
+                      ]}
+                    >
+                      {field.icon && (
+                        <MaterialCommunityIcons
+                          name={field.icon as any}
+                          size={20}
+                          color={isFocused ? (theme.colors.primary || '#0F5FA8') : '#94A3B8'}
+                          style={field.type === 'multiline' ? { marginTop: 10 } : undefined}
+                        />
+                      )}
+                      <TextInput
+                        style={[
+                          styles.input,
+                          field.type === 'multiline' && styles.multilineInput,
+                        ]}
+                        placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                        placeholderTextColor="#94A3B8"
+                        value={fieldValue}
+                        onChangeText={(val) => handleChange(field.key, val)}
+                        onFocus={() => setFocusedKey(field.key)}
+                        onBlur={() => setFocusedKey(null)}
+                        multiline={field.type === 'multiline'}
+                        numberOfLines={field.type === 'multiline' ? 4 : 1}
+                      />
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Render Native DateTimePicker when active */}
+          {pickerState && Platform.OS !== 'web' && (
+            <DateTimePicker
+              value={pickerState.tempDate}
+              mode={pickerState.mode}
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleNativePickerChange}
+            />
+          )}
+        </View>
       )}
     </View>
   );

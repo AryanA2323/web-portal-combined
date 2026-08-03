@@ -1,22 +1,48 @@
 import Constants from 'expo-constants';
 
-const getApiBaseUrl = () => {
-  const configuredApiBaseUrl = Constants.expoConfig?.extra?.apiBaseUrl;
+const PRODUCTION_API_BASE_URL = 'https://api.claimverify.shovelsolutions.in/api';
 
-  if (typeof configuredApiBaseUrl === 'string' && configuredApiBaseUrl.length > 0) {
+const getApiBaseUrl = () => {
+  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+  const normalizedEnvUrl = envUrl?.trim();
+
+  if (__DEV__) {
+    if (
+      normalizedEnvUrl &&
+      normalizedEnvUrl !== PRODUCTION_API_BASE_URL &&
+      !normalizedEnvUrl.includes('loca.lt')
+    ) {
+      return normalizedEnvUrl;
+    }
+
+    const hostUri = Constants.expoConfig?.hostUri;
+    
+    // If we're using an Expo tunnel (.exp.direct), port 8000 won't be exposed through it.
+    // We must connect to the local Wi-Fi IP directly.
+    if (hostUri && !hostUri.includes('exp.direct') && !hostUri.includes('loca.lt')) {
+      const expoHost = hostUri.split(':')[0];
+      return `http://${expoHost}:8000/api`;
+    }
+    
+    // Fallback to the current local Wi-Fi IP Address of the PC if tunnel is in use
+    return 'http://192.168.1.2:8000/api';
+  } else if (normalizedEnvUrl && !normalizedEnvUrl.includes('loca.lt')) {
+    return normalizedEnvUrl;
+  }
+
+  const configuredApiBaseUrl = Constants.expoConfig?.extra?.apiBaseUrl;
+  if (
+    typeof configuredApiBaseUrl === 'string' &&
+    configuredApiBaseUrl.length > 0 &&
+    !configuredApiBaseUrl.includes('loca.lt')
+  ) {
     return configuredApiBaseUrl;
   }
 
-  const expoHost = Constants.expoConfig?.hostUri?.split(':')[0];
-  
-  if (expoHost) {
-    return `http://${expoHost}:8000/api`;
-  }
-  
-  return 'http://localhost:8000/api';
+  return PRODUCTION_API_BASE_URL;
 };
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
 export const API_TIMEOUT = 30000;
 
 export const ENDPOINTS = {

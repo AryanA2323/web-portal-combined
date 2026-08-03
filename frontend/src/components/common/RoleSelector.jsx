@@ -1,8 +1,8 @@
-import { 
-  FormControl, 
-  FormLabel, 
-  RadioGroup, 
-  FormControlLabel, 
+import {
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
   Radio,
   FormHelperText,
   Paper
@@ -12,24 +12,24 @@ import { ROLE_CONFIG, ROLES } from '../../utils/constants';
 
 const roleIcons = {
   [ROLES.QC]: Gavel,
-  [ROLES.ADMIN]: AdminPanelSettings,
+  [ROLES.CASE_MANAGER]: AdminPanelSettings,
 };
 
 const RoleSelector = ({ value, onChange, error, disabled = false }) => {
   return (
     <FormControl fullWidth error={!!error} sx={{ mb: { xs: 2, sm: 2.5 } }}>
-      <FormLabel 
-        sx={{ 
+      <FormLabel
+        sx={{
           mb: 2,
           fontWeight: 600,
           fontSize: '15px',
           color: '#333',
-          '&.Mui-focused': { color: '#667eea' } 
+          '&.Mui-focused': { color: '#667eea' }
         }}
       >
         Select Your Role
       </FormLabel>
-      
+
       <RadioGroup
         value={value}
         onChange={onChange}
@@ -38,7 +38,7 @@ const RoleSelector = ({ value, onChange, error, disabled = false }) => {
         {Object.entries(ROLE_CONFIG).map(([roleKey, config]) => {
           const IconComponent = roleIcons[roleKey];
           const isSelected = value === roleKey;
-          
+
           return (
             <Paper
               key={roleKey}
@@ -57,7 +57,7 @@ const RoleSelector = ({ value, onChange, error, disabled = false }) => {
                 value={roleKey}
                 disabled={disabled}
                 control={
-                  <Radio 
+                  <Radio
                     sx={{
                       color: config.color,
                       '&.Mui-checked': {
@@ -68,15 +68,15 @@ const RoleSelector = ({ value, onChange, error, disabled = false }) => {
                 }
                 label={
                   <div className="flex items-center gap-3 py-1">
-                    <div 
+                    <div
                       className="p-2 rounded-lg"
                       style={{ backgroundColor: isSelected ? config.color : config.bgColor }}
                     >
-                      <IconComponent 
-                        sx={{ 
+                      <IconComponent
+                        sx={{
                           color: isSelected ? '#fff' : config.color,
-                          fontSize: 24 
-                        }} 
+                          fontSize: 24
+                        }}
                       />
                     </div>
                     <div>
@@ -98,9 +98,9 @@ const RoleSelector = ({ value, onChange, error, disabled = false }) => {
           );
         })}
       </RadioGroup>
-      
+
       {error && (
-        <FormHelperText 
+        <FormHelperText
           className="animate-fadeIn ml-2 mt-2"
           sx={{ color: '#d32f2f' }}
         >

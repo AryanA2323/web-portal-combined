@@ -40,7 +40,10 @@ VALID_FULL_CASE_STATUS = {
     'QC-1', 'Pending Additional Docs', 'Connected Pending', 'RCU Pending', 'Portal Upload',
 }
 VALID_INVESTIGATION_REPORT = {'Open', 'Approval', 'Stop', 'QC', 'Dispatch'}
-VALID_CHECK_STATUS = {'Not Initiated', 'WIP', 'Completed', 'Stop'}
+VALID_CHECK_STATUS = {
+    'Not Initiated', 'WIP', 'Completed', 'Stop', 'Verified', 'Reassigned',
+    'Applied for CS', 'CS Recieved to adv', 'Dispatched', 'not found',
+}
 
 
 def _get_cursor():
@@ -199,7 +202,7 @@ def insert_case(claim_number, client_name, category,
                 sla='', case_type='',
                 investigation_report_status='Open',
                 full_case_status='WIP',
-                scope_of_work='',
+                special_instructions='',
                 case_number='',
                 policy_document='',
                 petition_document=''):
@@ -227,7 +230,7 @@ def insert_case(claim_number, client_name, category,
                      completion_date, completion_month,
                      case_due_date, tat_days, sla, case_type,
                      investigation_report_status, full_case_status,
-                     scope_of_work, case_number, policy_document, petition_document, created_at, updated_at)
+                     special_instructions, case_number, policy_document, petition_document, created_at, updated_at)
                 VALUES
                     (%s, %s, %s,
                      %s, %s,
@@ -242,7 +245,7 @@ def insert_case(claim_number, client_name, category,
                 completion_date, completion_month or '',
                 case_due_date, tat_days, sla_val, case_type,
                 investigation_report_status, full_case_status,
-                scope_of_work or '', case_number or '',
+                special_instructions or '', case_number or '',
                 policy_document or '', petition_document or '',
             ])
             new_id = cursor.fetchone()[0]
@@ -281,7 +284,6 @@ def insert_claimant_check(case_id,
                      claimant_address, claimant_income,
                      dependants, case_documents, vendor_documents,
                      check_status, statement, triggers,
-                     fir_date, reason_if_delayed,
                      claimant_lat, claimant_lng,
                      created_at, updated_at)
                 VALUES
@@ -289,7 +291,6 @@ def insert_claimant_check(case_id,
                      %s, %s,
                      %s, %s, %s,
                      %s, %s, %s,
-                     %s, %s,
                      NULL, NULL,
                      NOW(), NOW())
                 RETURNING id
@@ -299,7 +300,6 @@ def insert_claimant_check(case_id,
                 json.dumps(dependants or []), json.dumps(case_documents or []),
                 json.dumps(vendor_documents or []),
                 check_status, statement, triggers,
-                fir_date, reason_if_delayed,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted claimant_check id={row_id} for case={case_id}")
@@ -490,6 +490,7 @@ def insert_chargesheet(case_id,
                        fir_number='', city='', court_name='',
                        mv_act='', fir_delay_days=None,
                        bsn_section='', ipc='',
+                       police_station_name='', court_district='', court_case_no='',
                        case_documents=None, vendor_documents=None,
                        check_status='Not Initiated',
                        statement='', triggers=''):
@@ -507,6 +508,7 @@ def insert_chargesheet(case_id,
                     (case_id, fir_number, city, court_name,
                      mv_act, fir_delay_days,
                      bsn_section, ipc,
+                     police_station_name, court_district, court_case_no,
                      case_documents, vendor_documents,
                      check_status, statement, triggers,
                      chargesheet_lat, chargesheet_lng,
@@ -515,6 +517,7 @@ def insert_chargesheet(case_id,
                     (%s, %s, %s, %s,
                      %s, %s,
                      %s, %s,
+                     %s, %s, %s,
                      %s, %s,
                      %s, %s, %s,
                      NULL, NULL,
@@ -524,6 +527,7 @@ def insert_chargesheet(case_id,
                 case_id, fir_number, city, court_name,
                 mv_act, fir_delay_days,
                 bsn_section, ipc,
+                police_station_name, court_district, court_case_no,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status, statement, triggers,
             ])

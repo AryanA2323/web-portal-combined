@@ -21,7 +21,7 @@ import { theme } from '@/config/theme';
 import { RootState, AppDispatch } from '@/store';
 
 const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email'),
+  email: z.string().trim().email('Please enter a valid email'),
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -165,7 +165,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
               <View style={styles.footer}>
                 <MaterialCommunityIcons name="headset" size={16} color={theme.colors.textSecondary} />
-                <Text style={styles.footerText}>Need access help? Contact your administrator.</Text>
+                <Text style={styles.footerText}>Need access help? Contact your caseManageristrator.</Text>
               </View>
             </View>
           </Animated.View>

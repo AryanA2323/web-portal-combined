@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vendor_Portal",
     "slug": "Vendor_Portal",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "vendorportal",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "in.shovelsolutions.claimverify.vendor",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -53,7 +53,7 @@
       "enabled": false
     },
     "extra": {
-      "apiBaseUrl": "",
+      "apiBaseUrl": "https://api.claimverify.shovelsolutions.in/api",
       "router": {},
       "eas": {
         "projectId": "0c9954ca-ac4a-4923-860b-1f28b7542ce7"

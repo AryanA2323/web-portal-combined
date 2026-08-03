@@ -21,14 +21,15 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   }
 
   // Check role-based access (case-insensitive comparison)
-  const userRole = user?.role?.toLowerCase().replace(/_/g, '_');
+  const rawUserRole = user?.role?.toLowerCase().replace(/_/g, '_');
+  const userRole = rawUserRole === 'admin' ? 'case_manager' : rawUserRole;
   const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
   
   if (allowedRoles.length > 0 && !normalizedAllowedRoles.includes(userRole)) {
     // Redirect to appropriate dashboard based on user role
     const roleRedirects = {
-      admin: '/admin/dashboard',
-      super_admin: '/super-admin/dashboard',
+      case_manager: '/case_manager/dashboard',
+      super_admin: '/case_manager/dashboard',
       vendor: '/vendor/dashboard',
       client: '/client/dashboard',
       qc: '/qc/dashboard',

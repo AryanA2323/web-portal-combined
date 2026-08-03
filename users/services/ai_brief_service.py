@@ -138,7 +138,7 @@ class AIBriefService:
         inv_info = [
             f"Investigation Status: {case_context.get('investigation_report_status') or 'N/A'}",
             f"Full Case Status: {case_context.get('full_case_status') or 'N/A'}",
-            f"Scope of Work: {case_context.get('scope_of_work') or 'N/A'}",
+            f"Special Instructions: {case_context.get('special_instructions') or 'N/A'}",
         ]
         sections.append("=== INVESTIGATION SUMMARY ===\n" + "\n".join(inv_info))
 
@@ -167,7 +167,7 @@ class AIBriefService:
         return "\n\n".join(sections)
 
     _SYSTEM_INSTRUCTION = (
-        "You are assisting an insurance incident-management admin team. "
+        "You are assisting an insurance incident-management caseManager team. "
         "Read the vendor statements and case context carefully, then produce a concise, structured investigation report. "
         "Do not invent facts. If information is not available or unclear, state that it is not mentioned.\n\n"
         "Return the response in exactly this structured format with clear section headers:\n\n"

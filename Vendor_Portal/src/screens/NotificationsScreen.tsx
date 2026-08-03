@@ -173,13 +173,17 @@ export default function NotificationsScreen() {
         await apiService.getVendorCheckDetail(item.case_id, item.check_type);
         router.push({
           pathname: '/case-details',
-          params: { caseId: String(item.case_id), checkType: item.check_type },
+          params: {
+            caseId: String(item.case_id),
+            checkId: item.check_id ? String(item.check_id) : '',
+            checkType: item.check_type,
+          },
         });
       } catch (error: any) {
         if (isNotAssignedError(error)) {
           Alert.alert(
             'Check not assigned',
-            'This check is not currently assigned to you. It may have been removed or reassigned by the admin.',
+            'This check is not currently assigned to you. It may have been removed or reassigned by the caseManager.',
             [{ text: 'OK' }]
           );
           loadNotifications(true);

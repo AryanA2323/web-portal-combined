@@ -73,7 +73,7 @@ def _resolve_insurance_case(case_id: int, incident_case_db_id: Optional[int], re
                            case_receive_date, receive_month, completion_date,
                            completion_month, case_due_date, tat_days, sla,
                            case_type, investigation_report_status,
-                           full_case_status, scope_of_work
+                           full_case_status, special_instructions
                     FROM cases
                     WHERE id = %s
                     """,
@@ -102,7 +102,7 @@ def _resolve_insurance_case(case_id: int, incident_case_db_id: Optional[int], re
             case_type,
             investigation_report_status,
             full_case_status,
-            scope_of_work,
+            special_instructions,
         ) = row
 
         case = InsuranceCase.objects.filter(case_number=case_number).first()
@@ -127,7 +127,7 @@ def _resolve_insurance_case(case_id: int, incident_case_db_id: Optional[int], re
                 case_type=case_type or "",
                 investigation_report_status=investigation_report_status or "Open",
                 full_case_status=full_case_status or "WIP",
-                scope_of_work=scope_of_work or "",
+                special_instructions=special_instructions or "",
                 priority="MEDIUM",
                 status="OPEN",
                 created_by=request_user if getattr(request_user, "is_authenticated", False) else None,
@@ -201,6 +201,9 @@ class CreateVerificationSchema(Schema):
     fir_delay_in_days: Optional[int] = None
     bsn_sections: Optional[str] = None
     ipc_sections: Optional[str] = None
+    police_station_name: Optional[str] = None
+    court_district: Optional[str] = None
+    court_case_no: Optional[str] = None
 
     # RTI fields
     rti_chargesheet_checked: bool = False
@@ -305,7 +308,8 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
             # Update existing
             for field, value in payload.dict().items():
                 if field not in ['case_id', 'incident_case_db_id', 'check_type'] and value is not None:
-                    setattr(existing, field, value)
+                    if hasattr(existing, field):
+                        setattr(existing, field, value)
             existing.check_status = payload.check_status
             existing.save()
             verification = existing
@@ -436,6 +440,9 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         fir_delay_days=payload.fir_delay_in_days,
                         bsn_section=payload.bsn_sections or '',
                         ipc=payload.ipc_sections or '',
+                        police_station_name=payload.police_station_name or '',
+                        court_district=payload.court_district or '',
+                        court_case_no=payload.court_case_no or '',
                         check_status=payload.check_status,
                         statement=payload.statement or '',
                         triggers=payload.triggers or '',
@@ -630,15 +637,15 @@ def upload_verification_documents(
         table = _TYPE_TO_TABLE.get(verification.verification_type)
         if table and uploaded_docs:
             try:
-                claim_number = verification.case.claim_number
+                case_number = verification.case.case_number
                 with connections['default'].cursor() as cursor:
                     cursor.execute(f"""
                         SELECT ct.id, ct.case_documents
                         FROM {table} ct
                         JOIN cases c ON c.id = ct.case_id
-                        WHERE c.claim_number = %s
+                        WHERE c.case_number = %s
                         LIMIT 1
-                    """, [claim_number])
+                    """, [case_number])
                     row = cursor.fetchone()
                     if row:
                         check_id = row[0]

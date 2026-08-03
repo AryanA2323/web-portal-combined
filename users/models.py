@@ -9,12 +9,13 @@ class CustomUser(AbstractUser):
     
     class Role(models.TextChoices):
         SUPER_ADMIN = 'SUPER_ADMIN', 'Super Admin'
-        ADMIN = 'ADMIN', 'Admin'
+        CASE_MANAGER = 'CASE_MANAGER', 'Case Manager'
         VENDOR = 'VENDOR', 'Vendor'
         CLIENT = 'CLIENT', 'Client'
         QC = 'QC', 'QC'
+        ADVOCATE = 'ADVOCATE', 'Advocate'
     
-    class AdminSubRole(models.TextChoices):
+    class CaseManagerSubRole(models.TextChoices):
         CASE_HANDLER = 'CASE_HANDLER', 'Case Handler'
         REPORT_MANAGER = 'REPORT_MANAGER', 'Report Manager'
         LOG_MANAGER = 'LOG_MANAGER', 'Log Manager'
@@ -28,15 +29,21 @@ class CustomUser(AbstractUser):
     )
     sub_role = models.CharField(
         max_length=20,
-        choices=AdminSubRole.choices,
+        choices=CaseManagerSubRole.choices,
         blank=True,
         null=True,
-        help_text='Sub-role for admin users only',
+        help_text='Sub-role for case manager users only',
     )
     permissions = models.JSONField(
         default=list,
         blank=True,
         help_text='Custom page permissions for this user',
+    )
+    plain_password = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Admin-visible password for accounts created or reset through the Super Admin portal.',
     )
     is_2fa_enabled = models.BooleanField(default=False)
     
@@ -187,7 +194,7 @@ class Vendor(models.Model):
         CustomUser,
         on_delete=models.CASCADE,
         related_name='vendor_profile',
-        limit_choices_to={'role': CustomUser.Role.VENDOR},
+        limit_choices_to=models.Q(role=CustomUser.Role.VENDOR) | models.Q(role='ADVOCATE'),
     )
     company_name = models.CharField(max_length=255)
     contact_email = models.EmailField(blank=True)
@@ -292,21 +299,21 @@ class EvidencePhoto(models.Model):
             )
 
 
-class Admin(models.Model):
-    """Admin model for administrative users."""
+class CaseManager(models.Model):
+    """CaseManager model for caseManageristrative users."""
     
     user = models.OneToOneField(
         CustomUser,
         on_delete=models.CASCADE,
-        related_name='admin_profile',
-        limit_choices_to={'role': CustomUser.Role.ADMIN},
+        related_name='caseManager_profile',
+        limit_choices_to={'role': CustomUser.Role.CASE_MANAGER},
     )
     department = models.CharField(max_length=255, blank=True)
     employee_id = models.CharField(max_length=50, unique=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=20, blank=True)
     
-    # Admin-specific metadata
+    # CaseManager-specific metadata
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -320,7 +327,7 @@ class Admin(models.Model):
         ordering = ['employee_id']
     
     def __str__(self):
-        return f"Admin: {self.user.username} ({self.department})"
+        return f"CaseManager: {self.user.username} ({self.department})"
 
 
 class QC(models.Model):
@@ -691,7 +698,7 @@ class InsuranceCase(models.Model):
     case_type = models.CharField(max_length=50, choices=CASE_TYPE_CHOICES, blank=True, help_text='Full Case / Partial / Reassessment / Connected')
     investigation_report_status = models.CharField(max_length=20, choices=INVESTIGATION_REPORT_CHOICES, default='Open', help_text='Investigation report status')
     full_case_status = models.CharField(max_length=30, choices=FULL_CASE_STATUS_CHOICES, default='WIP', help_text='Detailed case status')
-    scope_of_work = models.TextField(blank=True, help_text='Scope of work for this case')
+    special_instructions = models.TextField(blank=True, help_text='Scope of work for this case')
     
     # =========================================================================
     # People Information

@@ -136,7 +136,7 @@ class EmailToCaseMapper:
             data['case_type'] = 'Full Case'
         
         # Extract scope of work
-        data['scope_of_work'] = self.extract_scope_of_work(search_text)
+        data['special_instructions'] = self.extract_special_instructions(search_text)
         
         # Set initial status
         data['full_case_status'] = 'Open'
@@ -236,7 +236,7 @@ class EmailToCaseMapper:
         
         return locations
     
-    def extract_scope_of_work(self, text: str) -> str:
+    def extract_special_instructions(self, text: str) -> str:
         """Extract scope of work from text."""
         scope_keywords = ['Full Case', 'Partial Investigation', 'Connected Case', 'Spot', 'Claimant', 'Insured']
         
@@ -277,7 +277,7 @@ class EmailToCaseMapper:
             case_type=data.get('case_type', ''),
             investigation_report_status=data['investigation_report_status'],
             full_case_status=data['full_case_status'],
-            scope_of_work=data.get('scope_of_work', ''),
+            special_instructions=data.get('special_instructions', ''),
             
             # Names
             claimant_name=data.get('claimant_name', ''),

@@ -11,11 +11,15 @@ import {
   TextInput,
   Platform,
   Linking,
+  Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { showToast, showDialog } from '@/components/Toast';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,9 +28,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/config/theme';
 import apiService from '@/services/api';
 import { useDispatch } from 'react-redux';
-import { markCheckAsCompleted } from '@/store/casesSlice';
+import { markCheckAsCompleted, updateCheckStatusInStore } from '@/store/casesSlice';
 import { API_BASE_URL } from '@/config/constants';
 import { QuestionnaireForm } from '@/components/QuestionnaireForm';
+import { DisclaimerSection } from '@/components/DisclaimerSection';
 import { clearDraftQuestionnaire } from '@/utils/draftStorage';
 
 const PRIMARY_BLUE = theme.colors.primary;
@@ -150,7 +155,12 @@ const getEvidencePhotoUri = (photo: any, apiHost: string): string => {
     rawUrl.startsWith('content:') ||
     rawUrl.startsWith('data:')
   ) {
-    return encodeURI(rawUrl);
+    let url = rawUrl;
+    // Force https if the apiHost is https, to avoid cleartext traffic errors on Android
+    if (apiHost.startsWith('https://') && url.startsWith('http://') && !url.includes('localhost') && !url.includes('10.0.2.2')) {
+      url = url.replace('http://', 'https://');
+    }
+    return encodeURI(url);
   }
 
   const normalizedPath = rawUrl.startsWith('/')
@@ -168,12 +178,50 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const router = useRouter();
   const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
+  const normalizedCheckType = String(checkType || '').toLowerCase().replace(/_checks$/, '').replace(/ check$/, '');
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingPhotoName, setDeletingPhotoName] = useState<string | null>(null);
   const isCompleted = data?.check?.check_status === 'Completed' || data?.check?.check_status === 'Verified';
+
+  const CHARGESHEET_STATUS_OPTIONS = [
+    'WIP',
+    'Applied for CS',
+    'CS Recieved to adv',
+    'Dispatched',
+    'not found',
+  ];
+
+  const [selectedChargesheetStatus, setSelectedChargesheetStatus] = useState<string>('WIP');
+  const [advocateRemark, setAdvocateRemark] = useState<string>('');
+  const [isSavingStatus, setIsSavingStatus] = useState<boolean>(false);
+  const [showStatusModal, setShowStatusModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (data?.check?.advocate_status) {
+      setSelectedChargesheetStatus(data.check.advocate_status);
+    } else if (data?.check?.check_status) {
+      setSelectedChargesheetStatus(data.check.check_status);
+    }
+    if (data?.check?.advocate_remark) {
+      setAdvocateRemark(data.check.advocate_remark);
+    }
+  }, [data?.check?.advocate_status, data?.check?.check_status, data?.check?.advocate_remark]);
+
+  const handleUpdateChargesheetStatus = (newStatus: string) => {
+    setSelectedChargesheetStatus(newStatus);
+    const isPhotoRequired = (newStatus === 'Applied for CS' || newStatus === 'Dispatched');
+    if (isPhotoRequired && evidencePhotos.length === 0 && pendingPhotos.length === 0) {
+      showToast({
+        type: 'info',
+        title: 'Photo Required',
+        message: `Please upload a photo below for status '${newStatus}'.`,
+      });
+    }
+  };
 
   const [pendingPhotos, setPendingPhotos] = useState<any[]>([]);
   const [pendingStatements, setPendingStatements] = useState<any[]>([]);
@@ -805,22 +853,26 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const caseInfo = data.case || {};
   const checkInfo = data.check || {};
   const evidencePhotos = checkInfo.evidence_photos || [];
+  const appliedCsPhotos = Array.isArray(checkInfo.applied_cs_photos) ? checkInfo.applied_cs_photos : (typeof checkInfo.applied_cs_photos === 'string' ? (() => { try { return JSON.parse(checkInfo.applied_cs_photos); } catch { return []; } })() : []);
+  const dispatchedPhotos = Array.isArray(checkInfo.dispatched_photos) ? checkInfo.dispatched_photos : (typeof checkInfo.dispatched_photos === 'string' ? (() => { try { return JSON.parse(checkInfo.dispatched_photos); } catch { return []; } })() : []);
   const writtenStatementPhotos = checkInfo.written_statement_photos || [];
   const rawDocs = checkInfo.documents || checkInfo.vendor_documents || checkInfo.case_documents || [];
   const documents = rawDocs.filter((d: any) => {
     const filename = d.filename || d.name || '';
     return d.category !== 'statement_photo' && !filename.startsWith('written_statement_');
   });
+  const checkDocuments = documents.filter((d: any) => d.category !== 'rto_document');
+  const generatedRtoDocs = documents.filter((d: any) => d.category === 'rto_document');
   const statementEntries = Array.isArray(checkInfo.statement_entries) ? checkInfo.statement_entries : [];
   const combinedStatementText = statementEntries.length > 0
     ? statementEntries
-        .map((e: any, idx: number) => {
-          const txt = (e.translation_en || e.statement_text || '').trim();
-          if (!txt) return '';
-          return statementEntries.length > 1 ? `Statement ${e.index || idx + 1}:\n${txt}` : txt;
-        })
-        .filter(Boolean)
-        .join('\n\n')
+      .map((e: any, idx: number) => {
+        const txt = (e.translation_en || e.statement_text || '').trim();
+        if (!txt) return '';
+        return statementEntries.length > 1 ? `Statement ${e.index || idx + 1}:\n${txt}` : txt;
+      })
+      .filter(Boolean)
+      .join('\n\n')
     : (checkInfo.statement || '');
   const statementCount = Number.isFinite(checkInfo.statement_count)
     ? Number(checkInfo.statement_count)
@@ -837,543 +889,1065 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const apiHost = API_BASE_URL.replace('/api', '');
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#0F5FA8', '#0A4274']}
-        style={[
-          styles.header,
-          Platform.OS === 'android' ? { paddingTop: HEADER_TOP_PADDING + insets.top } : null,
-        ]}
-      >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <MaterialCommunityIcons name="arrow-left" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>{checkTypeLabels[checkType] || checkType}</Text>
-          <Text style={styles.headerSubtitle}>Claim: {caseInfo.claim_number || 'N/A'}</Text>
-        </View>
-        <View style={styles.headerBadge}>
-          <Text style={styles.headerBadgeText}>{checkInfo.check_status || 'Pending'}</Text>
-        </View>
-      </LinearGradient>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {checkInfo.is_reassigned && (
-          <View style={[styles.section, { backgroundColor: '#fff5f5', borderColor: '#feb2b2', borderWidth: 1 }]}>
-            <Text style={[styles.sectionEyebrow, { color: '#e53e3e' }]}>Attention Required</Text>
-            <Text style={[styles.sectionTitle, { color: '#c53030' }]}>This check was reassigned</Text>
-            <Text style={{ fontSize: 15, color: '#2d3748', marginTop: 8, lineHeight: 22 }}>
-              <Text style={{ fontWeight: 'bold' }}>Admin Feedback: </Text>
-              {checkInfo.admin_feedback || 'No feedback provided.'}
-            </Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['#0F5FA8', '#0A4274']}
+          style={[
+            styles.header,
+            Platform.OS === 'android' ? { paddingTop: HEADER_TOP_PADDING + insets.top } : null,
+          ]}
+        >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerTitle}>{checkTypeLabels[checkType] || checkType}</Text>
+            <Text style={styles.headerSubtitle}>Claim: {caseInfo.claim_number || 'N/A'}</Text>
           </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionEyebrow}>Case</Text>
-          <Text style={styles.sectionTitle}>Case information</Text>
-          <DetailRow label="Claim Number" value={caseInfo.claim_number} />
-          <DetailRow label="Client Name" value={caseInfo.client_name} />
-          <DetailRow label="Category" value={caseInfo.category} />
-          <DetailRow label="Case Type" value={caseInfo.case_type} />
-          <DetailRow label="Case Status" value={caseInfo.full_case_status} />
-          <DetailRow label="TAT Days" value={caseInfo.tat_days} />
-          <DetailRow label="Receive Date" value={caseInfo.case_receive_date} />
-          <DetailRow label="Due Date" value={caseInfo.case_due_date} />
-          <DetailRow label="Scope of Work" value={caseInfo.scope_of_work} />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionEyebrow}>Check</Text>
-          <Text style={styles.sectionTitle}>{checkTypeLabels[checkType] || 'Check'} details</Text>
-          <DetailRow label="Status" value={checkInfo.check_status} />
-          {Object.entries(fieldLabels)
-            .filter(([field]) => field !== 'triggers')
-            .map(([field, label]) => (
-              <DetailRow key={field} label={label} value={checkInfo[field]} />
-            ))}
-        </View>
-
-        {checkInfo.triggers ? (
-          <View style={[styles.section, { backgroundColor: '#fff5f5', borderColor: '#feb2b2', borderWidth: 1 }]}>
-            <Text style={[styles.sectionEyebrow, { color: '#e53e3e' }]}>Important</Text>
-            <Text style={[styles.sectionTitle, { color: '#c53030' }]}>Triggers</Text>
-            <Text style={{ fontSize: 15, color: '#c53030', marginTop: 8, lineHeight: 22, fontWeight: '500' }}>
-              {checkInfo.triggers}
-            </Text>
+          <View style={styles.headerBadge}>
+            <Text style={styles.headerBadgeText}>{checkInfo.check_status || 'Pending'}</Text>
           </View>
-        ) : null}
+        </LinearGradient>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionEyebrow}>Statement</Text>
-          <Text style={styles.sectionTitle}>Record statement in Marathi</Text>
-          <Text style={styles.sectionSubtitle}>
-            Speak in Marathi. The app will translate it to English for review before saving.
-          </Text>
-          <View style={styles.counterPill}>
-            <MaterialCommunityIcons name="microphone-outline" size={15} color={theme.colors.primary} />
-            <Text style={styles.statementCounterText}>
-              Stored Statements: {statementCount}/{maxStatementsPerCheck}
-            </Text>
-          </View>
-
-          {statementEntries.length > 0 && (
-            <View style={styles.savedStatementsList}>
-              {statementEntries.map((entry: any, idx: number) => (
-                <View key={`statement-entry-${idx}`} style={styles.savedStatementCard}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={styles.savedStatementTitle}>Statement {entry.index || idx + 1}</Text>
-                    {!isCompleted && (
-                      <TouchableOpacity
-                        onPress={() => handleDeleteStatement(entry.index || idx + 1)}
-                        style={{ padding: 4 }}
-                        activeOpacity={0.7}
-                      >
-                        <MaterialCommunityIcons name="close-circle-outline" size={20} color="#E53935" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                  <Text style={styles.savedStatementText}>{entry.translation_en || entry.statement_text || ''}</Text>
-                  {!!entry.created_at && (
-                    <Text style={styles.savedStatementMeta}>
-                      Saved: {formatStatementTimestamp(entry.created_at)}
-                    </Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-
-          {writtenStatementPhotos.length > 0 && (
-            <View style={{ marginTop: 14 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.text, marginBottom: 8 }}>
-                Written Statement Photos ({writtenStatementPhotos.length})
-              </Text>
-              <View style={styles.photosGrid}>
-                {writtenStatementPhotos.map((photo: any, idx: number) => (
-                  <View key={`statement-photo-${idx}`} style={styles.photoCard}>
-                    <View style={styles.photoImageWrapper}>
-                      <Image
-                        source={{ uri: photo.preview_url || photo.url }}
-                        style={styles.photoImage}
-                        resizeMode="cover"
-                      />
-                      {!isCompleted && (
-                        <TouchableOpacity
-                          style={styles.removePhotoButton}
-                          onPress={() => handleDeleteDocument(photo.filename, true)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.removePhotoButtonText}>×</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    <Text style={styles.photoName} numberOfLines={1}>
-                      {photo.filename || `Photo ${idx + 1}`}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {!isCompleted && !canAddStatement && (
-            <View style={styles.maxStatementBanner}>
-              <Text style={styles.maxStatementBannerText}>
-                Maximum {maxStatementsPerCheck} statements have been stored for this check.
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
+        >
+          {normalizedCheckType !== 'chargesheet' && checkInfo.is_reassigned && (
+            <View style={[styles.section, { backgroundColor: '#fff5f5', borderColor: '#feb2b2', borderWidth: 1 }]}>
+              <Text style={[styles.sectionEyebrow, { color: '#e53e3e' }]}>Attention Required</Text>
+              <Text style={[styles.sectionTitle, { color: '#c53030' }]}>This check was reassigned</Text>
+              <Text style={{ fontSize: 15, color: '#2d3748', marginTop: 8, lineHeight: 22 }}>
+                <Text style={{ fontWeight: 'bold' }}>Admin Feedback: </Text>
+                {checkInfo.admin_feedback || 'No feedback provided.'}
               </Text>
             </View>
           )}
 
-          {!showPreview && canAddStatement && (
-            <View style={styles.recordingSection}>
-              {isRecording ? (
-                <View style={styles.recordingActiveInline}>
-                  <View style={styles.recordingIndicatorInline}>
-                    <View style={styles.recordingDot} />
-                    <Text style={styles.recordingTextInline}>Rec {formatDuration(recordingDuration)}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.stopButtonCompact}
-                    onPress={stopRecording}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.stopButtonTextCompact}>⏹️ Stop</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : recordingUri ? (
-                <View style={styles.recordingComplete}>
-                  <Text style={styles.recordingCompleteText}>
-                    Recording saved ({formatDuration(recordingDuration)})
-                  </Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionEyebrow}>Case</Text>
+            <Text style={styles.sectionTitle}>Case information</Text>
+            <DetailRow label="Claim Number" value={caseInfo.claim_number} />
+            <DetailRow label="Client Name" value={caseInfo.client_name} />
+            <DetailRow label="Category" value={caseInfo.category} />
+            <DetailRow label="Case Type" value={caseInfo.case_type} />
+            <DetailRow label="Case Status" value={caseInfo.full_case_status} />
+            <DetailRow label="TAT Days" value={caseInfo.tat_days} />
+            <DetailRow label="Receive Date" value={caseInfo.case_receive_date} />
+            <DetailRow label="Due Date" value={caseInfo.case_due_date} />
+            <DetailRow label="Special Instructions" value={caseInfo.special_instructions} />
+          </View>
 
-                  <View style={styles.recordingActions}>
-                    <TouchableOpacity
-                      style={styles.reRecordButton}
-                      onPress={discardRecording}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.reRecordButtonText}>🔄 Re-record</Text>
-                    </TouchableOpacity>
+          <View style={styles.section}>
+            <Text style={styles.sectionEyebrow}>Check</Text>
+            <Text style={styles.sectionTitle}>{checkTypeLabels[checkType] || 'Check'} details</Text>
+            {normalizedCheckType === 'chargesheet' ? (
+              <>
+                {Object.entries(fieldLabels)
+                  .filter(([field]) => field !== 'triggers' && field !== 'check_status')
+                  .map(([field, label]) => (
+                    <DetailRow key={field} label={label} value={checkInfo[field]} />
+                  ))}
+              </>
+            ) : (
+              <>
+                <DetailRow label="Status" value={checkInfo.check_status} />
+                {Object.entries(fieldLabels)
+                  .filter(([field]) => field !== 'triggers')
+                  .map(([field, label]) => (
+                    <DetailRow key={field} label={label} value={checkInfo[field]} />
+                  ))}
+              </>
+            )}
+          </View>
 
-                    <TouchableOpacity
-                      style={[styles.processButton, isProcessing && styles.disabledButton]}
-                      onPress={processRecording}
-                      disabled={isProcessing}
-                      activeOpacity={0.8}
-                    >
-                      {isProcessing ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : (
-                        <Text style={styles.processButtonText}>Process Recording</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.recordButtonCompact}
-                  onPress={startRecording}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.recordButtonIconCompact}>🎤</Text>
-                  <Text style={styles.recordButtonTextCompact}>
-                    Start Recording
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {!recordingUri && (
-                <View style={styles.writtenStatementContainer}>
-                  <Text style={styles.writtenStatementLabel}>
-                    📄 Upload photo of written statement:
-                  </Text>
-                  <View style={styles.sideBySideRow}>
-                    <TouchableOpacity
-                      style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]}
-                      onPress={pickWrittenStatementGallery}
-                      disabled={uploading}
-                      activeOpacity={0.8}
-                    >
-                      {uploading ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : (
-                        <>
-                          <MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" />
-                          <Text style={styles.smallActionButtonText}>From Gallery</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]}
-                      onPress={takeWrittenStatementCamera}
-                      disabled={uploading}
-                      activeOpacity={0.8}
-                    >
-                      {uploading ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : (
-                        <>
-                          <MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" />
-                          <Text style={styles.smallActionButtonText}>Take Photo</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
-          )}
-
-          {showPreview && canAddStatement && (
-            <View style={styles.previewSection}>
-              <View style={styles.translationBox}>
-                <Text style={styles.transcriptLabel}>Statement Title (who is giving the statement):</Text>
-                <TextInput
-                  style={styles.titleInput}
-                  value={statementTitle}
-                  onChangeText={setStatementTitle}
-                  placeholder="e.g. Statement from Vijay Sharma (claimant)"
-                  placeholderTextColor="#999"
-                />
-              </View>
-
-              <View style={styles.transcriptBox}>
-                <Text style={styles.transcriptLabel}>Marathi Transcript:</Text>
-                <Text style={styles.marathiText}>{transcriptMr}</Text>
-              </View>
-
-              <View style={styles.translationBox}>
-                <Text style={styles.transcriptLabel}>English Translation (editable):</Text>
-                <TextInput
-                  style={styles.translationInput}
-                  value={editedTranslation}
-                  onChangeText={setEditedTranslation}
-                  multiline
-                  textAlignVertical="top"
-                  placeholder="Edit translation if needed..."
-                />
-              </View>
-
-              <View style={styles.previewActions}>
-                <TouchableOpacity
-                  style={styles.discardButton}
-                  onPress={discardRecording}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.discardButtonText}>Discard</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.applyButton, isApplying && styles.disabledButton]}
-                  onPress={applyStatement}
-                  disabled={isApplying || isCompleted}
-                  activeOpacity={0.8}
-                >
-                  {isApplying ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.applyButtonText}>
-                      Save Statement {nextStatementIndex || ''}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Visit Photos Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionEyebrow}>Visit Photos</Text>
-          <Text style={styles.sectionTitle}>
-            Visit photos ({evidencePhotos.length + pendingPhotos.length})
-          </Text>
-
-          {evidencePhotos.length === 0 && pendingPhotos.length === 0 ? (
-            <Text style={styles.noEvidenceText}>No visit photos uploaded yet</Text>
-          ) : (
-            <View style={styles.photosGrid}>
-              {evidencePhotos.map((photo: any, idx: number) => (
-                <View key={`${getEvidencePhotoName(photo)}-${idx}`} style={styles.photoCard}>
-                  <View style={styles.photoImageWrapper}>
-                    <Image
-                      source={{ uri: getEvidencePhotoUri(photo, apiHost) }}
-                      style={styles.photoImage}
-                      resizeMode="cover"
-                      onError={(event) => {
-                        console.warn('Visit photo image failed to load:', {
-                          photo,
-                          resolvedUri: getEvidencePhotoUri(photo, apiHost),
-                          error: event.nativeEvent.error,
-                        });
-                      }}
-                    />
-                    {!isCompleted && (
-                      <TouchableOpacity
-                        style={[
-                          styles.removePhotoButton,
-                          deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled,
-                        ]}
-                        onPress={() => handleDeletePhoto(photo)}
-                        disabled={deletingPhotoName === getEvidencePhotoName(photo)}
-                        activeOpacity={0.8}
-                      >
-                        {deletingPhotoName === getEvidencePhotoName(photo) ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Text style={styles.removePhotoButtonText}>×</Text>
-                        )}
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                  <Text style={styles.photoName} numberOfLines={1}>
-                    {getEvidencePhotoName(photo)}
-                  </Text>
-                  <Text style={styles.photoDate}>
-                    {new Date(photo.uploaded_at).toLocaleDateString()}
-                  </Text>
-                </View>
-              ))}
-
-              {pendingPhotos.map((photo: any, idx: number) => (
-                <View key={`pending-${photo.name}-${idx}`} style={styles.photoCard}>
-                  <View style={styles.photoImageWrapper}>
-                    <Image
-                      source={{ uri: photo.uri }}
-                      style={styles.photoImage}
-                      resizeMode="cover"
-                    />
-                    <TouchableOpacity
-                      style={styles.removePhotoButton}
-                      onPress={() => {
-                        setPendingPhotos((prev) => prev.filter((p) => p !== photo));
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.removePhotoButtonText}>×</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.photoName} numberOfLines={1}>
-                    {photo.name} (Pending)
-                  </Text>
-                  <Text style={styles.photoDate}>Just now</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {!isCompleted && (
-            <View style={{ marginTop: 14 }}>
+          {normalizedCheckType === 'chargesheet' && (
+            <View style={[styles.section, { borderLeftWidth: 4, borderLeftColor: PRIMARY_BLUE }]}>
+              <Text style={styles.sectionEyebrow}>Status Update</Text>
+              <Text style={styles.sectionTitle}>Advocate Status</Text>
+              <Text style={[styles.detailLabel, { marginTop: 8 }]}>Advocate Status</Text>
               <TouchableOpacity
-                style={[styles.smallActionButton, { backgroundColor: '#2E9B62' }]}
-                onPress={takePhoto}
-                disabled={uploading}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1.5,
+                  borderColor: '#0F5FA8',
+                  borderRadius: 10,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  marginTop: 6,
+                }}
+                onPress={() => setShowStatusModal(!showStatusModal)}
+                disabled={isSavingStatus}
                 activeOpacity={0.8}
               >
-                <MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.smallActionButtonText}>Take Photo</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <MaterialCommunityIcons name="list-status" size={20} color="#0F5FA8" />
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F5FA8' }}>
+                    {selectedChargesheetStatus || 'Select Status'}
+                  </Text>
+                </View>
+                {isSavingStatus ? (
+                  <ActivityIndicator size="small" color="#0F5FA8" />
+                ) : (
+                  <MaterialCommunityIcons name={showStatusModal ? "chevron-up" : "chevron-down"} size={24} color="#0F5FA8" />
+                )}
               </TouchableOpacity>
+
+              {showStatusModal && (
+                <View style={{ marginTop: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
+                  {CHARGESHEET_STATUS_OPTIONS.map((opt) => {
+                    const isSelected = selectedChargesheetStatus === opt;
+                    return (
+                      <TouchableOpacity
+                        key={opt}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingHorizontal: 16,
+                          paddingVertical: 12,
+                          backgroundColor: isSelected ? '#F0F9FF' : '#FFFFFF',
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#F1F5F9',
+                        }}
+                        onPress={() => {
+                          setShowStatusModal(false);
+                          handleUpdateChargesheetStatus(opt);
+                        }}
+                      >
+                        <Text style={{ fontSize: 15, fontWeight: isSelected ? '600' : '400', color: isSelected ? '#0F5FA8' : '#334155' }}>
+                          {opt}
+                        </Text>
+                        {isSelected && <MaterialCommunityIcons name="check" size={20} color="#0F5FA8" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           )}
-        </View>
 
-        {/* Documents Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionEyebrow}>Documents</Text>
-          <Text style={styles.sectionTitle}>
-            Check Documents ({documents.length})
-          </Text>
+          {normalizedCheckType === 'chargesheet' && selectedChargesheetStatus === 'not found' && (
+            <View style={[styles.section, { marginTop: 16 }]}>
+              <Text style={styles.sectionTitle}>Advocate Remark</Text>
+              <TextInput
+                style={{
+                  height: 100,
+                  textAlignVertical: 'top',
+                  marginTop: 10,
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
+                  borderRadius: 8,
+                  padding: 12,
+                  backgroundColor: '#FFF',
+                  fontSize: 15,
+                  color: '#334155'
+                }}
+                placeholder="Enter remark (e.g. why it was not found)"
+                value={advocateRemark}
+                onChangeText={setAdvocateRemark}
+                multiline
+              />
+            </View>
+          )}
 
-          {documents.length === 0 ? (
-            <Text style={styles.noEvidenceText}>No documents uploaded for this check yet</Text>
-          ) : (
-            <View style={{ gap: 8, marginTop: 8 }}>
-              {documents.map((doc: any, idx: number) => (
-                <View key={idx} style={styles.docItemCard}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                    <MaterialCommunityIcons name="file-document-outline" size={24} color={PRIMARY_BLUE} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.docNameText} numberOfLines={1}>
-                        {doc.filename || `Document ${idx + 1}`}
+          {normalizedCheckType === 'chargesheet' && selectedChargesheetStatus === 'Applied for CS' && (() => {
+            const photos = appliedCsPhotos;
+            const category = 'applied_cs';
+            const sectionTitle = 'Applied for CS - Photos';
+
+            const handleUploadFromGallery = async () => {
+              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (status !== 'granted') {
+                showToast({ type: 'error', title: 'Permission Denied', message: 'We need access to your photos.' });
+                return;
+              }
+              const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+              let location = null;
+              if (locStatus === 'granted') {
+                try { location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }); } catch (e) { }
+              }
+              const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images' as any, allowsMultipleSelection: true, quality: 0.8 });
+              if (result.canceled || !result.assets || result.assets.length === 0) return;
+              const newPhotos = result.assets.map((asset, i) => ({
+                uri: asset.uri,
+                name: asset.fileName || `applied_cs_${Date.now()}_${i}.jpg`,
+                lat: location?.coords?.latitude?.toString() || '',
+                long: location?.coords?.longitude?.toString() || '',
+              }));
+              setUploading(true);
+              try {
+                await apiService.uploadCheckEvidence(caseId, checkType, newPhotos, category);
+                showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
+                await loadData(false);
+              } catch (err: any) {
+                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+              } finally {
+                setUploading(false);
+              }
+            };
+
+            const handleTakePhoto = async () => {
+              const { status } = await ImagePicker.requestCameraPermissionsAsync();
+              if (status !== 'granted') {
+                showToast({ type: 'error', title: 'Permission Denied', message: 'We need camera access.' });
+                return;
+              }
+              const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+              let location = null;
+              if (locStatus === 'granted') {
+                try { location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }); } catch (e) { }
+              } else {
+                showToast({ type: 'error', title: 'Location Required', message: 'Location permission is required.' });
+                return;
+              }
+              const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+              if (result.canceled || !result.assets || result.assets.length === 0) return;
+              const newPhotos = result.assets.map((asset, i) => ({
+                uri: asset.uri,
+                name: asset.fileName || `applied_cs_cam_${Date.now()}_${i}.jpg`,
+                lat: location?.coords?.latitude?.toString() || '',
+                long: location?.coords?.longitude?.toString() || '',
+              }));
+              setUploading(true);
+              try {
+                await apiService.uploadCheckEvidence(caseId, checkType, newPhotos, category);
+                showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
+                await loadData(false);
+              } catch (err: any) {
+                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+              } finally {
+                setUploading(false);
+              }
+            };
+
+            const handleDelete = async (photo: any) => {
+              const fname = getEvidencePhotoName(photo);
+              setDeletingPhotoName(fname);
+              try {
+                await apiService.deleteCheckEvidence(caseId, checkType, fname, category);
+                showToast({ type: 'success', title: 'Photo Deleted', message: 'Photo removed.' });
+                await loadData(false);
+              } catch (err: any) {
+                showToast({ type: 'error', title: 'Delete Failed', message: err?.message || 'Failed to delete photo.' });
+              } finally {
+                setDeletingPhotoName(null);
+              }
+            };
+
+            return (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>
+                  {sectionTitle} ({photos.length})
+                </Text>
+                {photos.length === 0 ? (
+                  <Text style={styles.noEvidenceText}>No photos uploaded yet</Text>
+                ) : (
+                  <View style={styles.photosGrid}>
+                    {photos.map((photo: any, idx: number) => (
+                      <View key={`applied-${getEvidencePhotoName(photo)}-${idx}`} style={styles.photoCard}>
+                        <View style={styles.photoImageWrapper}>
+                          <Image source={{ uri: getEvidencePhotoUri(photo, apiHost) }} style={styles.photoImage} resizeMode="cover" />
+                          <TouchableOpacity
+                            style={[styles.removePhotoButton, deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled]}
+                            onPress={() => handleDelete(photo)}
+                            disabled={deletingPhotoName === getEvidencePhotoName(photo)}
+                            activeOpacity={0.8}
+                          >
+                            {deletingPhotoName === getEvidencePhotoName(photo) ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <Text style={styles.removePhotoButtonText}>×</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.photoName} numberOfLines={1}>{getEvidencePhotoName(photo)}</Text>
+                        <Text style={styles.photoDate}>{photo.uploaded_at ? new Date(photo.uploaded_at).toLocaleDateString() : ''}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]} onPress={handleUploadFromGallery} disabled={uploading} activeOpacity={0.8}>
+                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>From Gallery</Text></>)}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]} onPress={handleTakePhoto} disabled={uploading} activeOpacity={0.8}>
+                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>Take Photo</Text></>)}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
+
+          {normalizedCheckType === 'chargesheet' && selectedChargesheetStatus === 'Dispatched' && (() => {
+            const photos = dispatchedPhotos;
+            const category = 'dispatched';
+            const sectionTitle = 'Dispatched - Photos';
+
+            const handleUploadFromGallery = async () => {
+              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (status !== 'granted') {
+                showToast({ type: 'error', title: 'Permission Denied', message: 'We need access to your photos.' });
+                return;
+              }
+              const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+              let location = null;
+              if (locStatus === 'granted') {
+                try { location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }); } catch (e) { }
+              }
+              const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images' as any, allowsMultipleSelection: true, quality: 0.8 });
+              if (result.canceled || !result.assets || result.assets.length === 0) return;
+              const newPhotos = result.assets.map((asset, i) => ({
+                uri: asset.uri,
+                name: asset.fileName || `dispatched_${Date.now()}_${i}.jpg`,
+                lat: location?.coords?.latitude?.toString() || '',
+                long: location?.coords?.longitude?.toString() || '',
+              }));
+              setUploading(true);
+              try {
+                await apiService.uploadCheckEvidence(caseId, checkType, newPhotos, category);
+                showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
+                await loadData(false);
+              } catch (err: any) {
+                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+              } finally {
+                setUploading(false);
+              }
+            };
+
+            const handleTakePhoto = async () => {
+              const { status } = await ImagePicker.requestCameraPermissionsAsync();
+              if (status !== 'granted') {
+                showToast({ type: 'error', title: 'Permission Denied', message: 'We need camera access.' });
+                return;
+              }
+              const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+              let location = null;
+              if (locStatus === 'granted') {
+                try { location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }); } catch (e) { }
+              } else {
+                showToast({ type: 'error', title: 'Location Required', message: 'Location permission is required.' });
+                return;
+              }
+              const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+              if (result.canceled || !result.assets || result.assets.length === 0) return;
+              const newPhotos = result.assets.map((asset, i) => ({
+                uri: asset.uri,
+                name: asset.fileName || `dispatched_cam_${Date.now()}_${i}.jpg`,
+                lat: location?.coords?.latitude?.toString() || '',
+                long: location?.coords?.longitude?.toString() || '',
+              }));
+              setUploading(true);
+              try {
+                await apiService.uploadCheckEvidence(caseId, checkType, newPhotos, category);
+                showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
+                await loadData(false);
+              } catch (err: any) {
+                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+              } finally {
+                setUploading(false);
+              }
+            };
+
+            const handleDelete = async (photo: any) => {
+              const fname = getEvidencePhotoName(photo);
+              setDeletingPhotoName(fname);
+              try {
+                await apiService.deleteCheckEvidence(caseId, checkType, fname, category);
+                showToast({ type: 'success', title: 'Photo Deleted', message: 'Photo removed.' });
+                await loadData(false);
+              } catch (err: any) {
+                showToast({ type: 'error', title: 'Delete Failed', message: err?.message || 'Failed to delete photo.' });
+              } finally {
+                setDeletingPhotoName(null);
+              }
+            };
+
+            return (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>
+                  {sectionTitle} ({photos.length})
+                </Text>
+                {photos.length === 0 ? (
+                  <Text style={styles.noEvidenceText}>No photos uploaded yet</Text>
+                ) : (
+                  <View style={styles.photosGrid}>
+                    {photos.map((photo: any, idx: number) => (
+                      <View key={`dispatched-${getEvidencePhotoName(photo)}-${idx}`} style={styles.photoCard}>
+                        <View style={styles.photoImageWrapper}>
+                          <Image source={{ uri: getEvidencePhotoUri(photo, apiHost) }} style={styles.photoImage} resizeMode="cover" />
+                          <TouchableOpacity
+                            style={[styles.removePhotoButton, deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled]}
+                            onPress={() => handleDelete(photo)}
+                            disabled={deletingPhotoName === getEvidencePhotoName(photo)}
+                            activeOpacity={0.8}
+                          >
+                            {deletingPhotoName === getEvidencePhotoName(photo) ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <Text style={styles.removePhotoButtonText}>×</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.photoName} numberOfLines={1}>{getEvidencePhotoName(photo)}</Text>
+                        <Text style={styles.photoDate}>{photo.uploaded_at ? new Date(photo.uploaded_at).toLocaleDateString() : ''}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]} onPress={handleUploadFromGallery} disabled={uploading} activeOpacity={0.8}>
+                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>From Gallery</Text></>)}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]} onPress={handleTakePhoto} disabled={uploading} activeOpacity={0.8}>
+                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>Take Photo</Text></>)}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
+
+
+
+          {normalizedCheckType === 'chargesheet' && (() => {
+            const isPhotoRequired = (selectedChargesheetStatus === 'Applied for CS' || selectedChargesheetStatus === 'Dispatched');
+            const statusPhotos = selectedChargesheetStatus === 'Applied for CS' ? appliedCsPhotos : dispatchedPhotos;
+            const hasPhoto = statusPhotos.length > 0;
+            const isSubmitDisabled = uploading || (isPhotoRequired && !hasPhoto);
+
+            return (
+              <View style={[styles.section, { marginTop: 16 }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.uploadButton,
+                    { backgroundColor: PRIMARY_BLUE },
+                    isSubmitDisabled && { backgroundColor: '#A0AEC0', opacity: 0.6 },
+                  ]}
+                  onPress={async () => {
+                    try {
+                      setUploading(true);
+                      if (selectedChargesheetStatus) {
+                        await apiService.updateCheckStatus(caseId, checkType, selectedChargesheetStatus, advocateRemark);
+                        dispatch(updateCheckStatusInStore({ caseId, status: selectedChargesheetStatus }));
+                      }
+                      showToast({
+                        type: 'success',
+                        title: 'Check Saved',
+                        message: 'Chargesheet check details saved successfully.',
+                      });
+                      await loadData(false);
+                    } catch (err: any) {
+                      console.error('Failed to save chargesheet check:', err);
+                      showToast({
+                        type: 'error',
+                        title: 'Save Failed',
+                        message: err?.message || 'Failed to save chargesheet check.',
+                      });
+                    } finally {
+                      setUploading(false);
+                    }
+                  }}
+                  disabled={isSubmitDisabled}
+                  activeOpacity={0.8}
+                >
+                  {uploading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <View style={styles.uploadButtonContent}>
+                      <MaterialCommunityIcons name="content-save-outline" size={20} color="#FFFFFF" />
+                      <Text style={styles.uploadButtonText}>Submit</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                {isPhotoRequired && !hasPhoto && (
+                  <Text style={{ fontSize: 13, color: '#E53E3E', textAlign: 'center', marginTop: 8, fontWeight: '500' }}>
+                    Please upload a photo above to enable Submit for status '{selectedChargesheetStatus}'.
+                  </Text>
+                )}
+              </View>
+            );
+          })()}
+
+          {normalizedCheckType !== 'chargesheet' && (
+            <>
+              {normalizedCheckType !== 'rto' && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionEyebrow}>Statement</Text>
+                  <Text style={styles.sectionTitle}>Record statement in Marathi</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Speak in Marathi. The app will translate it to English for review before saving.
+                  </Text>
+                  <View style={styles.counterPill}>
+                    <MaterialCommunityIcons name="microphone-outline" size={15} color={theme.colors.primary} />
+                    <Text style={styles.statementCounterText}>
+                      Stored Statements: {statementCount}/{maxStatementsPerCheck}
+                    </Text>
+                  </View>
+
+                  {statementEntries.length > 0 && (
+                    <View style={styles.savedStatementsList}>
+                      {statementEntries.map((entry: any, idx: number) => (
+                        <View key={`statement-entry-${idx}`} style={styles.savedStatementCard}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={styles.savedStatementTitle}>Statement {entry.index || idx + 1}</Text>
+                            {!isCompleted && (
+                              <TouchableOpacity
+                                onPress={() => handleDeleteStatement(entry.index || idx + 1)}
+                                style={{ padding: 4 }}
+                                activeOpacity={0.7}
+                              >
+                                <MaterialCommunityIcons name="close-circle-outline" size={20} color="#E53935" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          <Text style={styles.savedStatementText}>{entry.translation_en || entry.statement_text || ''}</Text>
+                          {!!entry.created_at && (
+                            <Text style={styles.savedStatementMeta}>
+                              Saved: {formatStatementTimestamp(entry.created_at)}
+                            </Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {writtenStatementPhotos.length > 0 && (
+                    <View style={{ marginTop: 14 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.text, marginBottom: 8 }}>
+                        Written Statement Photos ({writtenStatementPhotos.length})
                       </Text>
-                      {!!doc.uploaded_at && (
-                        <Text style={styles.docDateText}>
-                          {new Date(doc.uploaded_at).toLocaleDateString()}
-                        </Text>
+                      <View style={styles.photosGrid}>
+                        {writtenStatementPhotos.map((photo: any, idx: number) => (
+                          <View key={`statement-photo-${idx}`} style={styles.photoCard}>
+                            <View style={styles.photoImageWrapper}>
+                              <Image
+                                source={{ uri: photo.preview_url || photo.url }}
+                                style={styles.photoImage}
+                                resizeMode="cover"
+                              />
+                              {!isCompleted && (
+                                <TouchableOpacity
+                                  style={styles.removePhotoButton}
+                                  onPress={() => handleDeleteDocument(photo.filename, true)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.removePhotoButtonText}>×</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                            <Text style={styles.photoName} numberOfLines={1}>
+                              {photo.filename || `Photo ${idx + 1}`}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {!isCompleted && !canAddStatement && (
+                    <View style={styles.maxStatementBanner}>
+                      <Text style={styles.maxStatementBannerText}>
+                        Maximum {maxStatementsPerCheck} statements have been stored for this check.
+                      </Text>
+                    </View>
+                  )}
+
+                  {!showPreview && canAddStatement && (
+                    <View style={styles.recordingSection}>
+                      {isRecording ? (
+                        <View style={styles.recordingActiveInline}>
+                          <View style={styles.recordingIndicatorInline}>
+                            <View style={styles.recordingDot} />
+                            <Text style={styles.recordingTextInline}>Rec {formatDuration(recordingDuration)}</Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.stopButtonCompact}
+                            onPress={stopRecording}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.stopButtonTextCompact}>⏹️ Stop</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : recordingUri ? (
+                        <View style={styles.recordingComplete}>
+                          <Text style={styles.recordingCompleteText}>
+                            Recording saved ({formatDuration(recordingDuration)})
+                          </Text>
+
+                          <View style={styles.recordingActions}>
+                            <TouchableOpacity
+                              style={styles.reRecordButton}
+                              onPress={discardRecording}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.reRecordButtonText}>🔄 Re-record</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={[styles.processButton, isProcessing && styles.disabledButton]}
+                              onPress={processRecording}
+                              disabled={isProcessing}
+                              activeOpacity={0.8}
+                            >
+                              {isProcessing ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                              ) : (
+                                <Text style={styles.processButtonText}>Process Recording</Text>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.recordButtonCompact}
+                          onPress={startRecording}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.recordButtonIconCompact}>🎤</Text>
+                          <Text style={styles.recordButtonTextCompact}>
+                            Start Recording
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {!recordingUri && (
+                        <View style={styles.writtenStatementContainer}>
+                          <Text style={styles.writtenStatementLabel}>
+                            📄 Upload photo of written statement:
+                          </Text>
+                          <View style={styles.sideBySideRow}>
+                            <TouchableOpacity
+                              style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]}
+                              onPress={pickWrittenStatementGallery}
+                              disabled={uploading}
+                              activeOpacity={0.8}
+                            >
+                              {uploading ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                              ) : (
+                                <>
+                                  <MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" />
+                                  <Text style={styles.smallActionButtonText}>From Gallery</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]}
+                              onPress={takeWrittenStatementCamera}
+                              disabled={uploading}
+                              activeOpacity={0.8}
+                            >
+                              {uploading ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                              ) : (
+                                <>
+                                  <MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" />
+                                  <Text style={styles.smallActionButtonText}>Take Photo</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        </View>
                       )}
                     </View>
+                  )}
+
+                  {showPreview && canAddStatement && (
+                    <View style={styles.previewSection}>
+                      <View style={styles.translationBox}>
+                        <Text style={styles.transcriptLabel}>Statement Title (who is giving the statement):</Text>
+                        <TextInput
+                          style={styles.titleInput}
+                          value={statementTitle}
+                          onChangeText={setStatementTitle}
+                          placeholder="e.g. Statement from Vijay Sharma (claimant)"
+                          placeholderTextColor="#999"
+                        />
+                      </View>
+
+                      <View style={styles.transcriptBox}>
+                        <Text style={styles.transcriptLabel}>Marathi Transcript:</Text>
+                        <Text style={styles.marathiText}>{transcriptMr}</Text>
+                      </View>
+
+                      <View style={styles.translationBox}>
+                        <Text style={styles.transcriptLabel}>English Translation (editable):</Text>
+                        <TextInput
+                          style={styles.translationInput}
+                          value={editedTranslation}
+                          onChangeText={setEditedTranslation}
+                          multiline
+                          textAlignVertical="top"
+                          placeholder="Edit translation if needed..."
+                        />
+                      </View>
+
+                      <View style={styles.previewActions}>
+                        <TouchableOpacity
+                          style={styles.discardButton}
+                          onPress={discardRecording}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.discardButtonText}>Discard</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.applyButton, isApplying && styles.disabledButton]}
+                          onPress={applyStatement}
+                          disabled={isApplying || isCompleted}
+                          activeOpacity={0.8}
+                        >
+                          {isApplying ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <Text style={styles.applyButtonText}>
+                              Save Statement {nextStatementIndex || ''}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Visit Photos Section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionEyebrow}>Visit Photos</Text>
+                <Text style={styles.sectionTitle}>
+                  Visit photos ({evidencePhotos.length + pendingPhotos.length})
+                </Text>
+
+                {evidencePhotos.length === 0 && pendingPhotos.length === 0 ? (
+                  <Text style={styles.noEvidenceText}>No visit photos uploaded yet</Text>
+                ) : (
+                  <View style={styles.photosGrid}>
+                    {evidencePhotos.map((photo: any, idx: number) => (
+                      <View key={`${getEvidencePhotoName(photo)}-${idx}`} style={styles.photoCard}>
+                        <View style={styles.photoImageWrapper}>
+                          <Image
+                            source={{ uri: getEvidencePhotoUri(photo, apiHost) }}
+                            style={styles.photoImage}
+                            resizeMode="cover"
+                            onError={(event) => {
+                              console.warn('Visit photo image failed to load:', {
+                                photo,
+                                resolvedUri: getEvidencePhotoUri(photo, apiHost),
+                                error: event.nativeEvent.error,
+                              });
+                            }}
+                          />
+                          {!isCompleted && (
+                            <TouchableOpacity
+                              style={[
+                                styles.removePhotoButton,
+                                deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled,
+                              ]}
+                              onPress={() => handleDeletePhoto(photo)}
+                              disabled={deletingPhotoName === getEvidencePhotoName(photo)}
+                              activeOpacity={0.8}
+                            >
+                              {deletingPhotoName === getEvidencePhotoName(photo) ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={styles.removePhotoButtonText}>×</Text>
+                              )}
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        <Text style={styles.photoName} numberOfLines={1}>
+                          {getEvidencePhotoName(photo)}
+                        </Text>
+                        <Text style={styles.photoDate}>
+                          {new Date(photo.uploaded_at).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    ))}
+
+                    {pendingPhotos.map((photo: any, idx: number) => (
+                      <View key={`pending-${photo.name}-${idx}`} style={styles.photoCard}>
+                        <View style={styles.photoImageWrapper}>
+                          <Image
+                            source={{ uri: photo.uri }}
+                            style={styles.photoImage}
+                            resizeMode="cover"
+                          />
+                          <TouchableOpacity
+                            style={styles.removePhotoButton}
+                            onPress={() => {
+                              setPendingPhotos((prev) => prev.filter((p) => p !== photo));
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.removePhotoButtonText}>×</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.photoName} numberOfLines={1}>
+                          {photo.name} (Pending)
+                        </Text>
+                        <Text style={styles.photoDate}>Just now</Text>
+                      </View>
+                    ))}
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    {doc.preview_url || doc.url ? (
-                      <TouchableOpacity
-                        onPress={() => Linking.openURL(doc.preview_url || doc.url)}
-                        style={styles.docViewButton}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.docViewButtonText}>View</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                    {!isCompleted && (
-                      <TouchableOpacity
-                        onPress={() => handleDeleteDocument(doc.filename, false)}
-                        style={{ padding: 4 }}
-                        activeOpacity={0.7}
-                      >
-                        <MaterialCommunityIcons name="close-circle-outline" size={20} color="#E53935" />
-                      </TouchableOpacity>
+                )}
+
+                {!isCompleted && (
+                  <View style={{ marginTop: 14 }}>
+                    <TouchableOpacity
+                      style={[styles.smallActionButton, { backgroundColor: '#2E9B62' }]}
+                      onPress={takePhoto}
+                      disabled={uploading}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.smallActionButtonText}>Take Photo</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionEyebrow}>Documents</Text>
+                <Text style={styles.sectionTitle}>
+                  Check Documents ({checkDocuments.length})
+                </Text>
+
+                {checkDocuments.length === 0 ? (
+                  <Text style={styles.noEvidenceText}>No documents uploaded for this check yet</Text>
+                ) : (
+                  <View style={{ gap: 8, marginTop: 8 }}>
+                    {checkDocuments.map((doc: any, idx: number) => (
+                      <View key={idx} style={styles.docItemCard}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <MaterialCommunityIcons name="file-document-outline" size={24} color={PRIMARY_BLUE} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.docNameText} numberOfLines={1}>
+                              {doc.filename || `Document ${idx + 1}`}
+                            </Text>
+                            {!!doc.uploaded_at && (
+                              <Text style={styles.docDateText}>
+                                {new Date(doc.uploaded_at).toLocaleDateString()}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {doc.preview_url || doc.url ? (
+                            <TouchableOpacity
+                              onPress={() => Linking.openURL(doc.preview_url || doc.url)}
+                              style={styles.docViewButton}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.docViewButtonText}>View</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                          {!isCompleted && normalizedCheckType !== 'rto' && (
+                            <TouchableOpacity
+                              onPress={() => handleDeleteDocument(doc.filename, false)}
+                              style={{ padding: 4 }}
+                              activeOpacity={0.7}
+                            >
+                              <MaterialCommunityIcons name="delete-outline" size={20} color="#ef4444" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {!isCompleted && normalizedCheckType !== 'rto' && (
+                  <TouchableOpacity
+                    style={[styles.smallActionButton, { backgroundColor: '#475569', marginTop: 14 }]}
+                    onPress={handleUploadDocument}
+                    activeOpacity={0.8}
+                  >
+                    {uploading ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="upload" size={16} color="#FFFFFF" />
+                        <Text style={styles.smallActionButtonText}>Upload Document</Text>
+                      </>
                     )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {normalizedCheckType === 'rto' && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionEyebrow}>Generated</Text>
+                  <Text style={styles.sectionTitle}>
+                    Generated RTO Documents ({generatedRtoDocs.length})
+                  </Text>
+
+                  {generatedRtoDocs.length === 0 ? (
+                    <Text style={styles.noEvidenceText}>No RTO documents generated yet</Text>
+                  ) : (
+                    <View style={{ gap: 8, marginTop: 8 }}>
+                      {generatedRtoDocs.map((doc: any, idx: number) => (
+                        <View key={idx} style={styles.docItemCard}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                            <MaterialCommunityIcons name="file-document-outline" size={24} color={PRIMARY_BLUE} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.docNameText} numberOfLines={1}>
+                                {doc.filename || `Document ${idx + 1}`}
+                              </Text>
+                              {!!doc.uploaded_at && (
+                                <Text style={styles.docDateText}>
+                                  {new Date(doc.uploaded_at).toLocaleDateString()}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            {(doc.preview_url || doc.url) ? (
+                              <TouchableOpacity
+                                onPress={() => Linking.openURL(doc.preview_url || doc.url)}
+                                style={styles.docViewButton}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.docViewButtonText}>View</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <QuestionnaireForm
+                caseId={caseId}
+                checkType={checkType}
+                initialData={checkInfo.questionnaire || EMPTY_OBJECT}
+                statementText={combinedStatementText}
+                caseInfo={caseInfo}
+                checkInfo={checkInfo}
+                onChange={(formData) => {
+                  questionnaireDataRef.current = formData;
+                }}
+                disabled={isCompleted}
+              />
+
+
+              {!isCompleted && (
+                <View style={[styles.section, { marginTop: 16 }]}>
+                  {normalizedCheckType !== 'chargesheet' && (
+                    <DisclaimerSection checked={disclaimerAccepted} onCheck={setDisclaimerAccepted} />
+                  )}
+
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: normalizedCheckType !== 'chargesheet' ? 16 : 0 }}>
+                    <TouchableOpacity
+                      style={[styles.uploadButton, { flex: 1, backgroundColor: (normalizedCheckType !== 'chargesheet' && !disclaimerAccepted) || uploading ? '#A0AEC0' : '#E53935' }]}
+                      onPress={async () => {
+                        showDialog({
+                          type: 'warning',
+                          title: 'Fail & Submit Check',
+                          message: 'Are you sure you want to mark this check as failed?',
+                          actions: [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Confirm Fail',
+                              onPress: async () => {
+                                try {
+                                  setUploading(true);
+                                  if (questionnaireDataRef.current && Object.keys(questionnaireDataRef.current).length > 0) {
+                                    await apiService.saveQuestionnaire(caseId, checkType, questionnaireDataRef.current);
+                                    await clearDraftQuestionnaire(caseId, checkType);
+                                  }
+                                  await apiService.updateCheckStatus(caseId, checkType, 'REJECTED');
+                                  dispatch(updateCheckStatusInStore({ caseId, status: 'REJECTED' }));
+                                  showToast({ type: 'success', title: 'Check Failed', message: 'Check marked as failed.' });
+                                  router.back();
+                                } catch (err: any) {
+                                  console.error('Failed to fail check:', err);
+                                  showToast({ type: 'error', title: 'Submit Failed', message: err?.message || 'Failed to submit check.' });
+                                } finally {
+                                  setUploading(false);
+                                }
+                              },
+                            },
+                          ],
+                        });
+                      }}
+                      disabled={uploading || (normalizedCheckType !== 'chargesheet' && !disclaimerAccepted)}
+                      activeOpacity={0.8}
+                    >
+                      {uploading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <View style={styles.uploadButtonContent}>
+                          <MaterialCommunityIcons name="close-circle-outline" size={20} color="#FFFFFF" />
+                          <Text style={styles.uploadButtonText}>Failed Submit</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.uploadButton, { flex: 1, backgroundColor: (normalizedCheckType !== 'chargesheet' && !disclaimerAccepted) || uploading ? '#A0AEC0' : '#10B981' }]}
+                      onPress={async () => {
+                        showDialog({
+                          type: 'warning',
+                          title: 'Submit & Complete Check',
+                          message: 'Are you sure you want to mark this check as completed? Admin will be notified to review your submitted check.',
+                          actions: [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Confirm Submit',
+                              onPress: async () => {
+                                try {
+                                  setUploading(true);
+                                  if (questionnaireDataRef.current && Object.keys(questionnaireDataRef.current).length > 0) {
+                                    await apiService.saveQuestionnaire(caseId, checkType, questionnaireDataRef.current);
+                                    await clearDraftQuestionnaire(caseId, checkType);
+                                  }
+                                  await apiService.markCheckCompleted(caseId, checkType);
+                                  dispatch(markCheckAsCompleted({ caseId, checkType }));
+                                  showToast({ type: 'success', title: 'Check Completed', message: 'Check marked as completed.' });
+                                  router.back();
+                                } catch (err: any) {
+                                  console.error('Failed to complete check:', err);
+                                  showToast({ type: 'error', title: 'Submit Failed', message: err?.message || 'Failed to complete check.' });
+                                } finally {
+                                  setUploading(false);
+                                }
+                              },
+                            },
+                          ],
+                        });
+                      }}
+                      disabled={uploading || (normalizedCheckType !== 'chargesheet' && !disclaimerAccepted)}
+                      activeOpacity={0.8}
+                    >
+                      {uploading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <View style={styles.uploadButtonContent}>
+                          <MaterialCommunityIcons name="check-circle-outline" size={20} color="#FFFFFF" />
+                          <Text style={styles.uploadButtonText}>Complete &amp; Submit Check</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   </View>
                 </View>
-              ))}
-            </View>
-          )}
-
-          {!isCompleted && (
-            <TouchableOpacity
-              style={[styles.smallActionButton, { backgroundColor: '#475569', marginTop: 14 }]}
-              onPress={handleUploadDocument}
-              disabled={uploading}
-              activeOpacity={0.8}
-            >
-              {uploading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <>
-                  <MaterialCommunityIcons name="file-upload-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.smallActionButtonText}>Upload Document / File</Text>
-                </>
               )}
-            </TouchableOpacity>
+            </>
           )}
-        </View>
-
-        <QuestionnaireForm
-          caseId={caseId}
-          checkType={checkType}
-          initialData={checkInfo.questionnaire || EMPTY_OBJECT}
-          statementText={combinedStatementText}
-          caseInfo={caseInfo}
-          checkInfo={checkInfo}
-          onChange={(formData) => {
-            questionnaireDataRef.current = formData;
-          }}
-          disabled={isCompleted}
-        />
-
-
-        {!isCompleted && (
-          <View style={[styles.section, { marginTop: 16 }]}>
-            <TouchableOpacity
-              style={[styles.uploadButton, { backgroundColor: '#10B981' }]}
-              onPress={async () => {
-                showDialog({
-                  type: 'warning',
-                  title: 'Submit & Complete Check',
-                  message: 'Are you sure you want to mark this check as completed? Admin will be notified to review your submitted check.',
-                  actions: [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Confirm Submit',
-                      onPress: async () => {
-                        try {
-                          setUploading(true);
-                          if (questionnaireDataRef.current && Object.keys(questionnaireDataRef.current).length > 0) {
-                            await apiService.saveQuestionnaire(caseId, checkType, questionnaireDataRef.current);
-                            await clearDraftQuestionnaire(caseId, checkType);
-                          }
-                          await apiService.markCheckCompleted(caseId, checkType);
-                          dispatch(markCheckAsCompleted({ caseId, checkType }));
-                          showToast({ type: 'success', title: 'Check Completed', message: 'Check marked as completed.' });
-                          router.back();
-                        } catch (err: any) {
-                          console.error('Failed to complete check:', err);
-                          showToast({ type: 'error', title: 'Submit Failed', message: err?.message || 'Failed to complete check.' });
-                        } finally {
-                          setUploading(false);
-                        }
-                      },
-                    },
-                  ],
-                });
-              }}
-              disabled={uploading}
-              activeOpacity={0.8}
-            >
-              {uploading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <View style={styles.uploadButtonContent}>
-                  <MaterialCommunityIcons name="check-circle-outline" size={20} color="#FFFFFF" />
-                  <Text style={styles.uploadButtonText}>Complete &amp; Submit Check</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 

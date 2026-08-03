@@ -66,6 +66,13 @@ const casesSlice = createSlice({
           : c
       );
     },
+    updateCheckStatusInStore: (state, action: PayloadAction<{ caseId: number; status: string }>) => {
+      state.cases = state.cases.map(c => 
+        c.case_id === action.payload.caseId
+          ? { ...c, check_status: action.payload.status } 
+          : c
+      );
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -97,7 +104,7 @@ const casesSlice = createSlice({
       .addCase(fetchCases.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
-        state.cases = [];
+        // Do not clear existing cases on a temporary background refresh failure
       })
       .addCase(fetchCaseDetail.pending, (state) => {
         state.isLoading = true;
@@ -116,5 +123,5 @@ const casesSlice = createSlice({
   },
 });
 
-export const { clearError, clearSelectedCase, clearAllCases, markCheckAsCompleted } = casesSlice.actions;
+export const { clearError, clearSelectedCase, clearAllCases, markCheckAsCompleted, updateCheckStatusInStore } = casesSlice.actions;
 export default casesSlice.reducer;

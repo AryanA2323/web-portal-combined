@@ -23,6 +23,10 @@ import apiService from '@/services/api';
 
 const checkStatusColors: Record<string, { solid: string; soft: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
   WIP: { solid: '#D9822B', soft: '#FFF3E3', icon: 'progress-clock' },
+  'Applied for CS': { solid: '#0F5FA8', soft: '#EBF3FA', icon: 'file-document-outline' },
+  'CS Recieved to adv': { solid: '#6E59CF', soft: '#F1EFFC', icon: 'file-check-outline' },
+  Dispatched: { solid: '#2F7A8E', soft: '#EBF4F6', icon: 'truck-delivery-outline' },
+  'not found': { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
   Completed: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   Verified: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   Reassigned: { solid: '#D64545', soft: '#FDECEC', icon: 'refresh' },
@@ -58,12 +62,27 @@ export default function DashboardScreen() {
   const [filterType, setFilterType] = useState<'all' | 'wip' | 'reassigned'>('all');
   
   const activeChecks = useMemo(() => {
-    return checks.filter((c: any) => {
+    const filtered = checks.filter((c: any) => {
       if (c.check_status === 'Completed' || c.check_status === 'Verified') return false;
       if (filterType === 'wip' && c.check_status !== 'WIP') return false;
       if (filterType === 'reassigned' && c.check_status !== 'Reassigned') return false;
       return true;
     });
+
+    // Merge insured + driver into single "Insured cum driver" card
+    const seenCum = new Set<string>();
+    const result: any[] = [];
+    for (const c of filtered) {
+      if (c.insured_cum_driver) {
+        const key = `${c.case_id}`;
+        if (seenCum.has(key)) continue;
+        seenCum.add(key);
+        result.push({ ...c, check_type: 'Insured cum driver' });
+      } else {
+        result.push(c);
+      }
+    }
+    return result;
   }, [checks, filterType]);
   
   const [unreadCount, setUnreadCount] = useState(0);

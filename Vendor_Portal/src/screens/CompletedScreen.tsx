@@ -23,6 +23,10 @@ import { useRouter } from 'expo-router';
 
 const checkStatusColors: Record<string, { solid: string; soft: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
   WIP: { solid: '#D9822B', soft: '#FFF3E3', icon: 'progress-clock' },
+  'Applied for CS': { solid: '#0F5FA8', soft: '#EBF3FA', icon: 'file-document-outline' },
+  'CS Recieved to adv': { solid: '#6E59CF', soft: '#F1EFFC', icon: 'file-check-outline' },
+  Dispatched: { solid: '#2F7A8E', soft: '#EBF4F6', icon: 'truck-delivery-outline' },
+  'not found': { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
   Completed: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   Verified: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   Reassigned: { solid: '#D64545', soft: '#FDECEC', icon: 'refresh' },
@@ -36,6 +40,7 @@ const checkTypeColors: Record<string, string> = {
   'Driver Check': '#2F7A8E',
   'Spot Check': '#2E9B62',
   Chargesheet: '#C56B1F',
+  'Insured cum driver': '#6E59CF',
 };
 
 const typeToSlug: Record<string, string> = {
@@ -47,6 +52,7 @@ const typeToSlug: Record<string, string> = {
   'Chargesheet Check': 'chargesheet',
   'RTI Check': 'rti',
   'RTO Check': 'rto',
+  'Insured cum driver': 'insured_cum_driver',
 };
 
 export default function CompletedScreen() {
@@ -73,7 +79,20 @@ export default function CompletedScreen() {
       filtered = filtered.filter((c: any) => new Date(c.updated_at) <= endOfDay);
     }
     
-    return filtered;
+    const seenCum = new Set();
+    const finalFiltered = [];
+    for (const c of filtered) {
+      if (c.insured_cum_driver) {
+        const key = `${c.case_id}`;
+        if (seenCum.has(key)) continue;
+        seenCum.add(key);
+        finalFiltered.push({ ...c, check_type: 'Insured cum driver' });
+      } else {
+        finalFiltered.push(c);
+      }
+    }
+    
+    return finalFiltered;
   }, [checks, fromDate, toDate]);
   // Refresh data every time the screen comes into focus
   useFocusEffect(

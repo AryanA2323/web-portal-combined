@@ -104,7 +104,7 @@ class InsuranceCase(models.Model):
     case_type = models.CharField(max_length=50, choices=CASE_TYPE_CHOICES, blank=True)
     investigation_report_status = models.CharField(max_length=20, choices=REPORT_STATUS_CHOICES, default='Pending')
     full_case_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
-    scope_of_work = models.TextField(blank=True)
+    special_instructions = models.TextField(blank=True)
     case_notes = models.TextField(blank=True)
     
     # ========== CLAIMANT DETAILS ==========

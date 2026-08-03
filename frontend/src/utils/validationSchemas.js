@@ -78,7 +78,7 @@ export const registerSchema = yup.object().shape({
     .required('Please confirm your password'),
   role: yup
     .string()
-    .oneOf(['qc', 'admin'], 'Please select a valid role')
+    .oneOf(['qc', 'case_manager'], 'Please select a valid role')
     .required('Please select your role'),
 });
 
@@ -114,6 +114,6 @@ export const signupSchema = yup.object().shape({
     .required('Please confirm your password'),
   role: yup
     .string()
-    .oneOf(['qc', 'admin'], 'Please select a valid role')
+    .oneOf(['qc', 'case_manager'], 'Please select a valid role')
     .required('Please select your role'),
 });

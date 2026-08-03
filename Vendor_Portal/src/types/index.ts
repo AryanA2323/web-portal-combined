@@ -53,8 +53,10 @@ export interface Case {
   workflow_type?: string;
   investigation_progress?: number;
   case_id?: number;
+  check_id?: number;
   check_type?: string;
   check_status?: string;
+  insured_cum_driver?: boolean;
 }
 
 export interface CasesResponse {
@@ -74,6 +76,7 @@ export interface VendorNotification {
   id: number;
   notification_type: 'CHECK_ASSIGNED' | 'CHECK_REMOVED' | string;
   check_type: string;
+  check_id?: number;
   case_id: number;
   case_number: string;
   claim_number?: string;

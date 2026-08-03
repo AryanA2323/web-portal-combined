@@ -1,7 +1,7 @@
 // Role configuration
 export const ROLES = {
   QC: 'qc',
-  ADMIN: 'admin',
+  CASE_MANAGER: 'case_manager',
   SUPER_ADMIN: 'super_admin', // Support for sub-role being returned as main role
 };
 
@@ -15,13 +15,13 @@ export const ROLE_CONFIG = {
     icon: 'Gavel',
     dashboardPath: '/qc/dashboard',
   },
-  [ROLES.ADMIN]: {
-    label: 'Admin',
+  [ROLES.CASE_MANAGER]: {
+    label: 'Case Manager',
     description: 'System administration',
     color: '#d32f2f',
     bgColor: '#ffebee',
     icon: 'AdminPanelSettings',
-    dashboardPath: '/admin/dashboard',
+    dashboardPath: '/case_manager/dashboard',
   },
   [ROLES.SUPER_ADMIN]: {
     label: 'Super Admin',
@@ -29,7 +29,7 @@ export const ROLE_CONFIG = {
     color: '#d32f2f',
     bgColor: '#ffebee',
     icon: 'AdminPanelSettings',
-    dashboardPath: '/admin/dashboard',
+    dashboardPath: '/case_manager/dashboard',
   },
 };
 
@@ -37,15 +37,15 @@ export const ROLE_CONFIG = {
 export const getRoleDashboard = (role) => {
   const normalizedRole = role?.toLowerCase().replace(/_/g, '_');
   
-  // Handle both 'admin' and 'super_admin' roles
-  if (normalizedRole === 'super_admin' || normalizedRole === 'admin') {
-    return '/admin/dashboard';
+  // Handle 'admin', 'case_manager' and 'super_admin' roles
+  if (normalizedRole === 'super_admin' || normalizedRole === 'case_manager' || normalizedRole === 'admin') {
+    return '/case_manager/dashboard';
   }
   
   return ROLE_CONFIG[normalizedRole]?.dashboardPath || '/';
 };
 
-// Admin sub-roles
+// CaseManager sub-roles
 export const ADMIN_SUB_ROLES = {
   CASE_HANDLER: 'case_handler',
   REPORT_MANAGER: 'report_manager',
@@ -53,22 +53,22 @@ export const ADMIN_SUB_ROLES = {
   SUPER_ADMIN: 'super_admin',
 };
 
-// Default permissions for regular admin (all pages except users)
+// Default permissions for regular case manager (all pages except users)
 const DEFAULT_ADMIN_PERMISSIONS = [
-  '/admin/dashboard',
-  '/admin/cases',
-  '/admin/ai-brief',
-  '/admin/legal-review',
-  '/admin/reports',
-  '/admin/audit-logs',
-  '/admin/settings',
+  '/case_manager/dashboard',
+  '/case_manager/cases',
+  '/case_manager/ai-brief',
+  '/case_manager/legal-review',
+  '/case_manager/reports',
+  '/case_manager/audit-logs',
+  '/case_manager/settings',
 ];
 
 // Super admin gets access to users page
 const SUPER_ADMIN_PERMISSIONS = [
-  '/admin/dashboard',
-  '/admin/users',
-  '/admin/clients',
+  '/case_manager/dashboard',
+  '/case_manager/users',
+  '/case_manager/clients',
 ];
 
 // Sub-role configuration with permissions
@@ -77,19 +77,19 @@ export const SUB_ROLE_CONFIG = {
     label: 'Case Handler',
     description: 'Manage and handle cases',
     icon: 'FolderOpen',
-    permissions: ['/admin/dashboard', '/admin/cases']
+    permissions: ['/case_manager/dashboard', '/case_manager/cases']
   },
   report_manager: {
     label: 'Report Manager',
     description: 'Generate and manage reports',
     icon: 'Assessment',
-    permissions: ['/admin/dashboard', '/admin/reports']
+    permissions: ['/case_manager/dashboard', '/case_manager/reports']
   },
   log_manager: {
     label: 'Log Manager',
     description: 'Manage system logs',
     icon: 'History',
-    permissions: ['/admin/dashboard', '/admin/audit-logs']
+    permissions: ['/case_manager/dashboard', '/case_manager/audit-logs']
   },
   super_admin: {
     label: 'Super Admin',
@@ -107,8 +107,8 @@ export const getMenuItemsForUser = (user) => {
   
   const userRole = user.role?.toLowerCase();
   
-  // Allow both 'admin' and 'super_admin' roles
-  if (userRole !== 'admin' && userRole !== 'super_admin') {
+  // Allow 'admin', 'case_manager' and 'super_admin' roles
+  if (userRole !== 'case_manager' && userRole !== 'super_admin' && userRole !== 'admin') {
     return [];
   }
   
@@ -128,7 +128,7 @@ export const getMenuItemsForUser = (user) => {
     return SUB_ROLE_CONFIG[subRole].permissions;
   }
   
-  // Default: regular admin gets all pages except users
+  // Default: regular case manager gets all pages except users
   return DEFAULT_ADMIN_PERMISSIONS;
 };
 

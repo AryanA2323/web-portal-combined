@@ -2,7 +2,7 @@
 Add common case fields to InsuranceCase model:
   client_name, case_receipt_date, receipt_month, completion_date,
   completion_month, case_due_date, tat_days, sla_status, case_type,
-  investigation_report_status, full_case_status, scope_of_work
+  investigation_report_status, full_case_status, special_instructions
 """
 
 from django.db import migrations, models
@@ -136,7 +136,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="insurancecase",
-            name="scope_of_work",
+            name="special_instructions",
             field=models.TextField(blank=True, help_text="Scope of work for this case", default=""),
             preserve_default=False,
         ),

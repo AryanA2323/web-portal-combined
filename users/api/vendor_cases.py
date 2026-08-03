@@ -88,7 +88,7 @@ def dict_fetchall(cursor):
 
 def get_vendor_id_from_user(user):
     """Get vendor ID from authenticated user."""
-    if not user.is_authenticated or user.role != 'VENDOR':
+    if not user.is_authenticated or user.role not in ('VENDOR', 'ADVOCATE'):
         return None
     
     try:
@@ -98,6 +98,37 @@ def get_vendor_id_from_user(user):
     except Exception as e:
         logger.error(f"Failed to get vendor ID for user {user.id}: {e}")
         return None
+
+
+def get_vendor_ids_from_user(user):
+    """Return tuple of possible vendor assignment IDs (both Vendor.id and User.id) for a user."""
+    if not user.is_authenticated or user.role not in ('VENDOR', 'ADVOCATE'):
+        return ()
+
+    ids = []
+    try:
+        from users.models import Vendor
+        vendor = Vendor.objects.filter(user=user).first()
+        if vendor:
+            ids.append(vendor.id)
+    except Exception as e:
+        logger.error(f"Failed to get vendor IDs for user {user.id}: {e}")
+
+    if user.id not in ids:
+        ids.append(user.id)
+
+    return tuple(ids)
+
+
+def _vendor_assignment_where_clause(vendor_ids, column_name: str = "assigned_vendor_id"):
+    """Build a SQL WHERE fragment for one or more vendor identifiers."""
+    if not vendor_ids:
+        return "1 = 0", []
+    if isinstance(vendor_ids, int):
+        vendor_ids = (vendor_ids,)
+    if len(vendor_ids) == 1:
+        return f"{column_name} = %s", [vendor_ids[0]]
+    return f"({column_name} = %s OR {column_name} = %s)", [vendor_ids[0], vendor_ids[1]]
 
 
 CHECK_ASSIGNMENT_TABLES = (
@@ -111,42 +142,57 @@ CHECK_ASSIGNMENT_TABLES = (
 )
 
 
-def get_vendor_assigned_case_numbers(cursor, vendor_id: int) -> List[str]:
+def get_vendor_assigned_case_numbers(cursor, vendor_ids) -> List[str]:
     """Return distinct insurance case numbers that have at least one assigned sub-check."""
+    if isinstance(vendor_ids, int):
+        vendor_ids = (vendor_ids,)
+    where_clause, params = _vendor_assignment_where_clause(vendor_ids, "t.assigned_vendor_id")
+    if not params:
+        return []
+
     union_query = " UNION ".join(
         [
             f"""
-            SELECT c.case_number
+            SELECT COALESCE(c.case_number, icase.case_number) AS case_number
             FROM {table} t
-            JOIN cases c ON c.id = t.case_id
-            WHERE t.assigned_vendor_id = %s
-              AND c.case_number IS NOT NULL
-              AND c.case_number <> ''
+            LEFT JOIN cases c ON c.id = t.case_id
+            LEFT JOIN insurance_case icase ON icase.id = t.case_id
+            WHERE {where_clause}
+              AND COALESCE(c.case_number, icase.case_number) IS NOT NULL
+              AND COALESCE(c.case_number, icase.case_number) <> ''
             """
             for table in CHECK_ASSIGNMENT_TABLES
         ]
     )
 
+    all_params = params * len(CHECK_ASSIGNMENT_TABLES)
     cursor.execute(
         f"SELECT DISTINCT case_number FROM ({union_query}) assigned_cases ORDER BY case_number",
-        [vendor_id] * len(CHECK_ASSIGNMENT_TABLES),
+        all_params,
     )
-    return [row[0] for row in cursor.fetchall()]
+    return [row[0] for row in cursor.fetchall() if row[0]]
 
 
-def vendor_has_case_assignment(cursor, vendor_id: int, case_number: str) -> bool:
+def vendor_has_case_assignment(cursor, vendor_ids, case_number: str) -> bool:
     """Check whether a vendor has any assigned sub-check for the given case number."""
+    if isinstance(vendor_ids, int):
+        vendor_ids = (vendor_ids,)
+    where_clause, params = _vendor_assignment_where_clause(vendor_ids, "t.assigned_vendor_id")
+    if not params:
+        return False
+
     for table in CHECK_ASSIGNMENT_TABLES:
         cursor.execute(
             f"""
             SELECT 1
             FROM {table} t
-            JOIN cases c ON c.id = t.case_id
-            WHERE t.assigned_vendor_id = %s
-              AND c.case_number = %s
+            LEFT JOIN cases c ON c.id = t.case_id
+            LEFT JOIN insurance_case icase ON icase.id = t.case_id
+            WHERE {where_clause}
+              AND (c.case_number = %s OR icase.case_number = %s)
             LIMIT 1
             """,
-            [vendor_id, case_number],
+            params + [case_number, case_number],
         )
         if cursor.fetchone():
             return True
@@ -422,13 +468,13 @@ def get_vendor_cases(
     if request.user.role != 'VENDOR':
         return 403, {"error": "Vendor access required"}
     
-    vendor_id = get_vendor_id_from_user(request.user)
-    if not vendor_id:
+    vendor_ids = get_vendor_ids_from_user(request.user)
+    if not vendor_ids:
         return 403, {"error": "Vendor profile not found"}
     
     try:
         with connection.cursor() as cursor:
-            case_numbers = get_vendor_assigned_case_numbers(cursor, vendor_id)
+            case_numbers = get_vendor_assigned_case_numbers(cursor, vendor_ids)
             if not case_numbers:
                 return {
                     "cases": [],
@@ -541,6 +587,8 @@ _CHECK_TABLE_MAP = {
     'rto':               'rto_checks',
     'rto check':         'rto_checks',
     'rto_checks':        'rto_checks',
+    'insured_cum_driver':'insured_checks',
+    'insured cum driver':'insured_checks',
 }
 
 _CHECK_DETAIL_COLUMNS = {
@@ -549,11 +597,11 @@ _CHECK_DETAIL_COLUMNS = {
                      cc.claimant_name, cc.claimant_contact, cc.claimant_address,
                      cc.claimant_income, cc.statement, cc.triggers, cc.vendor_evidence AS evidence,
                      cc.vendor_documents AS vendor_documents, cc.case_documents AS case_documents,
-                     cc.admin_feedback, cc.is_reassigned, cc.questionnaire''',
+                     cc.questionnaire, cc.vendor_feedback, cc.negative_status''',
         'alias': 'cc',
         'fields': ['id','case_id','check_status','claimant_name','claimant_contact',
                     'claimant_address','claimant_income','statement','triggers','evidence',
-                    'vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
+                    'vendor_documents','case_documents','questionnaire','vendor_feedback','negative_status'],
     },
     'insured_checks': {
         'select': '''ic.id, ic.case_id, ic.check_status,
@@ -561,11 +609,12 @@ _CHECK_DETAIL_COLUMNS = {
                      ic.policy_number, ic.policy_period, ic.rc, ic.permit,
                      ic.statement, ic.triggers, ic.vendor_evidence AS evidence,
                      ic.vendor_documents AS vendor_documents, ic.case_documents AS case_documents,
-                     ic.admin_feedback, ic.is_reassigned, ic.questionnaire''',
+                     ic.questionnaire, ic.vendor_feedback, ic.negative_status''',
         'alias': 'ic',
         'fields': ['id','case_id','check_status','insured_name','insured_contact',
                     'insured_address','policy_number','policy_period','rc','permit',
-                    'statement','triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
+                    'statement','triggers','evidence','vendor_documents','case_documents',
+                    'questionnaire','vendor_feedback','negative_status'],
     },
     'driver_checks': {
         'select': '''dc.id, dc.case_id, dc.check_status,
@@ -573,11 +622,12 @@ _CHECK_DETAIL_COLUMNS = {
                      dc.dl, dc.permit, dc.occupation,
                      dc.statement, dc.triggers, dc.vendor_evidence AS evidence,
                      dc.vendor_documents AS vendor_documents, dc.case_documents AS case_documents,
-                     dc.admin_feedback, dc.is_reassigned, dc.questionnaire''',
+                     dc.questionnaire, dc.vendor_feedback, dc.negative_status''',
         'alias': 'dc',
         'fields': ['id','case_id','check_status','driver_name','driver_contact',
                     'driver_address','dl','permit','occupation',
-                    'statement','triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
+                    'statement','triggers','evidence','vendor_documents','case_documents',
+                    'questionnaire','vendor_feedback','negative_status'],
     },
     'spot_checks': {
         'select': '''sc.id, sc.case_id, sc.check_status,
@@ -585,53 +635,64 @@ _CHECK_DETAIL_COLUMNS = {
                      sc.fir_number, sc.time_of_accident, sc.accident_brief,
                      sc.triggers, sc.vendor_evidence AS evidence,
                      sc.vendor_documents AS vendor_documents, sc.case_documents AS case_documents,
-                     sc.admin_feedback, sc.is_reassigned, sc.questionnaire''',
+                     sc.questionnaire, sc.vendor_feedback, sc.negative_status''',
         'alias': 'sc',
         'fields': ['id','case_id','check_status','place_of_accident','police_station',
                     'district','fir_number','time_of_accident','accident_brief',
-                    'triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
+                    'triggers','evidence','vendor_documents','case_documents',
+                    'questionnaire','vendor_feedback','negative_status'],
     },
     'chargesheets': {
-        'select': '''cs.id, cs.case_id, cs.check_status,
+        'select': '''cs.id, cs.case_id, cs.check_status, cs.advocate_status,
                      cs.court_name, cs.fir_number, cs.mv_act,
                      cs.fir_delay_days, cs.bsn_section, cs.ipc,
+                     cs.police_station_name, cs.court_district, cs.court_case_no,
                      cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
                      cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
-                     cs.admin_feedback, cs.is_reassigned, cs.questionnaire''',
+                     cs.questionnaire, cs.vendor_feedback, cs.negative_status,
+                     cs.applied_cs_photos, cs.dispatched_photos, cs.advocate_remark''',
         'alias': 'cs',
-        'fields': ['id','case_id','check_status','court_name','fir_number','mv_act',
+        'fields': ['id','case_id','check_status','advocate_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
-                    'statement','triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
+                    'police_station_name','court_district','court_case_no',
+                    'statement','triggers','evidence','vendor_documents','case_documents',
+                    'questionnaire','vendor_feedback','negative_status',
+                    'applied_cs_photos','dispatched_photos','advocate_remark'],
     },
     'chargesheet_checks': {
-        'select': '''cs.id, cs.case_id, cs.check_status,
+        'select': '''cs.id, cs.case_id, cs.check_status, cs.advocate_status,
                      cs.court_name, cs.fir_number, cs.mv_act,
                      cs.fir_delay_days, cs.bsn_section, cs.ipc,
+                     cs.police_station_name, cs.court_district, cs.court_case_no,
                      cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
                      cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
-                     cs.admin_feedback, cs.is_reassigned, cs.questionnaire''',
+                     cs.questionnaire, cs.vendor_feedback, cs.negative_status,
+                     cs.applied_cs_photos, cs.dispatched_photos, cs.advocate_remark''',
         'alias': 'cs',
-        'fields': ['id','case_id','check_status','court_name','fir_number','mv_act',
+        'fields': ['id','case_id','check_status','advocate_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
-                    'statement','triggers','evidence','vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
+                    'police_station_name','court_district','court_case_no',
+                    'statement','triggers','evidence','vendor_documents','case_documents',
+                    'questionnaire','vendor_feedback','negative_status',
+                    'applied_cs_photos','dispatched_photos','advocate_remark'],
     },
     'rti_checks': {
         'select': '''rt.id, rt.case_id, rt.check_status,
-                     rt.statement, rt.triggers, rt.vendor_evidence AS evidence,
+                     NULL AS statement, NULL AS triggers, rt.vendor_evidence AS evidence,
                      rt.vendor_documents AS vendor_documents, rt.case_documents AS case_documents,
-                     rt.admin_feedback, rt.is_reassigned, rt.questionnaire''',
+                     rt.questionnaire, rt.vendor_feedback''',
         'alias': 'rt',
         'fields': ['id','case_id','check_status','statement','triggers','evidence',
-                   'vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
+                   'vendor_documents','case_documents','questionnaire','vendor_feedback'],
     },
     'rto_checks': {
         'select': '''ro.id, ro.case_id, ro.check_status,
-                     ro.statement, ro.triggers, ro.vendor_evidence AS evidence,
+                     NULL AS statement, NULL AS triggers, ro.vendor_evidence AS evidence,
                      ro.vendor_documents AS vendor_documents, ro.case_documents AS case_documents,
-                     ro.admin_feedback, ro.is_reassigned, ro.questionnaire''',
+                     ro.questionnaire, ro.vendor_feedback''',
         'alias': 'ro',
         'fields': ['id','case_id','check_status','statement','triggers','evidence',
-                   'vendor_documents','case_documents','admin_feedback','is_reassigned','questionnaire'],
+                   'vendor_documents','case_documents','questionnaire','vendor_feedback'],
     },
 }
 
@@ -659,41 +720,58 @@ def get_vendor_assigned_checks(request: HttpRequest):
         logger.warning("vendor-assigned-checks: User not authenticated")
         return 401, {"error": "Not authenticated"}
     logger.info(f"vendor-assigned-checks: User role = {request.user.role}")
-    if request.user.role != 'VENDOR':
-        logger.warning(f"vendor-assigned-checks: Non-vendor role: {request.user.role}")
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
+        logger.warning(f"vendor-assigned-checks: Non-vendor/advocate role: {request.user.role}")
         return 403, {"error": "Vendor access required"}
 
-    vendor_id = get_vendor_id_from_user(request.user)
-    if not vendor_id:
+    vendor_ids = get_vendor_ids_from_user(request.user)
+    if not vendor_ids:
         return 403, {"error": "Vendor profile not found"}
 
     try:
         assigned_checks = []
         with connections['default'].cursor() as cursor:
             for table, label in _CHECK_TYPE_LABELS.items():
+                if request.user.role == 'ADVOCATE' and table != 'chargesheets':
+                    continue
                 if table not in _CHECK_DETAIL_COLUMNS:
                     continue
                 meta = _CHECK_DETAIL_COLUMNS[table]
                 alias = meta['alias']
+                where_clause, where_params = _vendor_assignment_where_clause(vendor_ids, f"{alias}.assigned_vendor_id")
                 try:
+                    icd_select = f", {alias}.insured_cum_driver" if table in _TABLES_WITH_INSURED_CUM_DRIVER else ""
+                    adv_select = f", {alias}.advocate_status" if table == 'chargesheets' else ", '' AS advocate_status"
                     cursor.execute(f"""
                         SELECT {alias}.id, {alias}.case_id, {alias}.check_status,
-                               c.claim_number, c.client_name, c.category, c.full_case_status
+                               COALESCE(c.claim_number, icase.claim_number, '') AS claim_number,
+                               COALESCE(c.client_name, icase.client_name, '') AS client_name,
+                               COALESCE(c.category, icase.category, '') AS category,
+                               COALESCE(c.full_case_status, icase.full_case_status, icase.status, '') AS full_case_status
+                               {icd_select}
+                               {adv_select}
                         FROM {table} {alias}
-                        JOIN cases c ON c.id = {alias}.case_id
-                        WHERE {alias}.assigned_vendor_id = %s
-                        ORDER BY {alias}.updated_at DESC NULLS LAST
-                    """, [vendor_id])
+                        LEFT JOIN cases c ON c.id = {alias}.case_id
+                        LEFT JOIN insurance_case icase ON icase.id = {alias}.case_id
+                        WHERE {where_clause}
+                        ORDER BY {alias}.id DESC
+                    """, where_params)
                     for r in cursor.fetchall():
+                        icd_val = bool(r[7]) if table in _TABLES_WITH_INSURED_CUM_DRIVER else False
+                        # advocate_status position depends on whether insured_cum_driver column is present
+                        adv_idx = 8 if table in _TABLES_WITH_INSURED_CUM_DRIVER else 7
+                        adv_stat = r[adv_idx] if (table == 'chargesheets' and len(r) > adv_idx and r[adv_idx]) else ""
+                        status_val = adv_stat if adv_stat else (r[2] or "WIP")
                         assigned_checks.append({
                             "check_id": r[0],
                             "case_id": r[1],
-                            "check_status": r[2] or "WIP",
+                            "check_status": status_val,
                             "check_type": label,
                             "claim_number": r[3] or "",
                             "client_name": r[4] or "",
                             "category": r[5] or "",
                             "case_status": r[6] or "",
+                            "insured_cum_driver": icd_val,
                         })
                 except Exception as table_err:
                     logger.warning(f"Skipping table '{table}' in vendor-assigned-checks: {table_err}")
@@ -722,18 +800,20 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
     """Return case info + check row detail for a specific assigned check."""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
 
-    vendor_id = get_vendor_id_from_user(request.user)
-    if not vendor_id:
+    vendor_ids = get_vendor_ids_from_user(request.user)
+    if not vendor_ids:
         return 403, {"error": "Vendor profile not found"}
 
     table = _CHECK_TABLE_MAP.get(check_type.lower())
     if not table:
         return 400, {"error": f"Unknown check type '{check_type}'"}
 
-    meta = _CHECK_DETAIL_COLUMNS[table]
+    meta = _CHECK_DETAIL_COLUMNS.get(table)
+    if not meta:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
     alias = meta['alias']
 
     try:
@@ -742,11 +822,21 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
             cursor.execute("""
                 SELECT id, claim_number, client_name, category,
                        case_receive_date, case_due_date, tat_days, sla,
-                       case_type, full_case_status, scope_of_work,
+                       case_type, full_case_status, special_instructions,
                        investigation_report_status
                 FROM cases WHERE id = %s
             """, [case_id])
             case_row = cursor.fetchone()
+            if not case_row:
+                cursor.execute("""
+                    SELECT id, claim_number, NULL AS client_name, category,
+                           case_receive_date, case_due_date, tat_days, sla_status AS sla,
+                           case_type, full_case_status, special_instructions,
+                           investigation_report_status
+                    FROM insurance_case WHERE id = %s
+                """, [case_id])
+                case_row = cursor.fetchone()
+
             if not case_row:
                 return 404, {"error": "Case not found"}
 
@@ -761,16 +851,17 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                 "sla": case_row[7] or "",
                 "case_type": case_row[8] or "",
                 "full_case_status": case_row[9] or "",
-                "scope_of_work": case_row[10] or "",
+                "special_instructions": case_row[10] or "",
                 "investigation_report_status": case_row[11] or "",
             }
 
             # Get check detail
+            where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, f"{alias}.assigned_vendor_id")
             cursor.execute(f"""
                 SELECT {meta['select']}
                 FROM {table} {alias}
-                WHERE {alias}.case_id = %s AND {alias}.assigned_vendor_id = %s
-            """, [case_id, vendor_id])
+                WHERE {alias}.case_id = %s AND {where_vendor}
+            """, [case_id, *vendor_params])
             check_row = cursor.fetchone()
             if not check_row:
                 return 404, {"error": "Check not found or not assigned to you"}
@@ -823,8 +914,9 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
             check_detail['evidence_photos'] = normalized_evidence_list
 
             # Parse documents list (vendor_documents + case_documents)
-            docs_raw = check_detail.get('vendor_documents') or check_detail.get('case_documents')
-            docs_list = parse_json_list(docs_raw)
+            v_docs = parse_json_list(check_detail.get('vendor_documents'))
+            c_docs = parse_json_list(check_detail.get('case_documents'))
+            docs_list = v_docs + c_docs
             normalized_docs_list = []
             written_statement_photos = []
             for item in docs_list:
@@ -881,6 +973,209 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
         return 500, {"error": "Failed to fetch check detail"}
 
 
+@router.get(
+    "/vendor-check-detail-by-id/{check_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Get Vendor Check Detail By Check ID",
+    description="Get case details + specific check details for a vendor-assigned check using check_id.",
+)
+def get_vendor_check_detail_by_id(request: HttpRequest, check_id: int, check_type: str):
+    """Return case info + check row detail for a specific assigned check using check_id."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
+        return 403, {"error": "Vendor access required"}
+
+    vendor_ids = get_vendor_ids_from_user(request.user)
+    if not vendor_ids:
+        return 403, {"error": "Vendor profile not found"}
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+
+    meta = _CHECK_DETAIL_COLUMNS.get(table)
+    if not meta:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+    alias = meta['alias']
+
+    try:
+        with connections['default'].cursor() as cursor:
+            where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, f"{alias}.assigned_vendor_id")
+            cursor.execute(f"""
+                SELECT {meta['select']}
+                FROM {table} {alias}
+                WHERE {alias}.id = %s AND {where_vendor}
+            """, [check_id, *vendor_params])
+            check_row = cursor.fetchone()
+            
+            if not check_row:
+                cursor.execute(f"""
+                    SELECT {meta['select']}
+                    FROM {table} {alias}
+                    WHERE {alias}.id = %s
+                """, [check_id])
+                check_row = cursor.fetchone()
+
+            if not check_row:
+                return 404, {"error": "Check not found"}
+
+            check_detail = {}
+            for i, field in enumerate(meta['fields']):
+                val = check_row[i]
+                if hasattr(val, 'isoformat'):
+                    val = val.isoformat()
+                if field == 'questionnaire' and isinstance(val, str):
+                    try:
+                        val = json.loads(val)
+                    except json.JSONDecodeError:
+                        pass
+                check_detail[field] = val
+
+            case_id = check_detail.get('case_id')
+
+            cursor.execute("""
+                SELECT id, claim_number, client_name, category,
+                       case_receive_date, case_due_date, tat_days, sla,
+                       case_type, full_case_status, special_instructions,
+                       investigation_report_status
+                FROM cases WHERE id = %s
+            """, [case_id])
+            case_row = cursor.fetchone()
+            if not case_row:
+                cursor.execute("""
+                    SELECT id, claim_number, NULL AS client_name, category,
+                           case_receive_date, case_due_date, tat_days, sla_status AS sla,
+                           case_type, full_case_status, special_instructions,
+                           investigation_report_status
+                    FROM insurance_case WHERE id = %s
+                """, [case_id])
+                case_row = cursor.fetchone()
+
+            case_info = {
+                "id": case_row[0] if case_row else case_id,
+                "claim_number": (case_row[1] if case_row else "") or "",
+                "client_name": (case_row[2] if case_row else "") or "",
+                "category": (case_row[3] if case_row else "") or "",
+                "case_receive_date": str(case_row[4]) if case_row and case_row[4] else "",
+                "case_due_date": str(case_row[5]) if case_row and case_row[5] else "",
+                "tat_days": case_row[6] if case_row else None,
+                "sla": (case_row[7] if case_row else "") or "",
+                "case_type": (case_row[8] if case_row else "") or "",
+                "full_case_status": (case_row[9] if case_row else "") or "",
+                "special_instructions": (case_row[10] if case_row else "") or "",
+                "investigation_report_status": (case_row[11] if case_row else "") or "",
+            }
+
+            evidence_raw = check_detail.get('evidence')
+            evidence_list = []
+            if evidence_raw:
+                try:
+                    if isinstance(evidence_raw, list):
+                        evidence_list = evidence_raw
+                    elif isinstance(evidence_raw, str):
+                        evidence_list = json.loads(evidence_raw)
+                    else:
+                        evidence_list = []
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    evidence_list = []
+            normalized_evidence_list = []
+            for item in evidence_list:
+                if isinstance(item, dict):
+                    evidence_item = dict(item)
+                elif isinstance(item, str):
+                    evidence_item = {
+                        "url": item,
+                        "filename": extract_evidence_filename(item),
+                    }
+                else:
+                    continue
+
+                raw_url = evidence_item.get("url") or evidence_item.get("photo_url") or ""
+                evidence_item["preview_url"] = build_absolute_media_url(request, raw_url)
+                if not evidence_item.get("filename"):
+                    evidence_item["filename"] = extract_evidence_filename(evidence_item)
+                normalized_evidence_list.append(evidence_item)
+            check_detail['evidence_photos'] = normalized_evidence_list
+
+            v_docs = parse_json_list(check_detail.get('vendor_documents'))
+            c_docs = parse_json_list(check_detail.get('case_documents'))
+            docs_list = v_docs + c_docs
+            normalized_docs_list = []
+            written_statement_photos = []
+            for item in docs_list:
+                if isinstance(item, dict):
+                    doc_item = dict(item)
+                elif isinstance(item, str):
+                    doc_item = {
+                        "url": item,
+                        "filename": extract_evidence_filename(item),
+                    }
+                else:
+                    continue
+
+                raw_url = doc_item.get("url") or ""
+                doc_item["preview_url"] = build_absolute_media_url(request, raw_url)
+                filename = doc_item.get("filename") or extract_evidence_filename(doc_item)
+                doc_item["filename"] = filename
+
+                if doc_item.get("category") == "statement_photo" or filename.startswith("written_statement_"):
+                    written_statement_photos.append(doc_item)
+                else:
+                    normalized_docs_list.append(doc_item)
+
+            check_detail['documents'] = normalized_docs_list
+            check_detail['written_statement_photos'] = written_statement_photos
+
+            statement_entries = _get_statement_entries_for_check(table, check_detail.get('id'))
+            for entry in statement_entries:
+                if entry.get("image_url"):
+                    entry["image_url"] = build_absolute_media_url(request, entry["image_url"])
+                if entry.get("audio_url"):
+                    entry["audio_url"] = build_absolute_media_url(request, entry["audio_url"])
+                if entry.get("audio_path"):
+                    entry["audio_path"] = build_absolute_media_url(request, entry["audio_path"])
+            check_detail['statement_entries'] = statement_entries
+            check_detail['statement_count'] = len(statement_entries)
+            check_detail['max_statements_per_check'] = MAX_STATEMENTS_PER_CHECK
+            check_detail['can_add_statement'] = len(statement_entries) < MAX_STATEMENTS_PER_CHECK
+            check_detail['next_statement_index'] = (
+                len(statement_entries) + 1
+                if len(statement_entries) < MAX_STATEMENTS_PER_CHECK
+                else None
+            )
+
+            # Normalize advocate chargesheet photos (applied_cs_photos, dispatched_photos)
+            for photo_field in ('applied_cs_photos', 'dispatched_photos'):
+                raw_photos = check_detail.get(photo_field)
+                photo_list = parse_json_list(raw_photos) if raw_photos else []
+                normalized = []
+                for item in photo_list:
+                    if isinstance(item, dict):
+                        p = dict(item)
+                    elif isinstance(item, str):
+                        p = {"url": item, "filename": extract_evidence_filename(item)}
+                    else:
+                        continue
+                    raw_url = p.get("url") or p.get("photo_url") or ""
+                    p["preview_url"] = build_absolute_media_url(request, raw_url)
+                    if not p.get("filename"):
+                        p["filename"] = extract_evidence_filename(p)
+                    normalized.append(p)
+                check_detail[photo_field] = normalized
+
+            return {
+                "case": case_info,
+                "check_type": check_type,
+                "check_type_label": _CHECK_TYPE_LABELS.get(table, check_type),
+                "check": check_detail,
+            }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch vendor check detail by id for check_id={check_id} check_type={check_type}: {e}", exc_info=True)
+        return 500, {"error": "Failed to fetch check detail"}
+
+
 
 def _evaluate_and_update_check_status(cursor, table: str, check_id: int, check_type: str):
     cursor.execute(f"SELECT vendor_evidence FROM {table} WHERE id = %s", [check_id])
@@ -925,24 +1220,33 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
     """Upload evidence photo for a vendor-assigned check."""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
 
-    vendor_id = get_vendor_id_from_user(request.user)
-    if not vendor_id:
+    vendor_ids = get_vendor_ids_from_user(request.user)
+    if not vendor_ids:
         return 403, {"error": "Vendor profile not found"}
 
     table = _CHECK_TABLE_MAP.get(check_type.lower())
     if not table:
         return 400, {"error": f"Unknown check type '{check_type}'"}
+    # Determine which column to store photos in
+    photo_category = request.POST.get('photo_category', '') or request.GET.get('photo_category', '')
+    if table == 'chargesheets' and photo_category == 'applied_cs':
+        evidence_column = 'applied_cs_photos'
+    elif table == 'chargesheets' and photo_category == 'dispatched':
+        evidence_column = 'dispatched_photos'
+    else:
+        evidence_column = 'vendor_evidence'
 
     # Verify the check is assigned to this vendor
     try:
         with connections['default'].cursor() as cursor:
+            where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
             cursor.execute(f"""
-                SELECT id, vendor_evidence FROM {table}
-                WHERE case_id = %s AND assigned_vendor_id = %s
-            """, [case_id, vendor_id])
+                SELECT id, {evidence_column} FROM {table}
+                WHERE case_id = %s AND {where_vendor}
+            """, [case_id, *vendor_params])
             check_row = cursor.fetchone()
             if not check_row:
                 return 404, {"error": "Check not found or not assigned to you"}
@@ -1006,7 +1310,7 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
             case_coords = (case_location['latitude'], case_location['longitude'])
             distance_meters = geodesic(case_coords, photo_location).meters
             
-            if distance_meters > 100:
+            if distance_meters > 100 and table not in ['rto_checks', 'rti_checks', 'chargesheet_checks', 'chargesheets']:
                 errors.append("The evidence photo you uploaded does not match the check location. Try uploading the photo from the correct location.")
                 continue
                 
@@ -1060,11 +1364,11 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
             return 400, {"error": mismatch_msg}
         return 400, {"error": "Validation failed: " + "; ".join(errors)}
 
-    # Update the check table's vendor_evidence column
+    # Update the check table's evidence column
     try:
         with connections['default'].cursor() as cursor:
             cursor.execute(f"""
-                UPDATE {table} SET vendor_evidence = %s, check_status = 'WIP', updated_at = NOW()
+                UPDATE {table} SET {evidence_column} = %s, updated_at = NOW()
                 WHERE id = %s
             """, [json.dumps(evidence_list), check_id])
     except Exception as e:
@@ -1089,7 +1393,7 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
     """Mark a specific check as completed."""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
 
     vendor_id = get_vendor_id_from_user(request.user)
@@ -1103,10 +1407,14 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
     try:
         with connections['default'].cursor() as cursor:
             # Verify the check is assigned to this vendor
+            vendor_ids = get_vendor_ids_from_user(request.user)
+            where_vendor, vendor_params = _vendor_assignment_where_clause(
+                vendor_ids if vendor_ids else [vendor_id], "assigned_vendor_id"
+            )
             cursor.execute(f"""
                 SELECT id, vendor_evidence FROM {table}
-                WHERE case_id = %s AND assigned_vendor_id = %s
-            """, [case_id, vendor_id])
+                WHERE case_id = %s AND {where_vendor}
+            """, [case_id, *vendor_params])
             row = cursor.fetchone()
             if not row:
                 return 404, {"error": "Check not found or not assigned to you"}
@@ -1144,18 +1452,27 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
             # Update check_status
             cursor.execute(f"""
                 UPDATE {table} SET check_status = 'Completed', updated_at = NOW()
-                WHERE case_id = %s AND assigned_vendor_id = %s
-            """, [case_id, vendor_id])
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Failed to complete check: {e}")
-        return 500, {"error": "Failed to update check status"}
+                WHERE id = %s
+            """, [check_id])
 
-    return {
-        "success": True,
-        "message": "Check marked as completed"
-    }
+            # --- Insured cum driver: also complete the paired check ---
+            if table in ('insured_checks', 'driver_checks'):
+                cursor.execute(
+                    f"SELECT insured_cum_driver FROM {table} WHERE id = %s",
+                    [check_id],
+                )
+                icd_row = cursor.fetchone()
+                if icd_row and icd_row[0]:
+                    paired_table = 'driver_checks' if table == 'insured_checks' else 'insured_checks'
+                    cursor.execute(f"""
+                        UPDATE {paired_table} SET check_status = 'Completed', updated_at = NOW()
+                        WHERE case_id = %s
+                    """, [case_id])
+                    logger.info(f"Insured-cum-driver: also completed {paired_table} for case_id={case_id}")
+
+    except Exception as e:
+        logger.error(f"Failed to complete check: {e}", exc_info=True)
+        return 500, {"error": "Failed to update check status"}
 
     return {
         "success": True,
@@ -1164,7 +1481,84 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
 
 
 class QuestionnairePayload(Schema):
-    questionnaire: dict
+    questionnaire: dict = {}
+    vendor_feedback: str = ''
+    negative_status: str = ''
+    insured_cum_driver: bool = False
+
+
+# Tables that have negative_status column (added by migration 0044)
+_TABLES_WITH_NEGATIVE_STATUS = {
+    'claimant_checks', 'insured_checks', 'driver_checks',
+    'spot_checks', 'chargesheets',
+}
+# Tables that have insured_cum_driver column (added by migration 0044)
+_TABLES_WITH_INSURED_CUM_DRIVER = {
+    'insured_checks', 'driver_checks',
+}
+
+
+class CheckStatusUpdatePayload(Schema):
+    status: str
+    advocate_remark: str = ''
+
+
+@router.post(
+    "/vendor-check-status-update/{case_id}/{check_type}",
+    response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
+    summary="Update Vendor Check Status",
+    description="Update check status directly (e.g. for Chargesheet checks: WIP, Applied for CS, CS Recieved to adv, Dispatched, not found).",
+)
+def vendor_check_status_update(request: HttpRequest, case_id: int, check_type: str, payload: CheckStatusUpdatePayload):
+    """Update check status for an assigned check."""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
+        return 403, {"error": "Vendor access required"}
+
+    vendor_ids = get_vendor_ids_from_user(request.user)
+    if not vendor_ids:
+        return 403, {"error": "Vendor profile not found"}
+
+    table = _CHECK_TABLE_MAP.get(check_type.lower())
+    if not table:
+        return 400, {"error": f"Unknown check type '{check_type}'"}
+
+    new_status = (payload.status or '').strip()
+    if not new_status:
+        return 400, {"error": "status is required"}
+
+    try:
+        with connections['default'].cursor() as cursor:
+            where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
+            cursor.execute(
+                f"SELECT id FROM {table} WHERE case_id = %s AND {where_vendor}",
+                [case_id, *vendor_params],
+            )
+            row = cursor.fetchone()
+            if not row:
+                return 404, {"error": "Check not found or not assigned to you"}
+
+            check_id = row[0]
+            if table == 'chargesheets':
+                cursor.execute(
+                    f"UPDATE {table} SET advocate_status = %s, advocate_remark = %s, updated_at = NOW() WHERE id = %s",
+                    [new_status, payload.advocate_remark or '', check_id],
+                )
+            else:
+                cursor.execute(
+                    f"UPDATE {table} SET check_status = %s, updated_at = NOW() WHERE id = %s",
+                    [new_status, check_id],
+                )
+    except Exception as e:
+        logger.error(f"Failed to update check_status for case_id={case_id} check_type={check_type}: {e}", exc_info=True)
+        return 500, {"error": "Failed to update check status"}
+
+    return {
+        "success": True,
+        "message": "Status updated successfully",
+        "status": new_status,
+    }
 
 
 @router.post(
@@ -1174,14 +1568,14 @@ class QuestionnairePayload(Schema):
     description="Save dynamic questionnaire data for the check.",
 )
 def vendor_check_questionnaire_save(request: HttpRequest, case_id: int, check_type: str, payload: QuestionnairePayload):
-    """Save questionnaire responses to the check."""
+    """Save questionnaire responses and metadata to the check."""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
 
-    vendor_id = get_vendor_id_from_user(request.user)
-    if not vendor_id:
+    vendor_ids = get_vendor_ids_from_user(request.user)
+    if not vendor_ids:
         return 403, {"error": "Vendor profile not found"}
 
     table = _CHECK_TABLE_MAP.get(check_type.lower())
@@ -1191,24 +1585,83 @@ def vendor_check_questionnaire_save(request: HttpRequest, case_id: int, check_ty
     try:
         with connections['default'].cursor() as cursor:
             # Verify the check is assigned to this vendor
-            cursor.execute(f"SELECT id FROM {table} WHERE case_id = %s AND assigned_vendor_id = %s", [case_id, vendor_id])
+            where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
+            cursor.execute(
+                f"SELECT id FROM {table} WHERE case_id = %s AND {where_vendor}",
+                [case_id, *vendor_params],
+            )
             row = cursor.fetchone()
             if not row:
                 return 404, {"error": "Check not found or not assigned to you"}
-            
+
             check_id = row[0]
-            
+
             import json
             questionnaire_json = json.dumps(payload.questionnaire)
-            
-            # Save the questionnaire data
-            cursor.execute(f"""
-                UPDATE {table} SET questionnaire = %s::jsonb, updated_at = NOW()
-                WHERE id = %s
-            """, [questionnaire_json, check_id])
-            
+            vendor_feedback_val = payload.vendor_feedback or ''
+
+            set_clauses = ["questionnaire = %s::jsonb", "vendor_feedback = %s", "updated_at = NOW()"]
+            params = [questionnaire_json, vendor_feedback_val]
+
+            if table in _TABLES_WITH_NEGATIVE_STATUS:
+                set_clauses.append("negative_status = %s")
+                params.append(payload.negative_status or '')
+
+            if table in _TABLES_WITH_INSURED_CUM_DRIVER:
+                set_clauses.append("insured_cum_driver = %s")
+                params.append(payload.insured_cum_driver)
+
+            params.append(check_id)
+            cursor.execute(
+                f"UPDATE {table} SET {', '.join(set_clauses)} WHERE id = %s",
+                params,
+            )
+
+            # --- Insured cum driver: mirror data to paired check ---
+            if payload.insured_cum_driver and table in ('insured_checks', 'driver_checks'):
+                paired_table = 'driver_checks' if table == 'insured_checks' else 'insured_checks'
+
+                # Find the paired check for the same case
+                cursor.execute(
+                    f"SELECT id FROM {paired_table} WHERE case_id = %s LIMIT 1",
+                    [case_id],
+                )
+                paired_row = cursor.fetchone()
+                if paired_row:
+                    paired_id = paired_row[0]
+
+                    # Copy shared fields from the source check to the paired check
+                    cursor.execute(f"""
+                        SELECT vendor_evidence, vendor_documents, statement_entries
+                        FROM {table} WHERE id = %s
+                    """, [check_id])
+                    src = cursor.fetchone()
+                    src_evidence = src[0] if src else '[]'
+                    src_documents = src[1] if src else '[]'
+                    src_statements = src[2] if src else '[]'
+
+                    cursor.execute(f"""
+                        UPDATE {paired_table} SET
+                            questionnaire = %s::jsonb,
+                            vendor_feedback = %s,
+                            negative_status = %s,
+                            insured_cum_driver = TRUE,
+                            vendor_evidence = COALESCE(%s, '[]'::jsonb),
+                            vendor_documents = COALESCE(%s, '[]'::jsonb),
+                            statement_entries = COALESCE(%s, '[]'::jsonb),
+                            updated_at = NOW()
+                        WHERE id = %s
+                    """, [
+                        questionnaire_json,
+                        vendor_feedback_val,
+                        payload.negative_status or '',
+                        src_evidence, src_documents, src_statements,
+                        paired_id,
+                    ])
+                    logger.info(f"Insured-cum-driver: mirrored data from {table}#{check_id} to {paired_table}#{paired_id}")
+
     except Exception as e:
-        logger.error(f"Failed to save questionnaire: {e}")
+        logger.error(f"Failed to save questionnaire for case_id={case_id} check_type={check_type}: {e}", exc_info=True)
         return 500, {"error": "Failed to save questionnaire"}
 
     return {
@@ -1226,11 +1679,11 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
     """Delete a specific evidence photo from a vendor-assigned check."""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
 
-    vendor_id = get_vendor_id_from_user(request.user)
-    if not vendor_id:
+    vendor_ids = get_vendor_ids_from_user(request.user)
+    if not vendor_ids:
         return 403, {"error": "Vendor profile not found"}
 
     table = _CHECK_TABLE_MAP.get(check_type.lower())
@@ -1238,13 +1691,22 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
         return 400, {"error": f"Unknown check type '{check_type}'"}
     if not filename:
         return 400, {"error": "filename is required"}
+    # Determine which column to read/update
+    photo_category = request.GET.get('photo_category', '')
+    if table == 'chargesheets' and photo_category == 'applied_cs':
+        evidence_column = 'applied_cs_photos'
+    elif table == 'chargesheets' and photo_category == 'dispatched':
+        evidence_column = 'dispatched_photos'
+    else:
+        evidence_column = 'vendor_evidence'
 
     try:
         with connections['default'].cursor() as cursor:
+            where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
             cursor.execute(f"""
-                SELECT id, vendor_evidence FROM {table}
-                WHERE case_id = %s AND assigned_vendor_id = %s
-            """, [case_id, vendor_id])
+                SELECT id, {evidence_column} FROM {table}
+                WHERE case_id = %s AND {where_vendor}
+            """, [case_id, *vendor_params])
             check_row = cursor.fetchone()
             if not check_row:
                 return 404, {"error": "Check not found or not assigned to you"}
@@ -1262,7 +1724,7 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
             deleted_item = evidence_list.pop(delete_index)
 
             cursor.execute(f"""
-                UPDATE {table} SET vendor_evidence = %s, check_status = 'WIP', updated_at = NOW()
+                UPDATE {table} SET {evidence_column} = %s, updated_at = NOW()
                 WHERE id = %s
             """, [json.dumps(evidence_list), check_id])
     except Exception as exc:
@@ -1299,11 +1761,11 @@ def delete_vendor_check_document(request: HttpRequest, case_id: int, check_type:
     """Delete a specific document or statement photo from vendor_documents."""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
 
-    vendor_id = get_vendor_id_from_user(request.user)
-    if not vendor_id:
+    vendor_ids = get_vendor_ids_from_user(request.user)
+    if not vendor_ids:
         return 403, {"error": "Vendor profile not found"}
 
     table = _CHECK_TABLE_MAP.get(check_type.lower())
@@ -1314,10 +1776,11 @@ def delete_vendor_check_document(request: HttpRequest, case_id: int, check_type:
 
     try:
         with connections['default'].cursor() as cursor:
+            where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
             cursor.execute(f"""
                 SELECT id, vendor_documents FROM {table}
-                WHERE case_id = %s AND assigned_vendor_id = %s
-            """, [case_id, vendor_id])
+                WHERE case_id = %s AND {where_vendor}
+            """, [case_id, *vendor_params])
             check_row = cursor.fetchone()
             if not check_row:
                 return 404, {"error": "Check not found or not assigned to you"}
@@ -1730,7 +2193,7 @@ def upload_evidence(
                 )
                 
                 # Reject if distance > 100 meters
-                if distance_meters > 100:
+                if distance_meters > 100 and table not in ['rto_checks', 'rti_checks', 'chargesheet_checks', 'chargesheets']:
                     errors.append(
                         f"{file.name}: Location mismatch. Photo taken {distance_meters:.0f}m away from case location. "
                         f"Maximum allowed distance is 100m."

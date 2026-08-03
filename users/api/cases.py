@@ -485,7 +485,7 @@ class CaseSchema(Schema):
     case_type: Optional[str] = None
     investigation_report_status: Optional[str] = None
     full_case_status: Optional[str] = None
-    scope_of_work: Optional[str] = None
+    special_instructions: Optional[str] = None
     # Location
     incident_address: Optional[str] = None
     incident_city: Optional[str] = None
@@ -605,7 +605,7 @@ class CreateCaseSchema(Schema):
     case_type: str = ''   # Full Case / Partial Case / Reassessment / Connected Case
     investigation_report_status: str = 'Open'
     full_case_status: str = 'WIP'
-    scope_of_work: str = ''
+    special_instructions: str = ''
     
     # Basic / system fields
     title: str = ''
@@ -704,7 +704,7 @@ def is_admin_or_super_admin(user) -> bool:
     """Check if user is admin or super admin."""
     return (
         user.is_authenticated and
-        user.role in ['ADMIN', 'SUPER_ADMIN']
+        user.role in ['CASE_MANAGER', 'SUPER_ADMIN']
     )
 
 
@@ -896,7 +896,8 @@ def get_cases_incident_db(
                        cc.statement,
                        cc.triggers AS triggers,
                        cc.assigned_vendor_id,
-                       v.company_name AS assigned_vendor_name
+                       v.company_name AS assigned_vendor_name,
+                       cc.negative_status
                 FROM claimant_checks cc
                 LEFT JOIN users_vendor v ON v.id = cc.assigned_vendor_id
                 WHERE cc.case_id IN ({ph})
@@ -914,6 +915,7 @@ def get_cases_incident_db(
                         "statement": (r[6] or r[7] or "")[:120],
                         "assigned_vendor_id": r[8],
                         "assigned_vendor_name": r[9],
+                        "negative_status": r[10] or "",
                     })
 
             # ─── insured_checks ────────────────────────────────────────────
@@ -929,7 +931,8 @@ def get_cases_incident_db(
                        ic.statement,
                        ic.triggers AS triggers,
                        ic.assigned_vendor_id,
-                       v.company_name AS assigned_vendor_name
+                       v.company_name AS assigned_vendor_name,
+                       ic.negative_status
                 FROM insured_checks ic
                 LEFT JOIN users_vendor v ON v.id = ic.assigned_vendor_id
                 WHERE ic.case_id IN ({ph})
@@ -949,6 +952,7 @@ def get_cases_incident_db(
                         "statement": (r[9] or r[10] or "")[:120],
                         "assigned_vendor_id": r[11],
                         "assigned_vendor_name": r[12],
+                        "negative_status": r[13] or "",
                     })
 
             # ─── driver_checks ─────────────────────────────────────────────
@@ -963,7 +967,8 @@ def get_cases_incident_db(
                        dc.statement,
                        dc.triggers AS triggers,
                        dc.assigned_vendor_id,
-                       v.company_name AS assigned_vendor_name
+                       v.company_name AS assigned_vendor_name,
+                       dc.negative_status
                 FROM driver_checks dc
                 LEFT JOIN users_vendor v ON v.id = dc.assigned_vendor_id
                 WHERE dc.case_id IN ({ph})
@@ -982,6 +987,7 @@ def get_cases_incident_db(
                         "statement": (r[8] or r[9] or "")[:120],
                         "assigned_vendor_id": r[10],
                         "assigned_vendor_name": r[11],
+                        "negative_status": r[12] or "",
                     })
 
             # ─── spot_checks ───────────────────────────────────────────────
@@ -995,7 +1001,8 @@ def get_cases_incident_db(
                        sc.accident_brief,
                        sc.triggers,
                        sc.assigned_vendor_id,
-                       v.company_name AS assigned_vendor_name
+                       v.company_name AS assigned_vendor_name,
+                       sc.negative_status
                 FROM spot_checks sc
                 LEFT JOIN users_vendor v ON v.id = sc.assigned_vendor_id
                 WHERE sc.case_id IN ({ph})
@@ -1014,6 +1021,7 @@ def get_cases_incident_db(
                         "statement": (r[7] or r[8] or "")[:120],
                         "assigned_vendor_id": r[9],
                         "assigned_vendor_name": r[10],
+                        "negative_status": r[11] or "",
                     })
 
             # ─── chargesheets ──────────────────────────────────────────────
@@ -1029,7 +1037,9 @@ def get_cases_incident_db(
                        cs.statement,
                        cs.triggers,
                        cs.assigned_vendor_id,
-                       v.company_name AS assigned_vendor_name
+                       v.company_name AS assigned_vendor_name,
+                       cs.advocate_status,
+                       cs.negative_status
                 FROM chargesheets cs
                 LEFT JOIN users_vendor v ON v.id = cs.assigned_vendor_id
                 WHERE cs.case_id IN ({ph})
@@ -1053,6 +1063,8 @@ def get_cases_incident_db(
                         "statement": (r[9] or r[10] or "")[:120],
                         "assigned_vendor_id": r[11],
                         "assigned_vendor_name": r[12],
+                        "advocate_status": r[13],
+                        "negative_status": r[14] or "",
                     })
 
             # ─── rti_checks ───────────────────────────────────────────────
@@ -1068,7 +1080,8 @@ def get_cases_incident_db(
                        rt.rc_checked,
                        rt.remarks,
                        rt.assigned_vendor_id,
-                       v.company_name AS assigned_vendor_name
+                       v.company_name AS assigned_vendor_name,
+                       rt.negative_status
                 FROM rti_checks rt
                 LEFT JOIN users_vendor v ON v.id = rt.assigned_vendor_id
                 WHERE rt.case_id IN ({ph})
@@ -1092,6 +1105,7 @@ def get_cases_incident_db(
                         "statement": (r[10] or "")[:120],
                         "assigned_vendor_id": r[11],
                         "assigned_vendor_name": r[12],
+                        "negative_status": r[13] or "",
                     })
 
             # ─── rto_checks ───────────────────────────────────────────────
@@ -1107,7 +1121,8 @@ def get_cases_incident_db(
                        ro.rc_checked,
                        ro.remarks,
                        ro.assigned_vendor_id,
-                       v.company_name AS assigned_vendor_name
+                       v.company_name AS assigned_vendor_name,
+                       ro.negative_status
                 FROM rto_checks ro
                 LEFT JOIN users_vendor v ON v.id = ro.assigned_vendor_id
                 WHERE ro.case_id IN ({ph})
@@ -1147,8 +1162,10 @@ def get_cases_incident_db(
                         "location":     c.get("location", "—"),
                         "key_info":     c.get("key_info", "—"),
                         "statement":    c.get("statement", ""),
+                        "negative_status": c.get("negative_status", ""),
                         "assigned_vendor_id": c.get("assigned_vendor_id"),
                         "assigned_vendor_name": c.get("assigned_vendor_name", ""),
+                        "advocate_status": c.get("advocate_status", ""),
                     })
                 row["sub_items"] = sub_items
                 row["seq_num"] = int(row["seq_num"])
@@ -1188,7 +1205,7 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
                 c.case_type,
                 c.investigation_report_status,
                 c.full_case_status,
-                c.scope_of_work,
+                c.special_instructions,
                 c.case_receive_date,
                 c.category,
                 c.policy_document,
@@ -1363,7 +1380,7 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
         "case_type": row[4],
         "investigation_report_status": row[5],
         "full_case_status": row[6],
-        "scope_of_work": row[7],
+        "special_instructions": row[7],
         "case_receive_date": case_receive_date or "",
         "category": row[9],
         "policy_document": row[10],
@@ -1670,16 +1687,17 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
                     check_data['statement_audio_url'] = sa_url
 
                 # Normalize vendor documents / case documents
-                doc_raw = check_data.get('vendor_documents') or check_data.get('case_documents') or check_data.get('documents')
-                documents = []
-                if doc_raw:
-                    if isinstance(doc_raw, str):
-                        try:
-                            documents = _json.loads(doc_raw)
-                        except Exception:
-                            documents = []
-                    elif isinstance(doc_raw, list):
-                        documents = doc_raw
+                def parse_docs(raw):
+                    if not raw: return []
+                    if isinstance(raw, str):
+                        try: return _json.loads(raw)
+                        except: return []
+                    if isinstance(raw, list): return raw
+                    return []
+                
+                v_docs = parse_docs(check_data.get('vendor_documents'))
+                c_docs = parse_docs(check_data.get('case_documents'))
+                documents = v_docs + c_docs
 
                 normalized_docs = []
                 for d in documents:
@@ -2001,7 +2019,7 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
         'completion_date', 'completion_month',
         'case_due_date', 'tat_days', 'sla',
         'case_type', 'investigation_report_status',
-        'full_case_status', 'scope_of_work',
+        'full_case_status', 'special_instructions',
     }
 
     # Per-table updatable fields
@@ -2009,31 +2027,31 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
         'claimant_checks': {
             'claimant_name', 'claimant_contact', 'claimant_address',
             'claimant_income', 'dependants',
-            'check_status', 'statement', 'triggers',
+            'check_status', 'statement', 'triggers', 'negative_status',
             'case_documents', 'vendor_documents',
         },
         'insured_checks': {
             'insured_name', 'insured_contact', 'insured_address',
             'policy_number', 'policy_period', 'rc', 'permit',
-            'check_status', 'statement', 'triggers',
+            'check_status', 'statement', 'triggers', 'negative_status',
             'case_documents', 'vendor_documents',
         },
         'driver_checks': {
             'driver_name', 'driver_contact', 'driver_address',
             'dl', 'permit', 'occupation',
-            'check_status', 'statement', 'triggers',
+            'check_status', 'statement', 'triggers', 'negative_status',
             'case_documents', 'vendor_documents',
         },
         'spot_checks': {
             'time_of_accident', 'place_of_accident', 'district',
             'fir_number', 'city', 'police_station', 'accident_brief',
-            'check_status', 'triggers',
+            'check_status', 'triggers', 'negative_status',
             'case_documents', 'vendor_documents',
         },
         'chargesheets': {
             'fir_number', 'city', 'court_name', 'mv_act', 'fir_delay_days',
-            'bsn_section', 'ipc',
-            'check_status', 'statement', 'triggers',
+            'bsn_section', 'ipc', 'police_station_name', 'court_district', 'court_case_no',
+            'check_status', 'statement', 'triggers', 'negative_status', 'advocate_status',
             'case_documents', 'vendor_documents',
         },
         'rti_checks': {
@@ -2042,7 +2060,7 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
             'permit_checked', 'permit_number',
             'rc_checked', 'rc_number',
             'remarks',
-            'check_status',
+            'check_status', 'negative_status',
             'case_documents', 'vendor_documents',
         },
         'rto_checks': {
@@ -2051,7 +2069,7 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
             'permit_checked', 'permit_number',
             'rc_checked', 'rc_number',
             'remarks',
-            'check_status',
+            'check_status', 'negative_status',
             'case_documents', 'vendor_documents',
         },
     }
@@ -2492,7 +2510,7 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
             case_type=payload.case_type,
             investigation_report_status=payload.investigation_report_status,
             full_case_status=payload.full_case_status,
-            scope_of_work=payload.scope_of_work,
+            special_instructions=payload.special_instructions,
             case_number=case_number,
             policy_document='',
             petition_document=''
@@ -2524,7 +2542,7 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
                 case_type=payload.case_type,
                 investigation_report_status=payload.investigation_report_status,
                 full_case_status=payload.full_case_status,
-                scope_of_work=payload.scope_of_work,
+                special_instructions=payload.special_instructions,
                 # People
                 insured_name=payload.insured_name,
                 claimant_name=payload.claimant_name,
@@ -3470,14 +3488,17 @@ def list_vendors_for_cases(request):
     """Get list of all active vendors."""
     from users.models import CustomUser, Vendor
 
-    # Backfill vendor profiles for vendor users created through generic user
+    check_type = request.GET.get('check_type', '').lower()
+    target_role = CustomUser.Role.ADVOCATE if check_type == 'chargesheet' else CustomUser.Role.VENDOR
+
+    # Backfill vendor profiles for users created through generic user
     # management before profile sync existed.
-    vendor_users_without_profile = CustomUser.objects.filter(
-        role=CustomUser.Role.VENDOR,
+    users_without_profile = CustomUser.objects.filter(
+        role=target_role,
         is_active=True,
         vendor_profile__isnull=True,
     )
-    for user in vendor_users_without_profile:
+    for user in users_without_profile:
         Vendor.objects.get_or_create(
             user=user,
             defaults={
@@ -3487,7 +3508,7 @@ def list_vendors_for_cases(request):
             },
         )
     
-    vendors = Vendor.objects.filter(is_active=True).order_by('company_name')
+    vendors = Vendor.objects.filter(is_active=True, user__role=target_role).order_by('company_name')
     
     return [
         VendorSchema(
@@ -3718,7 +3739,7 @@ class AdminReviewCheckSchema(Schema):
 )
 def review_check(request: HttpRequest, case_id: int, check_type: str, payload: AdminReviewCheckSchema):
     from users.models import CustomUser
-    if request.user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN]:
+    if request.user.role not in [CustomUser.Role.CASE_MANAGER, CustomUser.Role.SUPER_ADMIN]:
         raise HttpError(403, "Only admins can review checks")
     
     table = _CHECK_TABLE_MAP.get(check_type.lower())
@@ -3786,7 +3807,7 @@ def upload_check_media(
     from django.db import connections
     from users.models import CustomUser
 
-    if request.user.role not in [CustomUser.Role.ADMIN, CustomUser.Role.SUPER_ADMIN, CustomUser.Role.VENDOR]:
+    if request.user.role not in [CustomUser.Role.CASE_MANAGER, CustomUser.Role.SUPER_ADMIN, CustomUser.Role.VENDOR]:
         raise HttpError(403, "Admin or vendor access required")
 
     table = _CHECK_TABLE_MAP.get(check_type.lower())
@@ -3891,4 +3912,405 @@ def upload_check_media(
         new_item["audio_url"] = abs_url
 
     return {"success": True, "message": f"{cat_clean.capitalize()} uploaded successfully", "item": new_item}
+
+
+
+from django.http import HttpResponse
+
+class GenerateRTIRequest(Schema):
+    to_address: str
+    date_of_accident: str
+
+@router.post('/cases/{case_id}/chargesheet/{sub_id}/generate-rti', tags=["Cases"], summary="Generate RTI Document")
+def generate_rti_form(request, case_id: int, sub_id: str, data: GenerateRTIRequest):
+    from django.db import connections
+    from ninja.errors import HttpError
+    import docx
+    import io
+
+    with connections['default'].cursor() as cursor:
+        # Fetch claim_number
+        cursor.execute("SELECT claim_number FROM cases WHERE id = %s", [case_id])
+        case_row = cursor.fetchone()
+        if not case_row:
+            raise HttpError(404, "Case not found")
+        claim_number = case_row[0] or ""
+
+        # Fetch chargesheet data using case_id since sub_id is a composite string
+        cursor.execute(
+            "SELECT fir_number, police_station_name FROM chargesheets WHERE case_id = %s LIMIT 1",
+            [case_id]
+        )
+        cs_row = cursor.fetchone()
+        if not cs_row:
+            raise HttpError(404, "Chargesheet not found")
+        fir_number = cs_row[0] or ""
+        police_station = cs_row[1] or ""
+
+        # Fetch victim name (from claimant)
+        cursor.execute(
+            "SELECT claimant_name FROM claimant_checks WHERE case_id = %s LIMIT 1",
+            [case_id]
+        )
+        cl_row = cursor.fetchone()
+        victim_name = cl_row[0] if cl_row else ""
+
+        # Fetch vehicle number (from insured)
+        cursor.execute(
+            "SELECT rc, questionnaire FROM insured_checks WHERE case_id = %s LIMIT 1",
+            [case_id]
+        )
+        ins_row = cursor.fetchone()
+        vehicle_number = ""
+        if ins_row:
+            rc_val = ins_row[0] or ""
+            questionnaire_data = ins_row[1] or {}
+            if isinstance(questionnaire_data, str):
+                import json
+                try:
+                    questionnaire_data = json.loads(questionnaire_data)
+                except:
+                    questionnaire_data = {}
+            vehicle_number = questionnaire_data.get("vehicle_number", rc_val)
+
+    try:
+        from django.conf import settings
+        rti_template_path = os.path.join(settings.BASE_DIR, 'RTI 2003501 (1).docx')
+        doc = docx.Document(rti_template_path)
+        
+        # 1. Claim Number (Paragraph 1)
+        doc.paragraphs[1].runs[-1].text = f" {claim_number}"
+        
+        # 2. To Address (Paragraph 2)
+        for r in doc.paragraphs[2].runs[2:]:
+            r.text = ''
+        if len(doc.paragraphs[2].runs) > 1:
+            doc.paragraphs[2].runs[1].text = f"\n{data.to_address}"
+            
+        # 12. FIR No
+        doc.paragraphs[12].runs[-1].text = f" {fir_number}"
+        
+        # 13. Police Station
+        doc.paragraphs[13].runs[-1].text = f" {police_station}"
+        
+        # 14. Date of Accident
+        doc.paragraphs[14].runs[-1].text = f" {data.date_of_accident}"
+        
+        # 15. Name of Deceased
+        doc.paragraphs[15].runs[-1].text = f" {victim_name}"
+        
+        # 16. Vehicle Number
+        doc.paragraphs[16].runs[-1].text = f" {vehicle_number}"
+        
+        doc_io = io.BytesIO()
+        doc.save(doc_io)
+        doc_io.seek(0)
+        
+        response = HttpResponse(
+            doc_io.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        response['Content-Disposition'] = f'attachment; filename="RTI_{claim_number}.docx"'
+        return response
+    except Exception as e:
+        raise HttpError(500, f"Failed to generate RTI: {str(e)}")
+
+class GenerateSection134Request(Schema):
+    to_address: str
+
+@router.post('/cases/{case_id}/generate-section134', tags=["Cases"], summary="Generate Section 134 Notice")
+def generate_section134_form(request, case_id: int, data: GenerateSection134Request):
+    from django.db import connections
+    from ninja.errors import HttpError
+    import docx
+    import io
+    import os
+    from datetime import datetime
+
+    with connections['default'].cursor() as cursor:
+        # Fetch claim_number and client name directly from cases table
+        cursor.execute("""
+            SELECT c.claim_number, c.client_name 
+            FROM cases c 
+            WHERE c.id = %s
+        """, [case_id])
+        case_row = cursor.fetchone()
+        if not case_row:
+            raise HttpError(404, "Case not found")
+        claim_number = case_row[0] or ""
+        client_name = case_row[1] or ""
+
+        # Fetch vehicle number and policy number from insured_checks
+        cursor.execute(
+            "SELECT rc, questionnaire, policy_number FROM insured_checks WHERE case_id = %s LIMIT 1",
+            [case_id]
+        )
+        ins_row = cursor.fetchone()
+        vehicle_number = ""
+        policy_number = ""
+        if ins_row:
+            rc_val = ins_row[0] or ""
+            questionnaire_data = ins_row[1] or {}
+            if isinstance(questionnaire_data, str):
+                import json
+                try:
+                    questionnaire_data = json.loads(questionnaire_data)
+                except:
+                    questionnaire_data = {}
+            vehicle_number = questionnaire_data.get("vehicle_number", rc_val)
+            policy_number = ins_row[2] or ""
+
+    try:
+        from django.conf import settings
+        template_path = os.path.join(settings.BASE_DIR, 'SECTION 134 NOTICE - 2774340 (1).docx')
+        doc = docx.Document(template_path)
+        
+        # Paragraph 1: Date (format: 09 June 2026)
+        current_date = datetime.now().strftime("%d %B %Y")
+        doc.paragraphs[1].runs[-1].text = current_date
+        
+        # Paragraph 2: To, \n {to_address}
+        for r in doc.paragraphs[2].runs[2:]:
+            r.text = ''
+        if len(doc.paragraphs[2].runs) > 1:
+            doc.paragraphs[2].runs[1].text = f"\n{data.to_address}"
+            
+        # Paragraph 4: Policy No, Vehicle No, Claim/MACT Case No, Insurance Company
+        if len(doc.paragraphs[4].runs) >= 17:
+            doc.paragraphs[4].runs[2].text = policy_number
+            doc.paragraphs[4].runs[6].text = f" {vehicle_number}"
+            doc.paragraphs[4].runs[12].text = claim_number
+            doc.paragraphs[4].runs[16].text = client_name
+            
+        # Paragraph 19: Insurance Company (in signature block)
+        if len(doc.paragraphs[19].runs) >= 5:
+            doc.paragraphs[19].runs[4].text = client_name
+            
+        doc_io = io.BytesIO()
+        doc.save(doc_io)
+        doc_io.seek(0)
+        
+        response = HttpResponse(
+            doc_io.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        response['Content-Disposition'] = f'attachment; filename="SECTION_134_{claim_number}.docx"'
+        return response
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HttpError(500, f"Failed to generate Section 134 Notice: {str(e)}")
+
+
+@router.get('/cases/{case_id}/section134-history', tags=["Cases"], summary="Get Section 134 Sent History")
+def get_section134_history(request, case_id: int):
+    from django.db import connections
+    from ninja.errors import HttpError
+    import json
+
+    with connections['default'].cursor() as cursor:
+        cursor.execute("SELECT section134_sent_history FROM cases WHERE id = %s", [case_id])
+        row = cursor.fetchone()
+        if not row:
+            raise HttpError(404, "Case not found")
+        
+        history = row[0]
+        if not history:
+            history = []
+        elif isinstance(history, str):
+            try:
+                history = json.loads(history)
+            except:
+                history = []
+        
+    return {"success": True, "history": history}
+
+
+@router.post('/cases/{case_id}/section134-history', tags=["Cases"], summary="Add to Section 134 Sent History")
+def add_section134_history(request, case_id: int):
+    from django.db import connections
+    from ninja.errors import HttpError
+    import json
+    from datetime import datetime
+
+    current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with connections['default'].cursor() as cursor:
+        cursor.execute("SELECT section134_sent_history FROM cases WHERE id = %s", [case_id])
+        row = cursor.fetchone()
+        if not row:
+            raise HttpError(404, "Case not found")
+        
+        history = row[0]
+        if not history:
+            history = []
+        elif isinstance(history, str):
+            try:
+                history = json.loads(history)
+            except:
+                history = []
+                
+        history.append(current_date)
+        updated_history = json.dumps(history)
+        
+        cursor.execute(
+            "UPDATE cases SET section134_sent_history = %s WHERE id = %s",
+            [updated_history, case_id]
+        )
+        
+    return {"success": True, "history": history}
+
+
+class GenerateRTORTIRequest(Schema):
+    doc_type: str = "DL Extract"
+    to_address: str = ""
+    subject_name: str = ""
+    id_number: str = ""
+    authorized_signatory: str = ""
+    contact_number: str = ""
+    email_id: str = ""
+
+
+@router.post('/cases/incident-db/{case_id}/generate-rto-rti', tags=["Cases"], summary="Generate RTO RTI Document(s)")
+def generate_rto_rti_form(request, case_id: int, data: GenerateRTORTIRequest):
+    import os
+    import io
+    import docx
+    import zipfile
+    from django.http import HttpResponse
+    from django.conf import settings
+    from ninja.errors import HttpError
+
+    cm_name = (data.authorized_signatory or "").strip()
+    if not cm_name and hasattr(request, 'user') and request.user.is_authenticated:
+        cm_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+    if not cm_name:
+        cm_name = "Amit Dalvi"
+
+    to_addr = (data.to_address or "").strip()
+    subj_name = (data.subject_name or "").strip()
+    id_num = (data.id_number or "").strip()
+    contact_num = (data.contact_number or "").strip() or "7498333018"
+    email_id_val = (data.email_id or "").strip() or "amit.dalvi@shovelsolutions.in"
+
+    def populate_doc(template_filename):
+        tpl_path = os.path.join(settings.BASE_DIR, template_filename)
+        if not os.path.exists(tpl_path):
+            raise HttpError(404, f"Template file {template_filename} not found")
+        doc = docx.Document(tpl_path)
+
+        # To address replacement
+        if to_addr:
+            to_lines = [l.strip() for l in to_addr.split('\n') if l.strip()]
+            if to_lines and len(doc.paragraphs) > 1:
+                doc.paragraphs[1].text = to_lines[0]
+                for idx in range(2, 5):
+                    if idx < len(doc.paragraphs):
+                        doc.paragraphs[idx].text = ''
+                if len(to_lines) > 1:
+                    doc.paragraphs[1].text = "\n".join(to_lines)
+
+        for p in doc.paragraphs:
+            txt = p.text.strip()
+            if txt.startswith("Subject Name:"):
+                p.text = f"Subject Name: {subj_name}"
+            elif txt.startswith("ID Number:") or "ID Number:" in txt:
+                p.text = f"ID Number: {id_num}"
+            elif txt.startswith("Authorized Signatory:"):
+                p.text = f"Authorized Signatory: {cm_name}"
+            elif txt.startswith("Contact Number:"):
+                p.text = f"Contact Number: {contact_num}"
+            elif txt.startswith("Email ID:"):
+                p.text = f"Email ID: {email_id_val}"
+
+        doc_buf = io.BytesIO()
+        doc.save(doc_buf)
+        doc_buf.seek(0)
+        return doc_buf.getvalue()
+
+    doc_type_clean = (data.doc_type or "").strip().lower()
+
+    try:
+        from django.db import connection
+        from datetime import datetime
+        import json
+
+        def save_to_rto_check(content_bytes, fn):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            safe_name = f"{timestamp}_{fn.replace(' ', '_')}"
+            rel_path = f"rto_documents/case_{case_id}/{safe_name}"
+            abs_path = os.path.join(settings.MEDIA_ROOT, rel_path)
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            with open(abs_path, 'wb') as dest:
+                dest.write(content_bytes)
+            
+            doc_entry = {
+                "filename": fn,
+                "url": f"/media/{rel_path}",
+                "uploaded_at": datetime.now().isoformat(),
+                "uploaded_by": "System Generated",
+                "category": "rto_document"
+            }
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT id, case_documents FROM rto_checks WHERE case_id = %s", [case_id])
+                row = cursor.fetchone()
+                if row:
+                    rto_check_id = row[0]
+                    try:
+                        case_docs = json.loads(row[1]) if isinstance(row[1], str) else (row[1] or [])
+                    except Exception:
+                        case_docs = []
+                        
+                    # Remove older document of the same type if it exists
+                    case_docs = [d for d in case_docs if d.get("filename") != fn]
+                    
+                    case_docs.append(doc_entry)
+                    cursor.execute("UPDATE rto_checks SET case_documents = %s WHERE id = %s", [json.dumps(case_docs), rto_check_id])
+
+        if doc_type_clean == "all":
+            zip_buffer = io.BytesIO()
+            dl_content = populate_doc("DL RTI.docx")
+            rc_content = populate_doc("RC RTI.docx")
+            permit_content = populate_doc("Permit RTI.docx")
+            
+            save_to_rto_check(dl_content, "DL_RTI.docx")
+            save_to_rto_check(rc_content, "RC_RTI.docx")
+            save_to_rto_check(permit_content, "Permit_RTI.docx")
+
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr("DL_RTI.docx", dl_content)
+                zf.writestr("RC_RTI.docx", rc_content)
+                zf.writestr("Permit_RTI.docx", permit_content)
+
+            zip_buffer.seek(0)
+            response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+            response['Content-Disposition'] = 'attachment; filename="RTO_RTI_Applications.zip"'
+            return response
+        else:
+            if "dl" in doc_type_clean:
+                content = populate_doc("DL RTI.docx")
+                filename = "DL_RTI.docx"
+            elif "rc" in doc_type_clean:
+                content = populate_doc("RC RTI.docx")
+                filename = "RC_RTI.docx"
+            elif "permit" in doc_type_clean:
+                content = populate_doc("Permit RTI.docx")
+                filename = "Permit_RTI.docx"
+            else:
+                content = populate_doc("DL RTI.docx")
+                filename = "RTO_RTI.docx"
+            
+            save_to_rto_check(content, filename)
+
+            response = HttpResponse(
+                content,
+                content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HttpError(500, f"Failed to generate RTO RTI document: {str(e)}")
+
 

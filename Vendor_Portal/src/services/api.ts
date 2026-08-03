@@ -290,7 +290,8 @@ class ApiService {
   async uploadCheckEvidence(
     caseId: number,
     checkType: string,
-    photos: { uri: string; name: string; lat?: string; long?: string }[]
+    photos: { uri: string; name: string; lat?: string; long?: string }[],
+    photoCategory?: string
   ): Promise<any> {
     try {
       const formData = new FormData();
@@ -304,6 +305,9 @@ class ApiService {
         formData.append('photos', file);
         formData.append('latitudes', photo.lat || '');
         formData.append('longitudes', photo.long || '');
+      }
+      if (photoCategory) {
+        formData.append('photo_category', photoCategory);
       }
       const response = await this.api.post(
         `/vendor-check-upload/${caseId}/${checkType}`,
@@ -319,10 +323,14 @@ class ApiService {
     }
   }
 
-  async deleteCheckEvidence(caseId: number, checkType: string, filename: string): Promise<any> {
+  async deleteCheckEvidence(caseId: number, checkType: string, filename: string, photoCategory?: string): Promise<any> {
     try {
+      const params: any = { filename };
+      if (photoCategory) {
+        params.photo_category = photoCategory;
+      }
       const response = await this.api.delete(`/vendor-check-evidence/${caseId}/${checkType}`, {
-        params: { filename },
+        params,
       });
       return response.data;
     } catch (error) {
@@ -332,8 +340,17 @@ class ApiService {
 
   async saveQuestionnaire(caseId: number, checkType: string, questionnaire: any): Promise<any> {
     try {
+      const isSameAsDriver = 
+        questionnaire?.insured_cum_driver === 'true' || 
+        questionnaire?.insured_cum_driver === true ||
+        questionnaire?.driver_and_insured_same === 'true' || 
+        questionnaire?.driver_and_insured_same === true;
+
       const response = await this.api.post(`/vendor-check-questionnaire/${caseId}/${checkType}`, {
         questionnaire,
+        insured_cum_driver: isSameAsDriver,
+        negative_status: questionnaire?.negative_status || '',
+        vendor_feedback: questionnaire?.vendor_feedback || '',
       });
       return response.data;
     } catch (error) {
@@ -344,6 +361,19 @@ class ApiService {
   async markCheckCompleted(caseId: number, checkType: string): Promise<any> {
     try {
       const response = await this.api.post(`/vendor-check-complete/${caseId}/${checkType}`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async updateCheckStatus(caseId: number, checkType: string, status: string, advocateRemark?: string): Promise<any> {
+    try {
+      const payload: any = { status };
+      if (advocateRemark !== undefined) {
+        payload.advocate_remark = advocateRemark;
+      }
+      const response = await this.api.post(`/vendor-check-status-update/${caseId}/${checkType}`, payload);
       return response.data;
     } catch (error) {
       throw this.handleError(error as AxiosError);
@@ -363,6 +393,18 @@ class ApiService {
   async getCaseDetail(caseId: number): Promise<any> {
     try {
       const response = await this.api.get(`/cases/${caseId}/`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error as AxiosError);
+    }
+  }
+
+  async generateRtoRtiDoc(caseId: number, docType: string): Promise<any> {
+    try {
+      const response = await this.api.post(`/cases/incident-db/${caseId}/generate-rto-rti`, 
+        { doc_type: docType },
+        { responseType: 'blob', timeout: 30000 }
+      );
       return response.data;
     } catch (error) {
       throw this.handleError(error as AxiosError);

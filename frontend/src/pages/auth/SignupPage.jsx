@@ -169,18 +169,18 @@ const SignupPage = () => {
               <Box 
                 className="mt-4 p-4 rounded-lg animate-fadeIn"
                 sx={{ 
-                  backgroundColor: selectedRole === 'admin' ? '#fef2f2' : 
+                  backgroundColor: selectedRole === 'case_manager' ? '#fef2f2' : 
                                    selectedRole === 'vendor' ? '#eff6ff' : '#f0fdf4',
                   border: `1px solid ${
-                    selectedRole === 'admin' ? '#fecaca' : 
+                    selectedRole === 'case_manager' ? '#fecaca' : 
                     selectedRole === 'vendor' ? '#bfdbfe' : '#bbf7d0'
                   }`
                 }}
               >
                 <Typography variant="body2" className="text-gray-700">
-                  {selectedRole === 'admin' && (
+                  {selectedRole === 'case_manager' && (
                     <>
-                      <strong>🔐 Administrator Account</strong>
+                      <strong>🔐 CaseManageristrator Account</strong>
                       <br />
                       Full access to manage users, incidents, and system settings.
                     </>

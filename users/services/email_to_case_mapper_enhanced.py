@@ -201,7 +201,7 @@ class EnhancedEmailToCaseMapper:
         # Determine case type and scope
         if 'intimation' in subject_text.lower() or 'Full Case' in all_text:
             data['case_type'] = 'Full Case'
-            data['scope_of_work'] = 'Full Investigation'
+            data['special_instructions'] = 'Full Investigation'
         
         # Set initial status
         data['full_case_status'] = 'Open'
@@ -482,7 +482,7 @@ class EnhancedEmailToCaseMapper:
             case_type=data.get('case_type', ''),
             investigation_report_status=data['investigation_report_status'],
             full_case_status=data['full_case_status'],
-            scope_of_work=data.get('scope_of_work', ''),
+            special_instructions=data.get('special_instructions', ''),
             
             # Claimant information
             claimant_name=data.get('claimant_name', ''),

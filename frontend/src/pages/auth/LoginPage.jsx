@@ -75,7 +75,7 @@ const LoginPage = () => {
       });
 
       // Get user's role from response and redirect
-      const userRole = response.user?.role?.toLowerCase();
+      const userRole = response.role?.toLowerCase() || response.user?.role?.toLowerCase();
       const dashboardPath = getRoleDashboard(userRole);
       
       // Navigate after a short delay to ensure state is updated

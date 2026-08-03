@@ -44,7 +44,7 @@ class Migration(migrations.Migration):
                         'QC-1','Pending Additional Docs','Connected Pending',
                         'RCU Pending','Portal Upload'
                     )),
-                scope_of_work       TEXT NOT NULL DEFAULT '',
+                special_instructions       TEXT NOT NULL DEFAULT '',
 
                 -- Metadata
                 created_at  TIMESTAMP NOT NULL DEFAULT NOW(),

@@ -6,19 +6,19 @@ import { AuthProvider } from './context';
 import { ProtectedRoute } from './components';
 import { LoginPage, SignupPage, ForgotPasswordPage, ResetPasswordPage, TwoFactorPage } from './pages';
 import { 
-  AdminDashboard,
+  CaseManagerDashboard,
   SuperAdminDashboard,
   CasesPage,
   NewCasePage, 
   UsersPage, 
   AIBriefPage, 
   LegalReviewPage, 
-  ReportsPage as AdminReportsPage, 
+  ReportsPage as CaseManagerReportsPage, 
   AuditLogsPage, 
   SettingsPage,
   CheckDetailPage,
   ClientsPage,
-} from './pages/admin';
+} from './pages/case_manager';
 import {
   DashboardPage as QCDashboardPage,
   ReportsPage as QCReportsPage,
@@ -137,92 +137,92 @@ function App() {
               }
             />
             
-            {/* Protected Routes - Admin */}
+            {/* Protected Routes - CaseManager */}
             <Route
-              path="/admin/dashboard"
+              path="/case_manager/dashboard"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminDashboard />
+                <ProtectedRoute allowedRoles={['case_manager']}>
+                  <CaseManagerDashboard />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/cases"
+              path="/case_manager/cases"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['case_manager']}>
                   <CasesPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/cases/new"
+              path="/case_manager/cases/new"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['case_manager']}>
                   <NewCasePage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/users"
+              path="/case_manager/users"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
+                <ProtectedRoute allowedRoles={['case_manager', 'super_admin']}>
                   <UsersPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/clients"
+              path="/case_manager/clients"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
+                <ProtectedRoute allowedRoles={['case_manager', 'super_admin']}>
                   <ClientsPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/ai-brief"
+              path="/case_manager/ai-brief"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['case_manager']}>
                   <AIBriefPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/legal-review"
+              path="/case_manager/legal-review"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['case_manager']}>
                   <LegalReviewPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/reports"
+              path="/case_manager/reports"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminReportsPage />
+                <ProtectedRoute allowedRoles={['case_manager']}>
+                  <CaseManagerReportsPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/audit-logs"
+              path="/case_manager/audit-logs"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['case_manager']}>
                   <AuditLogsPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/settings"
+              path="/case_manager/settings"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['case_manager']}>
                   <SettingsPage />
                 </ProtectedRoute>
               }
             />
             
             <Route
-              path="/admin/cases/:caseId/check/:checkType"
+              path="/case_manager/cases/:caseId/check/:checkType"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['case_manager']}>
                   <CheckDetailPage />
                 </ProtectedRoute>
               }
