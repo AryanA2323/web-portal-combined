@@ -20,7 +20,6 @@ import {
   FormControlLabel,
   Switch,
   Grid,
-  Alert,
   CircularProgress,
   Tooltip,
   InputAdornment,
@@ -33,7 +32,9 @@ import {
   Search,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
+import AlertMessage from '../../components/common/AlertMessage';
 import api from '../../services/api';
+import { NotificationBell } from '../../components/case_manager';
 
 const EMPTY_FORM = {
   client_code: '',
@@ -220,39 +221,31 @@ const ClientsPage = () => {
 
   return (
     <CaseManagerLayout>
-      <Box sx={{ p: 3 }}>
+      <Box>
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Business sx={{ fontSize: 32, color: '#667eea' }} />
-            <Typography variant="h4" fontWeight={700}>
-              Clients
-            </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, borderBottom: '1px solid #e0e0e0', pb: 2 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', letterSpacing: '-0.5px' }}>
+            Clients
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleOpenCreate}
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                '&:hover': { background: 'linear-gradient(135deg, #5a6fd6 0%, #6a4293 100%)' },
+              }}
+            >
+              Add Client
+            </Button>
+            <NotificationBell />
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleOpenCreate}
-            sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              '&:hover': { background: 'linear-gradient(135deg, #5a6fd6 0%, #6a4293 100%)' },
-            }}
-          >
-            Add Client
-          </Button>
         </Box>
 
         {/* Messages */}
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
-        {successMessage && (
-          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
-            {successMessage}
-          </Alert>
-        )}
+        <AlertMessage severity="error" onClose={() => setError(null)} message={error} open={!!error} />
+        <AlertMessage severity="success" onClose={() => setSuccessMessage(null)} message={successMessage} open={!!successMessage} />
 
         {/* Search */}
         <Box sx={{ mb: 2 }}>

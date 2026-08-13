@@ -14,20 +14,20 @@ import {
 } from '@mui/material';
 import { Email, Lock } from '@mui/icons-material';
 
-import { FormInput, LoadingButton, AlertMessage } from '../../components/common';
+import { FormInput, LoadingButton } from '../../components/common';
 import { loginSchema } from '../../utils/validationSchemas';
 import { getRoleDashboard } from '../../utils/constants';
 import { useAuth } from '../../context';
-import companyLogo from '../../logoo.png';
+import { toast } from '../../context/ToastContext';
+import companyLogo from '../../SS_logo.jpg';
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  
+
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [alertState, setAlertState] = useState({ open: false, message: '', severity: 'error' });
 
   const {
     register,
@@ -43,41 +43,33 @@ const LoginPage = () => {
 
   const onSubmit = async (data) => {
     setIsLoading(true);
-    setAlertState({ open: false, message: '', severity: 'error' });
+    setIsLoading(true);
 
     try {
       const response = await login(data.email, data.password);
-      
+
       // Check if 2FA is required
       if (response.requires2FA) {
-        setAlertState({
-          open: true,
-          message: 'A verification code has been sent to your email.',
-          severity: 'info',
-        });
-        
+        toast.info('A verification code has been sent to your email.');
+
         // Redirect to 2FA verification page with credentials
         setTimeout(() => {
-          navigate('/verify-2fa', { 
-            state: { 
-              email: data.email, 
+          navigate('/verify-2fa', {
+            state: {
+              email: data.email,
               password: data.password,
-            } 
+            }
           });
         }, 1500);
         return;
       }
-      
-      setAlertState({
-        open: true,
-        message: 'Login successful! Redirecting...',
-        severity: 'success',
-      });
+
+      toast.success('Login successful! Redirecting...');
 
       // Get user's role from response and redirect
       const userRole = response.role?.toLowerCase() || response.user?.role?.toLowerCase();
       const dashboardPath = getRoleDashboard(userRole);
-      
+
       // Navigate after a short delay to ensure state is updated
       setTimeout(() => {
         navigate(dashboardPath, { replace: true });
@@ -85,7 +77,7 @@ const LoginPage = () => {
     } catch (error) {
       // Parse error message for user-friendly display
       let errorMessage = 'Login failed. Please try again.';
-      
+
       if (error.error) {
         // Map backend error codes to user-friendly messages
         const errorCode = error.code;
@@ -106,19 +98,11 @@ const LoginPage = () => {
       } else if (error.non_field_errors?.[0]) {
         errorMessage = error.non_field_errors[0];
       }
-      
-      setAlertState({
-        open: true,
-        message: errorMessage,
-        severity: 'error',
-      });
+
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const closeAlert = () => {
-    setAlertState({ ...alertState, open: false });
   };
 
   return (
@@ -195,34 +179,35 @@ const LoginPage = () => {
             animation: 'slideUp 0.6s ease-out',
           }}
         >
-          {/* Header */}
-          <Box sx={{ textAlign: 'center', mb: { xs: 4, sm: 5 } }}>
+          {/* Header Logo */}
+          <Box sx={{ textAlign: 'center', mb: { xs: 3, sm: 4 } }}>
             <Box
               sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: { xs: 108, sm: 124 },
-                height: { xs: 108, sm: 124 },
+                width: '100%',
+                maxWidth: 240,
+                height: 60,
                 mx: 'auto',
-                mb: 3,
-                p: 1.25,
-                background: 'linear-gradient(145deg, rgba(255,255,255,0.96), rgba(244,247,255,0.9))',
-                borderRadius: '28px',
-                border: '1px solid rgba(102,126,234,0.24)',
-                boxShadow: '0 18px 36px rgba(102, 126, 234, 0.22), inset 0 1px 0 rgba(255,255,255,0.95)',
-                animation: 'iconBounce 0.8s ease-out',
+                mb: 2.5,
+                background: '#ffffff',
+                borderRadius: '16px',
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+                boxShadow: '0 10px 25px rgba(102, 126, 234, 0.12)',
+                overflow: 'hidden', // Ensure the image stays within the rounded corners
+                px: 2, // Add some padding so the logo doesn't touch the edges
               }}
             >
               <Box
                 component="img"
                 src={companyLogo}
-                alt="Shovel Screen"
+                alt="Shoveltech Solutions"
                 sx={{
                   width: '100%',
                   height: '100%',
                   objectFit: 'contain',
-                  filter: 'drop-shadow(0 8px 14px rgba(35, 48, 120, 0.22))',
+                  transform: 'scale(1.1)',
                 }}
               />
             </Box>
@@ -250,15 +235,7 @@ const LoginPage = () => {
             </Typography>
           </Box>
 
-          {/* Alert Message */}
-          <Box sx={{ mb: alertState.open ? 3 : 0 }}>
-            <AlertMessage
-              open={alertState.open}
-              severity={alertState.severity}
-              message={alertState.message}
-              onClose={closeAlert}
-            />
-          </Box>
+          {/* Alert Message Removed (Using Global Toast) */}
 
           {/* Login Form */}
           <form onSubmit={handleSubmit(onSubmit)} noValidate>

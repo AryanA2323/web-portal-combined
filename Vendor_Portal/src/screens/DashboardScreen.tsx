@@ -29,6 +29,7 @@ const checkStatusColors: Record<string, { solid: string; soft: string; icon: key
   'not found': { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
   Completed: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   Verified: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
+  'Failed': { solid: '#EF4444', soft: '#FEE2E2', icon: 'close-octagon-outline' },
   Reassigned: { solid: '#D64545', soft: '#FDECEC', icon: 'refresh' },
   'Not Initiated': { solid: '#71839A', soft: '#EEF3F8', icon: 'clock-outline' },
   Stop: { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
@@ -63,7 +64,7 @@ export default function DashboardScreen() {
   
   const activeChecks = useMemo(() => {
     const filtered = checks.filter((c: any) => {
-      if (c.check_status === 'Completed' || c.check_status === 'Verified') return false;
+      if (c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Failed') return false;
       if (filterType === 'wip' && c.check_status !== 'WIP') return false;
       if (filterType === 'reassigned' && c.check_status !== 'Reassigned') return false;
       return true;
@@ -82,6 +83,11 @@ export default function DashboardScreen() {
         result.push(c);
       }
     }
+    result.sort((a: any, b: any) => {
+      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
     return result;
   }, [checks, filterType]);
   
@@ -138,7 +144,7 @@ export default function DashboardScreen() {
   const summary = useMemo(() => {
     const totalChecks = checks.length;
     const wipChecks = checks.filter((c: any) => c.check_status === 'WIP').length;
-    const completedChecks = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified').length;
+    const completedChecks = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Failed').length;
     const reassignedChecks = checks.filter((c: any) => c.check_status === 'Reassigned').length;
     const notInitiated = checks.filter((c: any) => c.check_status === 'Not Initiated').length;
     return { totalChecks, wipChecks, completedChecks, reassignedChecks, notInitiated };

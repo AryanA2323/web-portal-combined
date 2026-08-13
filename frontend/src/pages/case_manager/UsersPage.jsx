@@ -46,8 +46,10 @@ import {
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
+import AlertMessage from '../../components/common/AlertMessage';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 import { useAuth } from '../../context/AuthContext';
+import { NotificationBell } from '../../components/case_manager';
 
 // All available case manager pages for permission toggles
 const ADMIN_PAGES = [
@@ -416,36 +418,35 @@ const UsersPage = () => {
 
   return (
     <CaseManagerLayout>
-      <Box sx={{ p: 3 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Typography variant="h4" fontWeight={600}>
+      <Box>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, borderBottom: '1px solid #e0e0e0', pb: 2 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', letterSpacing: '-0.5px' }}>
             User Management
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<PersonAdd />}
-            onClick={handleOpenCreateDialog}
-            sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
-              },
-            }}
-          >
-            Add User
-          </Button>
+          <Box display="flex" alignItems="center" gap={2}>
+            <Button
+              variant="contained"
+              startIcon={<PersonAdd />}
+              onClick={handleOpenCreateDialog}
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                },
+              }}
+            >
+              Add User
+            </Button>
+            <NotificationBell />
+          </Box>
         </Box>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
+          <AlertMessage severity="error" onClose={() => setError(null)} message={error} open={!!error} />
         )}
 
         {successMessage && (
-          <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccessMessage(null)}>
-            {successMessage}
-          </Alert>
+          <AlertMessage severity="success" onClose={() => setSuccessMessage(null)} message={successMessage} open={!!successMessage} />
         )}
 
         {/* Role Filter */}

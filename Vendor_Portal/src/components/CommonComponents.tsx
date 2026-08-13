@@ -109,22 +109,24 @@ export const Card: React.FC<CardProps> = ({ children, style, onPress }) => {
   );
 };
 
+import { showToast } from './Toast';
+
 interface ErrorMessageProps {
   message: string;
   onDismiss?: () => void;
 }
 
 export const ErrorMessage: React.FC<ErrorMessageProps> = ({ message, onDismiss }) => {
-  return (
-    <View style={styles.errorContainer}>
-      <Text style={styles.errorMessage}>{message}</Text>
-      {onDismiss && (
-        <TouchableOpacity onPress={onDismiss}>
-          <Text style={styles.dismissText}>Dismiss</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  React.useEffect(() => {
+    if (message) {
+      showToast({ type: 'error', title: 'Error', message });
+      if (onDismiss) {
+        setTimeout(onDismiss, 100);
+      }
+    }
+  }, [message, onDismiss]);
+
+  return null;
 };
 
 export const LoadingIndicator: React.FC = () => {

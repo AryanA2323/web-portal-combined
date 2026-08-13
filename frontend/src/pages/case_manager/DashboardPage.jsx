@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Paper, Typography, Box, CircularProgress } from '@mui/material';
 import {
   FolderOpen,
@@ -26,6 +27,8 @@ import CaseManagerLayout from './components/CaseManagerLayout';
 import StatCard from './components/StatCard';
 import api from '../../services/api';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
+import { useAuth } from '../../context';
+import { NotificationBell } from '../../components/case_manager';
 
 // Register ChartJS components
 ChartJS.register(
@@ -39,7 +42,17 @@ ChartJS.register(
   ArcElement
 );
 
+const getUserDisplayName = (u) => {
+  if (!u) return 'User';
+  if (u.first_name || u.last_name) {
+    return `${u.first_name || ''} ${u.last_name || ''}`.trim();
+  }
+  return u.username || u.email || 'User';
+};
+
 const CaseManagerDashboard = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [caseVolume, setCaseVolume] = useState([]);
@@ -53,7 +66,7 @@ const CaseManagerDashboard = () => {
   const fetchDashboardData = async (isAutoRefresh = false) => {
     try {
       if (!isAutoRefresh) setLoading(true);
-      
+
       // Fetch all dashboard data in parallel
       const [statsRes, volumeRes, statusRes, activityRes] = await Promise.all([
         api.get('/dashboard/stats').catch(() => ({ data: null })),
@@ -61,12 +74,12 @@ const CaseManagerDashboard = () => {
         api.get('/dashboard/case-status').catch(() => ({ data: [] })),
         api.get('/dashboard/recent-activity').catch(() => ({ data: [] })),
       ]);
-      
+
       if (statsRes.data) setStats(statsRes.data);
       if (volumeRes.data) setCaseVolume(volumeRes.data);
       if (statusRes.data) setCaseStatus(statusRes.data);
       if (activityRes.data) setRecentActivity(activityRes.data);
-      
+
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -98,6 +111,7 @@ const CaseManagerDashboard = () => {
       change: stats.completed_change,
       icon: CheckCircle,
       iconBgColor: '#e8f5e9',
+      onClick: () => navigate('/case_manager/completed-cases'),
     },
     {
       title: 'Pending Cases',
@@ -186,7 +200,91 @@ const CaseManagerDashboard = () => {
   }
 
   return (
-    <CaseManagerLayout>
+    <CaseManagerLayout disablePadding>
+      {/* Welcome Banner Header with User-Provided Background Image */}
+      <Box
+        sx={{
+          minHeight: 120,
+          mx: { xs: 1.5, md: 2.5 },
+          mb: 3,
+          py: { xs: 2.5, md: 3 },
+          px: { xs: 3, md: 5 },
+          borderRadius: '0 0 16px 16px',
+          boxSizing: 'border-box',
+          bgcolor: '#ffffff',
+          backgroundImage: 'url(/welcome_section_bg.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center center',
+          backgroundRepeat: 'no-repeat',
+          boxShadow: '0 4px 16px rgba(148, 163, 184, 0.08)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+          border: '1px solid rgba(226, 232, 240, 0.9)',
+          borderTop: 'none',
+        }}
+      >
+        {/* Left Side: Welcome Text */}
+        <Box sx={{ position: 'relative', zIndex: 2 }}>
+          <Typography
+            sx={{
+              fontFamily: '"Caveat", "Dancing Script", "Brush Script MT", "cursive", sans-serif',
+              fontSize: { xs: '1.9rem', md: '2.4rem' },
+              fontWeight: 500,
+              fontStyle: 'normal',
+              color: '#4f46e5',
+              lineHeight: 1.1,
+              mb: 0.2,
+            }}
+          >
+            Welcome back,
+          </Typography>
+          <Typography
+            variant="h2"
+            sx={{
+              fontWeight: 800,
+              fontSize: { xs: '2rem', md: '2.6rem' },
+              color: '#0f172a',
+              letterSpacing: '-0.8px',
+              lineHeight: 1.1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+            }}
+          >
+            {getUserDisplayName(user)}! <span style={{ display: 'inline-block' }}>👋</span>
+          </Typography>
+        </Box>
+
+        {/* Right Side: Notification Bell Container (Matching Cases Page) */}
+        <Box
+          sx={{
+            position: 'relative',
+            zIndex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            bgcolor: '#ffffff',
+            borderRadius: '12px',
+            border: '1px solid rgba(99, 102, 241, 0.15)',
+            boxShadow: '0 4px 16px rgba(99, 102, 241, 0.12)',
+            p: 0.5,
+            flexShrink: 0,
+            transition: 'all 0.25s ease-in-out',
+            '&:hover': {
+              boxShadow: '0 6px 20px rgba(99, 102, 241, 0.2)',
+              transform: 'scale(1.03)',
+            },
+          }}
+        >
+          <NotificationBell />
+        </Box>
+      </Box>
+
+      {/* Main Dashboard Content Padding Container */}
+      <Box sx={{ p: { xs: 2, md: 3 }, pt: 0 }}>
+
       {/* Stats Cards */}
       <Box sx={{ display: 'flex', gap: 2, mb: 3, width: '100%' }}>
         {statsData.map((stat, index) => (
@@ -219,7 +317,7 @@ const CaseManagerDashboard = () => {
         </Box>
 
         {/* Case Status Distribution */}
-        <Box sx={{ flex: '1 1 50%'  }}>
+        <Box sx={{ flex: '1 1 50%' }}>
           <Paper
             elevation={0}
             sx={{
@@ -257,7 +355,7 @@ const CaseManagerDashboard = () => {
             {recentActivity.length > 0 ? recentActivity.map((activity, index) => {
               // Choose icon based on activity type
               let Icon;
-              switch(activity.type) {
+              switch (activity.type) {
                 case 'new_case':
                   Icon = AddBoxIcon;
                   break;
@@ -321,7 +419,8 @@ const CaseManagerDashboard = () => {
           </Box>
         </Paper>
       </Box>
-    </CaseManagerLayout>
+    </Box>
+  </CaseManagerLayout>
   );
 };
 

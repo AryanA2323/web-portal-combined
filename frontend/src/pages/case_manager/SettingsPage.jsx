@@ -20,6 +20,7 @@ import {
   Storage,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
+import { NotificationBell } from '../../components/case_manager';
 
 const SettingSection = ({ icon: Icon, title, subtitle, children }) => (
   <Card sx={{ mb: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderRadius: '12px', border: '1px solid #f0f0f0' }}>
@@ -89,39 +90,22 @@ const SettingsPage = () => {
     });
   };
 
-  const handleSave = () => {};
+  const handleSave = () => { };
 
   return (
     <CaseManagerLayout>
       <Box sx={{ px: 0.5 }}>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', mb: 0.5 }}>
-            Settings
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#6c757d', fontSize: '14px' }}>
-            Manage system configuration and preferences
-          </Typography>
+        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0', pb: 2 }}>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', mb: 0.5 }}>
+              Settings
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#6c757d', fontSize: '14px' }}>
+              Manage system configuration and preferences
+            </Typography>
+          </Box>
+          <NotificationBell />
         </Box>
-
-        <TextField
-          fullWidth
-          placeholder="Search cases, vendors, users..."
-          size="small"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Box component="span" sx={{ fontSize: 18 }}>🔍</Box>
-              </InputAdornment>
-            ),
-          }}
-          sx={{ 
-            mb: 4, 
-            maxWidth: 450,
-            '& .MuiOutlinedInput-root': {
-              backgroundColor: '#fff',
-            },
-          }}
-        />
 
         {/* General Settings */}
         <SettingSection

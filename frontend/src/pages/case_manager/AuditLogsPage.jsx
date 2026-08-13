@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -20,9 +19,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { FileDownload, Refresh, Search } from '@mui/icons-material';
+import { FileDownload, History, Refresh, Search } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
+import AlertMessage from '../../components/common/AlertMessage';
+import { NotificationBell } from '../../components/case_manager';
 
 const eventTypeColor = {
   CASE_CREATED: '#4c6ef5',
@@ -138,17 +139,101 @@ const AuditLogsPage = () => {
   };
 
   return (
-    <CaseManagerLayout>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#333' }}>
-          Audit Logs
-        </Typography>
+    <CaseManagerLayout disablePadding>
+      {/* Top Header Section - Audit Logs Theme */}
+      <Box
+        sx={{
+          minHeight: 110,
+          py: 1.75,
+          mx: { xs: 1.5, md: 2.5 },
+          px: { xs: 2, md: 3 },
+          borderRadius: '0 0 16px 16px',
+          boxSizing: 'border-box',
+          background: 'linear-gradient(120deg, #f8fafc 0%, #f1f5f9 30%, #e2e8f0 65%, #ede9fe 100%)',
+          boxShadow: '0 4px 16px rgba(148, 163, 184, 0.08)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 1.5,
+          position: 'relative',
+          overflow: 'hidden',
+          border: '1px solid rgba(226, 232, 240, 0.9)',
+          borderTop: 'none',
+        }}
+      >
+        {/* Multi-Tone Ambient Glowing Mesh Accents */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'radial-gradient(circle at 10% 20%, rgba(100, 116, 139, 0.18) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.20) 0%, transparent 40%)',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }}
+        />
+
+        {/* Left Side: Title & History Icon */}
+        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(71, 85, 105, 0.18)',
+            }}
+          >
+            <History sx={{ fontSize: 26, color: '#475569' }} />
+          </Box>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 800,
+              fontSize: { xs: '1.5rem', md: '1.9rem' },
+              letterSpacing: '-0.8px',
+              background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Audit Logs
+          </Typography>
+        </Box>
+
+        {/* Right Side: Notification Bell Container */}
+        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center' }}>
+          <Box
+            sx={{
+              bgcolor: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid rgba(99, 102, 241, 0.15)',
+              boxShadow: '0 4px 16px rgba(99, 102, 241, 0.12)',
+              p: 0.5,
+              flexShrink: 0,
+              transition: 'all 0.25s ease-in-out',
+              '&:hover': {
+                boxShadow: '0 6px 20px rgba(99, 102, 241, 0.2)',
+                transform: 'scale(1.03)',
+              },
+            }}
+          >
+            <NotificationBell />
+          </Box>
+        </Box>
       </Box>
 
+      {/* Main Content Container */}
+      <Box sx={{ p: 3, pt: 1 }}>
+
       {error ? (
-        <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
+        <AlertMessage severity="error" onClose={() => setError('')} message={error} open={!!error} />
       ) : null}
 
       <Paper
@@ -343,7 +428,8 @@ const AuditLogsPage = () => {
           sx={{ borderTop: '1px solid #e0e0e0' }}
         />
       </Paper>
-    </CaseManagerLayout>
+    </Box>
+  </CaseManagerLayout>
   );
 };
 

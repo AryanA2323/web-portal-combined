@@ -4314,3 +4314,260 @@ def generate_rto_rti_form(request, case_id: int, data: GenerateRTORTIRequest):
         raise HttpError(500, f"Failed to generate RTO RTI document: {str(e)}")
 
 
+
+
+
+# =========================================================================
+# TAT Change Requests
+# =========================================================================
+
+class TatChangeRequestCreateSchema(Schema):
+    updated_tat_days: int
+    reason: str
+
+class TatChangeRequestReviewSchema(Schema):
+    action: str  # 'APPROVE' or 'REJECT'
+
+@router.post('/{case_id}/approval/', tags=["TAT Change"], summary="Request TAT Change")
+def create_tat_change_request(request, case_id: str, data: TatChangeRequestCreateSchema):
+    from users.models import TatChangeRequest, CustomUser
+    from ninja.errors import HttpError
+    from django.utils import timezone
+    
+    if request.user.role not in [CustomUser.Role.CASE_MANAGER, CustomUser.Role.SUPER_ADMIN]:
+        raise HttpError(403, "Unauthorized")
+
+    # Fetch current TAT days from the raw DB
+    cursor = connection.cursor()
+    cursor.execute("SELECT tat_days FROM cases WHERE id = %s", [case_id])
+    row = cursor.fetchone()
+    if not row:
+        raise HttpError(404, "Case not found")
+    
+    current_tat_days = row[0]
+
+    # Check if a pending request already exists
+    if TatChangeRequest.objects.filter(case_id=case_id, status=TatChangeRequest.Status.PENDING).exists():
+        raise HttpError(400, "A pending TAT change request already exists for this case.")
+
+    # Create new request
+    tat_req = TatChangeRequest.objects.create(
+        case_id=case_id,
+        requested_by=request.user,
+        current_tat_days=current_tat_days,
+        updated_tat_days=data.updated_tat_days,
+        reason=data.reason,
+        status=TatChangeRequest.Status.PENDING
+    )
+
+    return {"success": True, "message": "TAT change request submitted successfully", "request_id": tat_req.id}
+
+@router.get('/{case_id}/approval/', tags=["TAT Change"], summary="Get Latest TAT Change Request")
+def get_latest_tat_change_request(request, case_id: str):
+    from users.models import TatChangeRequest
+    
+    # Get the most recent request
+    tat_req = TatChangeRequest.objects.filter(case_id=case_id).order_by('-requested_at').first()
+    
+    if not tat_req:
+        return {"has_request": False}
+        
+    return {
+        "has_request": True,
+        "request": {
+            "id": tat_req.id,
+            "status": tat_req.status,
+            "updated_tat_days": tat_req.updated_tat_days,
+            "reason": tat_req.reason,
+            "requested_at": tat_req.requested_at.isoformat() if tat_req.requested_at else None,
+        }
+    }
+
+
+@router.get('/super-admin/approvals/', tags=["TAT Change"], summary="Get All TAT Change Requests (Super Admin)")
+def get_all_tat_change_requests(request, status: Optional[str] = None):
+    from users.models import TatChangeRequest, CustomUser
+    from ninja.errors import HttpError
+    
+    if request.user.role != CustomUser.Role.SUPER_ADMIN:
+        raise HttpError(403, "Unauthorized")
+
+    queryset = TatChangeRequest.objects.select_related('requested_by', 'reviewed_by').all()
+    if status:
+        queryset = queryset.filter(status=status.upper())
+        
+    return [
+        {
+            "id": req.id,
+            "case_id": req.case_id,
+            "requested_by_name": f"{req.requested_by.first_name} {req.requested_by.last_name}",
+            "requested_by_email": req.requested_by.email,
+            "requested_at": req.requested_at.isoformat() if req.requested_at else None,
+            "current_tat_days": req.current_tat_days,
+            "updated_tat_days": req.updated_tat_days,
+            "reason": req.reason,
+            "status": req.status,
+            "reviewed_by_name": f"{req.reviewed_by.first_name} {req.reviewed_by.last_name}" if req.reviewed_by else None,
+            "reviewed_at": req.reviewed_at.isoformat() if req.reviewed_at else None,
+        }
+        for req in queryset
+    ]
+
+@router.post('/super-admin/tat-change-requests/{request_id}/review', tags=["TAT Change"], summary="Approve/Reject TAT Change Request")
+def review_tat_change_request(request, request_id: int, data: TatChangeRequestReviewSchema):
+    from users.models import TatChangeRequest, CustomUser
+    from ninja.errors import HttpError
+    from django.utils import timezone
+    
+    if request.user.role != CustomUser.Role.SUPER_ADMIN:
+        raise HttpError(403, "Unauthorized")
+
+    try:
+        tat_req = TatChangeRequest.objects.get(id=request_id)
+    except TatChangeRequest.DoesNotExist:
+        raise HttpError(404, "Request not found")
+
+    if tat_req.status != TatChangeRequest.Status.PENDING:
+        raise HttpError(400, f"Request is already {tat_req.status}")
+
+    action = data.action.upper()
+    if action not in ['APPROVE', 'REJECT']:
+        raise HttpError(400, "Invalid action")
+
+    tat_req.status = TatChangeRequest.Status.APPROVED if action == 'APPROVE' else TatChangeRequest.Status.REJECTED
+    tat_req.reviewed_by = request.user
+    tat_req.reviewed_at = timezone.now()
+    tat_req.save()
+
+    if action == 'APPROVE':
+        # Update the actual case
+        cursor = connection.cursor()
+        cursor.execute("UPDATE cases SET tat_days = %s WHERE id = %s", [tat_req.updated_tat_days, tat_req.case_id])
+        
+        # We also need to update the case_due_date = case_receive_date + updated_tat_days if possible
+        # We will let the DB trigger or existing logic handle it, but wait, there is logic in python usually.
+        # For safety, let's update case_due_date here:
+        cursor.execute("SELECT case_receive_date FROM cases WHERE id = %s", [tat_req.case_id])
+        row = cursor.fetchone()
+        if row and row[0]:
+            from datetime import timedelta
+            case_receive_date = row[0]
+            if isinstance(case_receive_date, str):
+                from datetime import datetime
+                case_receive_date = datetime.strptime(case_receive_date, '%Y-%m-%d').date()
+            new_due_date = case_receive_date + timedelta(days=tat_req.updated_tat_days)
+            cursor.execute("UPDATE cases SET case_due_date = %s WHERE id = %s", [new_due_date, tat_req.case_id])
+
+    action_past = "APPROVED" if action == "APPROVE" else "REJECTED"
+    return {"success": True, "message": f"TAT change request {action_past.lower()} successfully"}
+
+
+# =========================================================================
+# Case Deletion Requests
+# =========================================================================
+from typing import List
+
+class BulkCaseDeletionRequestSchema(Schema):
+    case_ids: List[int]
+    reason: str
+
+@router.post('/cases/bulk-deletion-request/', tags=["Case Deletion"], summary="Create Bulk Case Deletion Request")
+def create_bulk_case_deletion_request(request, data: BulkCaseDeletionRequestSchema):
+    from users.models import CaseDeletionRequest, CustomUser
+    from ninja.errors import HttpError
+    
+    if request.user.role not in [CustomUser.Role.CASE_MANAGER, CustomUser.Role.SUPER_ADMIN]:
+        raise HttpError(403, "Unauthorized")
+
+    cursor = connection.cursor()
+    created_requests = []
+    for case_id in data.case_ids:
+        # Check if case exists
+        cursor.execute("SELECT claim_number, id FROM cases WHERE id = %s", [case_id])
+        row = cursor.fetchone()
+        if not row:
+            continue
+        
+        # Check if already pending
+        if CaseDeletionRequest.objects.filter(case_id=case_id, status=CaseDeletionRequest.Status.PENDING).exists():
+            continue
+            
+        case_number = row[0] or str(row[1])
+        
+        req = CaseDeletionRequest.objects.create(
+            case_id=case_id,
+            case_number=case_number,
+            requested_by=request.user,
+            reason=data.reason,
+            status=CaseDeletionRequest.Status.PENDING
+        )
+        created_requests.append(req.id)
+
+    if not created_requests and data.case_ids:
+        return {"success": False, "message": "No requests created. Cases might not exist or already have pending deletion requests."}
+
+    return {"success": True, "message": f"Successfully created {len(created_requests)} deletion request(s)."}
+
+
+@router.get('/super-admin/deletion-requests/', tags=["Case Deletion"], summary="Get All Case Deletion Requests (Super Admin)")
+def get_all_deletion_requests(request, status: Optional[str] = None):
+    from users.models import CaseDeletionRequest, CustomUser
+    from ninja.errors import HttpError
+    
+    if request.user.role != CustomUser.Role.SUPER_ADMIN:
+        raise HttpError(403, "Unauthorized")
+
+    queryset = CaseDeletionRequest.objects.select_related('requested_by', 'reviewed_by').all()
+    if status:
+        queryset = queryset.filter(status=status.upper())
+        
+    return [
+        {
+            "id": req.id,
+            "case_id": req.case_id,
+            "case_number": req.case_number,
+            "requested_by_name": f"{req.requested_by.first_name} {req.requested_by.last_name}",
+            "requested_by_email": req.requested_by.email,
+            "requested_at": req.requested_at.isoformat() if req.requested_at else None,
+            "reason": req.reason,
+            "status": req.status,
+            "reviewed_by_name": f"{req.reviewed_by.first_name} {req.reviewed_by.last_name}" if req.reviewed_by else None,
+            "reviewed_at": req.reviewed_at.isoformat() if req.reviewed_at else None,
+        }
+        for req in queryset
+    ]
+
+@router.post('/super-admin/deletion-requests/{request_id}/review', tags=["Case Deletion"], summary="Approve/Reject Case Deletion Request")
+def review_deletion_request(request, request_id: int, data: TatChangeRequestReviewSchema):
+    from users.models import CaseDeletionRequest, CustomUser
+    from ninja.errors import HttpError
+    from django.utils import timezone
+    from users.incident_case_db import delete_case
+    
+    if request.user.role != CustomUser.Role.SUPER_ADMIN:
+        raise HttpError(403, "Unauthorized")
+
+    try:
+        del_req = CaseDeletionRequest.objects.get(id=request_id)
+    except CaseDeletionRequest.DoesNotExist:
+        raise HttpError(404, "Request not found")
+
+    if del_req.status != CaseDeletionRequest.Status.PENDING:
+        raise HttpError(400, f"Request is already {del_req.status}")
+
+    action = data.action.upper()
+    if action not in ['APPROVE', 'REJECT']:
+        raise HttpError(400, "Invalid action")
+
+    del_req.status = CaseDeletionRequest.Status.APPROVED if action == 'APPROVE' else CaseDeletionRequest.Status.REJECTED
+    del_req.reviewed_by = request.user
+    del_req.reviewed_at = timezone.now()
+    del_req.save()
+
+    if action == 'APPROVE':
+        # Actually delete the case
+        delete_case(del_req.case_id)
+
+    action_past = "APPROVED" if action == "APPROVE" else "REJECTED"
+    return {"success": True, "message": f"Deletion request {action_past.lower()} successfully"}
+

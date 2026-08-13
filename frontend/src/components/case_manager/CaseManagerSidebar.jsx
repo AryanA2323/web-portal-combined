@@ -20,12 +20,15 @@ import {
   People,
   AutoAwesome,
   Gavel,
+  CheckCircle,
   Assessment,
   History,
   Settings,
   Logout,
+  SwapHoriz,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import companyLogo from '../../SS_logo.jpg';
 
 const DRAWER_WIDTH = 240;
 
@@ -36,10 +39,42 @@ const allMenuItems = [
   { id: 'clients', label: 'Clients', icon: Store, path: '/case_manager/clients' },
   { id: 'ai-brief', label: 'AI Brief Review', icon: AutoAwesome, path: '/case_manager/ai-brief' },
   { id: 'legal-review', label: 'Legal Review', icon: Gavel, path: '/case_manager/legal-review' },
+  { id: 'completed-cases', label: 'Completed Cases', icon: CheckCircle, path: '/case_manager/completed-cases' },
   { id: 'reports', label: 'Reports', icon: Assessment, path: '/case_manager/reports' },
   { id: 'audit-logs', label: 'Audit Logs', icon: History, path: '/case_manager/audit-logs' },
+  { id: 'tat-changes', label: 'Approvals', icon: SwapHoriz, path: '/super-admin/approvals' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/case_manager/settings' },
 ];
+
+const getUserFullName = (u) => {
+  if (!u) return 'User';
+  const nameParts = [u.first_name, u.last_name].filter(Boolean);
+  if (nameParts.length > 0) {
+    return nameParts.join(' ');
+  }
+  return u.username || u.email || 'User';
+};
+
+const getUserRoleLabel = (u) => {
+  if (!u) return 'Case Manager';
+  const role = (u.role || '').toLowerCase();
+  const subRole = (u.sub_role || '').toLowerCase();
+
+  if (role === 'super_admin' || subRole === 'super_admin') {
+    return 'Super Admin';
+  }
+
+  const roleText = u.role
+    ? u.role.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+    : 'Case Manager';
+
+  if (u.sub_role && subRole !== role && !role.toLowerCase().includes(subRole)) {
+    const subRoleText = u.sub_role.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+    return `${roleText} • ${subRoleText}`;
+  }
+
+  return roleText;
+};
 
 const CaseManagerSidebar = () => {
   const navigate = useNavigate();
@@ -65,34 +100,19 @@ const CaseManagerSidebar = () => {
       }}
     >
       {/* Logo/Header */}
-      <Box sx={{ p: 2.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+      <Box sx={{ height: { xs: 96, md: 112, xl: 96 }, px: 2, pt: { xs: 3, md: 4.2, xl: 3 }, pb: { xs: 0, md: 1.5, xl: 0 }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Box
+          component="img"
+          src={companyLogo}
+          alt="Shoveltech Solutions"
           sx={{
-            width: 40,
-            height: 40,
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontWeight: 'bold',
-            fontSize: '20px',
+            height: 44,
+            width: '100%',
+            objectFit: 'contain',
+            transform: 'scale(1.08)',
           }}
-        >
-          S
-        </Box>
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '16px', lineHeight: 1.2 }}>
-            Shovel Screen
-          </Typography>
-          <Typography variant="caption" sx={{ color: '#666', fontSize: '12px' }}>
-            CaseManager Portal
-          </Typography>
-        </Box>
+        />
       </Box>
-
-      <Divider />
 
       {/* Navigation Menu */}
       <List sx={{ px: 1.5, py: 2, flex: 1 }}>
@@ -107,9 +127,9 @@ const CaseManagerSidebar = () => {
                 sx={{
                   borderRadius: '8px',
                   py: 1.2,
-                  backgroundColor: isActive ? '#f0f4ff' : 'transparent',
+                  backgroundColor: isActive ? '#e0e7ff' : 'transparent',
                   '&:hover': {
-                    backgroundColor: isActive ? '#f0f4ff' : '#f5f5f5',
+                    backgroundColor: isActive ? '#e0e7ff' : '#f5f5f5',
                   },
                 }}
               >
@@ -162,9 +182,7 @@ const CaseManagerSidebar = () => {
                 whiteSpace: 'nowrap',
               }}
             >
-              {user?.first_name && user?.last_name
-                ? `${user.first_name} ${user.last_name}`
-                : user?.email || 'User'}
+              {getUserFullName(user)}
             </Typography>
             <Typography
               variant="caption"
@@ -172,11 +190,9 @@ const CaseManagerSidebar = () => {
                 color: '#666',
                 fontSize: '12px',
                 display: 'block',
-                textTransform: 'capitalize',
               }}
             >
-              {user?.role || 'CaseManager'}
-              {user?.sub_role && ` • ${user.sub_role.replace('_', ' ')}`}
+              {getUserRoleLabel(user)}
             </Typography>
           </Box>
         </Box>
@@ -193,7 +209,7 @@ const CaseManagerSidebar = () => {
             py: 0.8,
             '&:hover': {
               borderColor: '#667eea',
-              backgroundColor: '#f0f4ff',
+              backgroundColor: '#e0e7ff',
               color: '#667eea',
             },
           }}

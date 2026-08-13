@@ -897,3 +897,48 @@ class Report(models.Model):
 
 # Import verification models
 from .models_verification import CaseVerification, VerificationDocument, VerificationComment, ClaimantDependent
+
+class TatChangeRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    case_id = models.CharField(max_length=255, db_index=True)
+    requested_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='tat_requests_made')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    current_tat_days = models.IntegerField(null=True, blank=True)
+    updated_tat_days = models.IntegerField()
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reviewed_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='tat_requests_reviewed')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+        db_table = 'tat_change_requests'
+
+    def __str__(self):
+        return f"TAT Change Request {self.id} for case {self.case_id}"
+
+class CaseDeletionRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    case_id = models.CharField(max_length=255, db_index=True)
+    case_number = models.CharField(max_length=255, blank=True, null=True)
+    requested_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='deletion_requests_made')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reviewed_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='deletion_requests_reviewed')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+        db_table = 'case_deletion_requests'
+
+    def __str__(self):
+        return f"Deletion Request {self.id} for case {self.case_id}"

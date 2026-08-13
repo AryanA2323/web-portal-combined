@@ -19,6 +19,8 @@ import {
   Select,
   MenuItem,
   Chip,
+  Dialog,
+  DialogContent,
 } from '@mui/material';
 import {
   Save,
@@ -31,6 +33,8 @@ import {
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
+import AlertMessage from '../../components/common/AlertMessage';
+import { NotificationBell } from '../../components/case_manager';
 
 const NewCasePage = () => {
   const navigate = useNavigate();
@@ -735,29 +739,28 @@ const NewCasePage = () => {
     <CaseManagerLayout>
       <Box sx={{ p: 3 }}>
         {/* Header */}
-        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ mb: 3, borderBottom: '1px solid #e0e0e0', pb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="h4">
             Create Verification Case
           </Typography>
-          <Button
-            startIcon={<ArrowBack />}
-            onClick={handleCancel}
-            variant="outlined"
-          >
-            Back to Cases
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Button
+              startIcon={<ArrowBack />}
+              onClick={handleCancel}
+              variant="outlined"
+            >
+              Back to Cases
+            </Button>
+            <NotificationBell />
+          </Box>
         </Box>
 
         {/* Error/Success Messages */}
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-            {error}
-          </Alert>
+          <AlertMessage severity="error" onClose={() => setError('')} message={error} open={!!error} />
         )}
         {success && (
-          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
-            {success}
-          </Alert>
+          <AlertMessage severity="success" onClose={() => setSuccess('')} message={success} open={!!success} />
         )}
 
         {/* Form */}
@@ -933,8 +936,8 @@ const NewCasePage = () => {
                       value={commonFields.tat_days}
                       onChange={handleCommonFieldChange}
                       helperText="Auto-calculated from dates"
-                      InputProps={{ readOnly: !!(commonFields.case_receive_date && commonFields.completion_date) }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: (commonFields.case_receive_date && commonFields.completion_date) ? '#f5f5f5' : undefined } }}
+                      InputProps={{ readOnly: true }}
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f5f5f5' } }}
                     />
                   </Grid>
                 </Grid>
@@ -1997,8 +2000,18 @@ const NewCasePage = () => {
             </Box>
           </form>
         </Paper>
-      </Box>
-    </CaseManagerLayout>
+        </Box>
+
+        {/* Loading Overlay */}
+        <Dialog open={loading} PaperProps={{ sx: { backgroundColor: 'transparent', boxShadow: 'none' } }}>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
+            <CircularProgress size={60} sx={{ color: 'white', mb: 2 }} />
+            <Typography variant="h6" sx={{ color: 'white', fontWeight: 600 }}>
+              Creating Case...
+            </Typography>
+          </DialogContent>
+        </Dialog>
+      </CaseManagerLayout>
   );
 };
 

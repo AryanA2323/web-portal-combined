@@ -3,6 +3,7 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
 import { AuthProvider } from './context';
+import { ToastProvider } from './context/ToastContext';
 import { ProtectedRoute } from './components';
 import { LoginPage, SignupPage, ForgotPasswordPage, ResetPasswordPage, TwoFactorPage } from './pages';
 import { 
@@ -18,6 +19,8 @@ import {
   SettingsPage,
   CheckDetailPage,
   ClientsPage,
+  CompletedCasesPage,
+  ApprovalsPage,
 } from './pages/case_manager';
 import {
   DashboardPage as QCDashboardPage,
@@ -90,8 +93,9 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AuthProvider>
-        <Router>
+      <ToastProvider>
+        <AuthProvider>
+          <Router>
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -136,6 +140,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/super-admin/approvals"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <ApprovalsPage />
+                </ProtectedRoute>
+              }
+            />
             
             {/* Protected Routes - CaseManager */}
             <Route
@@ -159,6 +171,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['case_manager']}>
                   <NewCasePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/case_manager/completed-cases"
+              element={
+                <ProtectedRoute allowedRoles={['case_manager']}>
+                  <CompletedCasesPage />
                 </ProtectedRoute>
               }
             />
@@ -233,7 +253,8 @@ function App() {
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </Router>
-      </AuthProvider>
+        </AuthProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

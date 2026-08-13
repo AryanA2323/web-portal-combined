@@ -20,6 +20,7 @@ import {
   Gavel,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import companyLogo from '../../../SS_logo.jpg';
 
 const DRAWER_WIDTH = 240;
 
@@ -43,22 +44,25 @@ const QCSidebar = () => {
         '& .MuiDrawer-paper': {
           width: DRAWER_WIDTH,
           boxSizing: 'border-box',
-          backgroundColor: '#2c3e50',
-          color: '#ecf0f1',
+          borderRight: '1px solid #e0e0e0',
+          backgroundColor: '#fff',
         },
       }}
     >
       {/* Logo/Header */}
-      <Box sx={{ p: 2.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <Gavel sx={{ color: '#3498db', fontSize: 32 }} />
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '16px', lineHeight: 1.2, color: '#ecf0f1' }}>
-            QC PORTAL
-          </Typography>
-        </Box>
+      <Box sx={{ height: { xs: 96, md: 112, xl: 96 }, px: 2, pt: { xs: 3, md: 4.2, xl: 3 }, pb: { xs: 0, md: 1.5, xl: 0 }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Box
+          component="img"
+          src={companyLogo}
+          alt="Shoveltech Solutions"
+          sx={{
+            height: 44,
+            width: '100%',
+            objectFit: 'contain',
+            transform: 'scale(1.08)',
+          }}
+        />
       </Box>
-
-      <Divider sx={{ borderColor: 'rgba(236, 240, 241, 0.1)' }} />
 
       {/* Navigation Menu */}
       <List sx={{ px: 1.5, py: 2, flex: 1 }}>
@@ -73,16 +77,16 @@ const QCSidebar = () => {
                 sx={{
                   borderRadius: '8px',
                   py: 1.2,
-                  backgroundColor: isActive ? 'rgba(52, 152, 219, 0.2)' : 'transparent',
+                  backgroundColor: isActive ? '#e0e7ff' : 'transparent',
                   '&:hover': {
-                    backgroundColor: isActive ? 'rgba(52, 152, 219, 0.3)' : 'rgba(236, 240, 241, 0.1)',
+                    backgroundColor: isActive ? '#e0e7ff' : '#f5f5f5',
                   },
                 }}
               >
                 <ListItemIcon sx={{ minWidth: 40 }}>
                   <Icon
                     sx={{
-                      color: isActive ? '#3498db' : '#95a5a6',
+                      color: isActive ? '#667eea' : '#666',
                       fontSize: 22,
                     }}
                   />
@@ -92,7 +96,7 @@ const QCSidebar = () => {
                   primaryTypographyProps={{
                     fontSize: '14px',
                     fontWeight: isActive ? 600 : 400,
-                    color: isActive ? '#3498db' : '#ecf0f1',
+                    color: isActive ? '#667eea' : '#333',
                   }}
                 />
               </ListItemButton>
@@ -101,7 +105,7 @@ const QCSidebar = () => {
         })}
       </List>
 
-      <Divider sx={{ borderColor: 'rgba(236, 240, 241, 0.1)' }} />
+      <Divider />
 
       {/* User Profile */}
       <Box sx={{ p: 2 }}>
@@ -110,7 +114,7 @@ const QCSidebar = () => {
             sx={{
               width: 36,
               height: 36,
-              backgroundColor: '#3498db',
+              backgroundColor: '#667eea',
               fontSize: '14px',
               fontWeight: 600,
             }}
@@ -126,23 +130,23 @@ const QCSidebar = () => {
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                color: '#ecf0f1',
+                color: '#333',
               }}
             >
-              {user?.first_name && user?.last_name
-                ? `${user.first_name} ${user.last_name}`
-                : user?.email || 'User'}
+              {user?.first_name || user?.last_name
+                ? `${user?.first_name || ''} ${user?.last_name || ''}`.trim()
+                : user?.username || 'User'}
             </Typography>
             <Typography
               variant="caption"
               sx={{
-                color: '#95a5a6',
+                color: '#666',
                 fontSize: '12px',
                 display: 'block',
                 textTransform: 'capitalize',
               }}
             >
-              {user?.role || 'QC'}
+              {user?.role === 'QC' ? 'Quality Check' : user?.role || 'Quality Check'}
             </Typography>
           </Box>
         </Box>
@@ -152,15 +156,15 @@ const QCSidebar = () => {
           startIcon={<Logout sx={{ fontSize: 18 }} />}
           onClick={logout}
           sx={{
-            borderColor: 'rgba(236, 240, 241, 0.2)',
-            color: '#ecf0f1',
+            borderColor: '#e0e0e0',
+            color: '#666',
             fontSize: '13px',
             textTransform: 'none',
             py: 0.8,
             '&:hover': {
-              borderColor: '#3498db',
-              backgroundColor: 'rgba(52, 152, 219, 0.1)',
-              color: '#3498db',
+              borderColor: '#667eea',
+              backgroundColor: '#e0e7ff',
+              color: '#667eea',
             },
           }}
         >

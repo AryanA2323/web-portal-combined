@@ -43,6 +43,7 @@ VALID_INVESTIGATION_REPORT = {'Open', 'Approval', 'Stop', 'QC', 'Dispatch'}
 VALID_CHECK_STATUS = {
     'Not Initiated', 'WIP', 'Completed', 'Stop', 'Verified', 'Reassigned',
     'Applied for CS', 'CS Recieved to adv', 'Dispatched', 'not found',
+    'Failed'
 }
 
 

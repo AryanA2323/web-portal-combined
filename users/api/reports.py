@@ -38,11 +38,11 @@ class QCSchema(Schema):
 class CaseInfoSchema(Schema):
     """Minimal case info for report listing."""
     id: int
-    case_number: str
-    title: str
+    case_number: Optional[str] = None
+    title: Optional[str] = None
     claim_number: Optional[str] = None
     client_name: Optional[str] = None
-    category: str
+    category: Optional[str] = None
     status: str
 
 
@@ -50,11 +50,11 @@ class ReportSchema(Schema):
     """Report response schema."""
     id: int
     case_id: int
-    case_number: str
-    case_title: str
+    case_number: Optional[str] = None
+    case_title: Optional[str] = None
     claim_number: Optional[str] = None
     client_name: Optional[str] = None
-    category: str
+    category: Optional[str] = None
     report_content: str
     status: str
     assigned_qc_id: Optional[int] = None
@@ -72,11 +72,11 @@ class ReportSchema(Schema):
 class ReportListSchema(Schema):
     """Report list response with case details."""
     id: int
-    case_number: str
-    case_title: str
+    case_number: Optional[str] = None
+    case_title: Optional[str] = None
     claim_number: Optional[str] = None
     client_name: Optional[str] = None
-    category: str
+    category: Optional[str] = None
     status: str
     assigned_qc_name: Optional[str] = None
     created_at: datetime
@@ -996,8 +996,8 @@ def review_report(request: HttpRequest, report_id: int, payload: ReviewReportSch
 class LogEntrySchema(Schema):
     """Schema for activity log entries."""
     id: int
-    case_number: str
-    case_title: str
+    case_number: Optional[str] = None
+    case_title: Optional[str] = None
     client_name: Optional[str] = None
     action: str
     review_notes: str

@@ -747,7 +747,9 @@ def get_vendor_assigned_checks(request: HttpRequest):
                                COALESCE(c.claim_number, icase.claim_number, '') AS claim_number,
                                COALESCE(c.client_name, icase.client_name, '') AS client_name,
                                COALESCE(c.category, icase.category, '') AS category,
-                               COALESCE(c.full_case_status, icase.full_case_status, icase.status, '') AS full_case_status
+                               COALESCE(c.full_case_status, icase.full_case_status, icase.status, '') AS full_case_status,
+                               COALESCE({alias}.updated_at, {alias}.created_at, c.updated_at, c.created_at) AS updated_at,
+                               COALESCE({alias}.created_at, c.created_at) AS created_at
                                {icd_select}
                                {adv_select}
                         FROM {table} {alias}
@@ -757,9 +759,11 @@ def get_vendor_assigned_checks(request: HttpRequest):
                         ORDER BY {alias}.id DESC
                     """, where_params)
                     for r in cursor.fetchall():
-                        icd_val = bool(r[7]) if table in _TABLES_WITH_INSURED_CUM_DRIVER else False
+                        updated_at_val = r[7].isoformat() if hasattr(r[7], 'isoformat') else (str(r[7]) if r[7] else None)
+                        created_at_val = r[8].isoformat() if hasattr(r[8], 'isoformat') else (str(r[8]) if r[8] else None)
+                        icd_val = bool(r[9]) if table in _TABLES_WITH_INSURED_CUM_DRIVER else False
                         # advocate_status position depends on whether insured_cum_driver column is present
-                        adv_idx = 8 if table in _TABLES_WITH_INSURED_CUM_DRIVER else 7
+                        adv_idx = 10 if table in _TABLES_WITH_INSURED_CUM_DRIVER else 9
                         adv_stat = r[adv_idx] if (table == 'chargesheets' and len(r) > adv_idx and r[adv_idx]) else ""
                         status_val = adv_stat if adv_stat else (r[2] or "WIP")
                         assigned_checks.append({
@@ -771,11 +775,19 @@ def get_vendor_assigned_checks(request: HttpRequest):
                             "client_name": r[4] or "",
                             "category": r[5] or "",
                             "case_status": r[6] or "",
+                            "updated_at": updated_at_val,
+                            "created_at": created_at_val,
                             "insured_cum_driver": icd_val,
                         })
                 except Exception as table_err:
                     logger.warning(f"Skipping table '{table}' in vendor-assigned-checks: {table_err}")
                     continue
+
+        # Sort all checks by updated_at / created_at descending (latest first)
+        assigned_checks.sort(
+            key=lambda c: c.get("updated_at") or c.get("created_at") or "",
+            reverse=True
+        )
 
         stats = {
             "total": len(assigned_checks),
@@ -1528,6 +1540,15 @@ def vendor_check_status_update(request: HttpRequest, case_id: int, check_type: s
     if not new_status:
         return 400, {"error": "status is required"}
 
+    # Map status aliases (like 'REJECTED' / 'FAILED') to DB check constraint values ('Stop', etc.)
+    status_map = {
+        'REJECTED': 'Stop',
+        'FAILED': 'Failed' if table == 'rto_checks' else 'Stop',
+        'FAILED SUBMIT': 'Failed' if table == 'rto_checks' else 'Stop',
+        'FAIL': 'Failed' if table == 'rto_checks' else 'Stop',
+    }
+    db_status = status_map.get(new_status.upper(), new_status)
+
     try:
         with connections['default'].cursor() as cursor:
             where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
@@ -1543,12 +1564,12 @@ def vendor_check_status_update(request: HttpRequest, case_id: int, check_type: s
             if table == 'chargesheets':
                 cursor.execute(
                     f"UPDATE {table} SET advocate_status = %s, advocate_remark = %s, updated_at = NOW() WHERE id = %s",
-                    [new_status, payload.advocate_remark or '', check_id],
+                    [db_status, payload.advocate_remark or '', check_id],
                 )
             else:
                 cursor.execute(
                     f"UPDATE {table} SET check_status = %s, updated_at = NOW() WHERE id = %s",
-                    [new_status, check_id],
+                    [db_status, check_id],
                 )
     except Exception as e:
         logger.error(f"Failed to update check_status for case_id={case_id} check_type={check_type}: {e}", exc_info=True)
@@ -1602,6 +1623,10 @@ def vendor_check_questionnaire_save(request: HttpRequest, case_id: int, check_ty
 
             set_clauses = ["questionnaire = %s::jsonb", "vendor_feedback = %s", "updated_at = NOW()"]
             params = [questionnaire_json, vendor_feedback_val]
+
+            if table == 'rto_checks':
+                set_clauses.append("remarks = %s")
+                params.append(vendor_feedback_val)
 
             if table in _TABLES_WITH_NEGATIVE_STATUS:
                 set_clauses.append("negative_status = %s")

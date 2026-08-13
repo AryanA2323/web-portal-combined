@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { authStorage } from '../utils/authStorage';
+import { toast } from '../context/ToastContext';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -28,6 +29,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Show toast for error
+    const errorMessage = error.response?.data?.error || error.response?.data?.detail || error.message || 'An error occurred';
+    toast.error(errorMessage);
+
     if (error.response?.status === 401) {
       // Don't redirect to login if we're already on auth pages (login, register, reset password, etc.)
       const authPaths = ['/login', '/signup', '/register', '/forgot-password', '/reset-password', '/verify-2fa'];

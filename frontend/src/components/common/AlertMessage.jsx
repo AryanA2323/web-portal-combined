@@ -1,5 +1,5 @@
-import { Alert, Collapse, IconButton } from '@mui/material';
-import { Close } from '@mui/icons-material';
+import { useEffect, useRef } from 'react';
+import { toast } from '../../context/ToastContext';
 
 const AlertMessage = ({
   open = true,
@@ -8,38 +8,30 @@ const AlertMessage = ({
   onClose,
   className = '',
 }) => {
-  if (!message) return null;
+  const prevOpen = useRef(false);
 
-  return (
-    <Collapse in={open}>
-      <Alert
-        severity={severity}
-        className={`mb-4 rounded-lg animate-fadeIn ${className}`}
-        action={
-          onClose && (
-            <IconButton
-              aria-label="close"
-              color="inherit"
-              size="small"
-              onClick={onClose}
-            >
-              <Close fontSize="inherit" />
-            </IconButton>
-          )
-        }
-        sx={{
-          '& .MuiAlert-icon': {
-            alignItems: 'center',
-          },
-          '& .MuiAlert-message': {
-            padding: '4px 0',
-          },
-        }}
-      >
-        {message}
-      </Alert>
-    </Collapse>
-  );
+  useEffect(() => {
+    // Only trigger if it transitioned to open, and we have a message
+    if (open && message && !prevOpen.current) {
+      if (severity === 'error') {
+        toast.error(message);
+      } else if (severity === 'success') {
+        toast.success(message);
+      } else if (severity === 'warning') {
+        toast.warning(message);
+      } else {
+        toast.info(message);
+      }
+      
+      // Auto-close the parent state so it can be re-triggered
+      if (onClose) {
+        setTimeout(onClose, 100);
+      }
+    }
+    prevOpen.current = open;
+  }, [open, message, severity, onClose]);
+
+  return null; // Do not render inline anymore
 };
 
 export default AlertMessage;

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -19,9 +18,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { CheckCircle, FileDownload, Refresh, Search } from '@mui/icons-material';
+import { CheckCircle, Description, FileDownload, Refresh, Search } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
+import AlertMessage from '../../components/common/AlertMessage';
+import { NotificationBell } from '../../components/case_manager';
 import jsPDF from 'jspdf';
 import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
 import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
@@ -315,7 +316,7 @@ const ReportsPage = () => {
         y = 20;
         addLine(`${labelPrefix}: ${docObj.filename || 'Document'}`, 13, true);
         y += 8;
-        
+
         const urlStr = docObj.url || docObj.file_url || '';
         const isImage = /\.(jpeg|jpg|png|gif|webp)$/i.test(urlStr || docObj.filename || '');
         const isPdf = /\.(pdf)$/i.test(urlStr || docObj.filename || '');
@@ -358,7 +359,7 @@ const ReportsPage = () => {
         try {
           const basePdfBuffer = doc.output('arraybuffer');
           const mergedPdf = await PDFDocument.load(basePdfBuffer);
-          
+
           pdfInsertions.sort((a, b) => b.afterPageIndex - a.afterPageIndex);
 
           for (const insertion of pdfInsertions) {
@@ -368,7 +369,7 @@ const ReportsPage = () => {
               const pdfBytes = await res.arrayBuffer();
               const externalPdf = await PDFDocument.load(pdfBytes);
               const copiedPages = await mergedPdf.copyPages(externalPdf, externalPdf.getPageIndices());
-              
+
               let insertAt = insertion.afterPageIndex + 1;
               for (const page of copiedPages) {
                 mergedPdf.insertPage(insertAt, page);
@@ -378,7 +379,7 @@ const ReportsPage = () => {
               console.error(`Failed to fetch or merge PDF ${insertion.filename}:`, err);
             }
           }
-          
+
           const mergedPdfBytes = await mergedPdf.save();
           const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
           const link = document.createElement('a');
@@ -402,17 +403,101 @@ const ReportsPage = () => {
   };
 
   return (
-    <CaseManagerLayout>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#333' }}>
-          Reports
-        </Typography>
+    <CaseManagerLayout disablePadding>
+      {/* Top Header Section - Reports Theme */}
+      <Box
+        sx={{
+          minHeight: 110,
+          py: 1.75,
+          mx: { xs: 1.5, md: 2.5 },
+          px: { xs: 2, md: 3 },
+          borderRadius: '0 0 16px 16px',
+          boxSizing: 'border-box',
+          background: 'linear-gradient(120deg, #ecfeff 0%, #cff4fc 30%, #e0f2fe 65%, #e0e7ff 100%)',
+          boxShadow: '0 4px 16px rgba(148, 163, 184, 0.08)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 1.5,
+          position: 'relative',
+          overflow: 'hidden',
+          border: '1px solid rgba(226, 232, 240, 0.9)',
+          borderTop: 'none',
+        }}
+      >
+        {/* Multi-Tone Ambient Glowing Mesh Accents */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'radial-gradient(circle at 10% 20%, rgba(6, 182, 212, 0.18) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(56, 189, 248, 0.20) 0%, transparent 40%)',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }}
+        />
+
+        {/* Left Side: Title & Description Icon */}
+        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #cff4fc 0%, #a5f3fc 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(8, 145, 178, 0.18)',
+            }}
+          >
+            <Description sx={{ fontSize: 26, color: '#0891b2' }} />
+          </Box>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 800,
+              fontSize: { xs: '1.5rem', md: '1.9rem' },
+              letterSpacing: '-0.8px',
+              background: 'linear-gradient(135deg, #0f172a 0%, #164e63 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Reports
+          </Typography>
+        </Box>
+
+        {/* Right Side: Notification Bell Container */}
+        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center' }}>
+          <Box
+            sx={{
+              bgcolor: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid rgba(99, 102, 241, 0.15)',
+              boxShadow: '0 4px 16px rgba(99, 102, 241, 0.12)',
+              p: 0.5,
+              flexShrink: 0,
+              transition: 'all 0.25s ease-in-out',
+              '&:hover': {
+                boxShadow: '0 6px 20px rgba(99, 102, 241, 0.2)',
+                transform: 'scale(1.03)',
+              },
+            }}
+          >
+            <NotificationBell />
+          </Box>
+        </Box>
       </Box>
 
+      {/* Main Content Container */}
+      <Box sx={{ p: 3, pt: 1 }}>
+
       {error ? (
-        <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
+        <AlertMessage severity="error" onClose={() => setError('')} message={error} open={!!error} />
       ) : null}
 
       <Paper
@@ -568,7 +653,8 @@ const ReportsPage = () => {
           </MenuItem>
         </Menu>
       </Paper>
-    </CaseManagerLayout>
+    </Box>
+  </CaseManagerLayout>
   );
 };
 

@@ -7,6 +7,14 @@ const getApiBaseUrl = () => {
   const normalizedEnvUrl = envUrl?.trim();
 
   if (__DEV__) {
+    const hostUri = Constants.expoConfig?.hostUri;
+    
+    // Automatically detect local Wi-Fi IP from Expo Metro if available
+    if (hostUri && !hostUri.includes('exp.direct') && !hostUri.includes('loca.lt')) {
+      const expoHost = hostUri.split(':')[0];
+      return `http://${expoHost}:8000/api`;
+    }
+
     if (
       normalizedEnvUrl &&
       normalizedEnvUrl !== PRODUCTION_API_BASE_URL &&
@@ -14,17 +22,8 @@ const getApiBaseUrl = () => {
     ) {
       return normalizedEnvUrl;
     }
-
-    const hostUri = Constants.expoConfig?.hostUri;
     
-    // If we're using an Expo tunnel (.exp.direct), port 8000 won't be exposed through it.
-    // We must connect to the local Wi-Fi IP directly.
-    if (hostUri && !hostUri.includes('exp.direct') && !hostUri.includes('loca.lt')) {
-      const expoHost = hostUri.split(':')[0];
-      return `http://${expoHost}:8000/api`;
-    }
-    
-    // Fallback to the current local Wi-Fi IP Address of the PC if tunnel is in use
+    // Fallback to the current local Wi-Fi IP Address of the PC
     return 'http://192.168.1.2:8000/api';
   } else if (normalizedEnvUrl && !normalizedEnvUrl.includes('loca.lt')) {
     return normalizedEnvUrl;

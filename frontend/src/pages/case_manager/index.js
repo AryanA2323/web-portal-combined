@@ -13,3 +13,5 @@ export { default as SettingsPage } from './SettingsPage';
 export { default as CheckDetailPage } from './CheckDetailPage';
 export { default as ClientsPage } from './ClientsPage';
 
+export { default as CompletedCasesPage } from './CompletedCasesPage';
+export { default as ApprovalsPage } from './ApprovalsPage';

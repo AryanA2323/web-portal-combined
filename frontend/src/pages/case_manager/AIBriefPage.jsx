@@ -25,6 +25,9 @@ import {
   TableRow,
   TextField,
   Typography,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
 } from '@mui/material';
 import {
   AutoAwesome,
@@ -37,14 +40,17 @@ import {
   Schedule,
   TrendingUp,
   InsertDriveFile,
+  ExpandMore,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
+import { NotificationBell } from '../../components/case_manager';
 import StatCard from './components/StatCard';
 import api from '../../services/api';
 import jsPDF from 'jspdf';
 import { PDFDocument } from 'pdf-lib';
 import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
+import AlertMessage from '../../components/common/AlertMessage';
 
 const REPORT_STORAGE_KEY = 'aiBriefReports';
 
@@ -499,7 +505,7 @@ const AIBriefPage = () => {
       // Set modal open with whatever we have first so it feels responsive
       setActiveReportCaseId(rowId);
       setViewReportDialogOpen(true);
-      
+
       // Fetch full report content
       const response = await api.get(`/reports/${reportId}`);
       setReportsByCase((prev) => ({
@@ -705,7 +711,7 @@ const AIBriefPage = () => {
       y = 20;
       addText(`${labelPrefix}: ${docObj.filename || 'Document'}`, 13, true, [51, 65, 85]);
       y += 8;
-      
+
       const isImage = /\.(jpeg|jpg|png|gif|webp)$/i.test(docObj.url || docObj.filename || '');
       const isPdf = /\.(pdf)$/i.test(docObj.url || docObj.filename || '');
 
@@ -735,12 +741,12 @@ const AIBriefPage = () => {
     }
 
     const fileName = `${sanitizeFileName(caseNum, 'ai-brief-report')}_ai_brief_report.pdf`;
-    
+
     if (pdfInsertions.length > 0) {
       try {
         const basePdfBuffer = doc.output('arraybuffer');
         const mergedPdf = await PDFDocument.load(basePdfBuffer);
-        
+
         pdfInsertions.sort((a, b) => b.afterPageIndex - a.afterPageIndex);
 
         for (const insertion of pdfInsertions) {
@@ -749,7 +755,7 @@ const AIBriefPage = () => {
             const pdfBytes = await res.arrayBuffer();
             const externalPdf = await PDFDocument.load(pdfBytes);
             const copiedPages = await mergedPdf.copyPages(externalPdf, externalPdf.getPageIndices());
-            
+
             let insertAt = insertion.afterPageIndex + 1;
             for (const page of copiedPages) {
               mergedPdf.insertPage(insertAt, page);
@@ -759,7 +765,7 @@ const AIBriefPage = () => {
             console.error(`Failed to fetch or merge PDF ${insertion.filename}:`, err);
           }
         }
-        
+
         const mergedPdfBytes = await mergedPdf.save();
         const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
         const link = document.createElement('a');
@@ -786,18 +792,18 @@ const AIBriefPage = () => {
             case_id: activeReport.caseId,
             report_content: activeReport.reportText,
           });
-          
+
           // Update the report with the database ID
           const updatedReport = {
             ...activeReport,
             id: saveResponse.data.id,
           };
-          
+
           setReportsByCase((prev) => ({
             ...prev,
             [activeReportCaseId]: updatedReport,
           }));
-          
+
           setEditedContent(activeReport.reportText);
           setEditMode(true);
           setSuccess('Report saved to database. You can now edit.');
@@ -866,7 +872,7 @@ const AIBriefPage = () => {
           report_content: activeReport.reportText,
         });
         reportId = saveResponse.data.id;
-        
+
         // Update the report with the database ID
         const updatedReport = {
           ...activeReport,
@@ -955,35 +961,128 @@ const AIBriefPage = () => {
   const isSelected = (id) => selected.indexOf(id) !== -1;
 
   return (
-    <CaseManagerLayout>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#333' }}>
-          AI Brief Review
-        </Typography>
+    <CaseManagerLayout disablePadding>
+      {/* Top Header Section - AI Brief Review Theme */}
+      <Box
+        sx={{
+          minHeight: 110,
+          py: 1.75,
+          mx: { xs: 1.5, md: 2.5 },
+          px: { xs: 2, md: 3 },
+          borderRadius: '0 0 16px 16px',
+          boxSizing: 'border-box',
+          background: 'linear-gradient(120deg, #faf5ff 0%, #f3e8ff 30%, #e0e7ff 65%, #ede9fe 100%)',
+          boxShadow: '0 4px 16px rgba(148, 163, 184, 0.08)',
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 1.5,
+          position: 'relative',
+          overflow: 'hidden',
+          border: '1px solid rgba(226, 232, 240, 0.9)',
+          borderTop: 'none',
+        }}
+      >
+        {/* Multi-Tone Ambient Glowing Mesh Accents */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'radial-gradient(circle at 10% 20%, rgba(168, 85, 247, 0.18) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.20) 0%, transparent 40%)',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }}
+        />
+
+        {/* Left Side: Title & AI Icon */}
+        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #f3e8ff 0%, #ddd6fe 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(147, 51, 234, 0.15)',
+            }}
+          >
+            <AutoAwesome sx={{ fontSize: 26, color: '#7e22ce' }} />
+          </Box>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 800,
+              fontSize: { xs: '1.5rem', md: '1.9rem' },
+              letterSpacing: '-0.8px',
+              background: 'linear-gradient(135deg, #0f172a 0%, #581c87 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            AI Brief Review
+          </Typography>
+        </Box>
+
+        {/* Right Side: 4 Stat Cards in Single Row + Notification Bell */}
+        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 2, flex: 1, justifyContent: 'flex-end' }}>
+          {/* Single Row of 4 Stat Cards */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+              gap: 1.25,
+              flex: 1,
+              maxWidth: 440,
+            }}
+          >
+            {statsData.map((stat, index) => (
+              <Box key={index} sx={{ minWidth: 0 }}>
+                <StatCard {...stat} compact={true} hideIcon={true} />
+              </Box>
+            ))}
+          </Box>
+
+          {/* Notification Bell */}
+          <Box
+            sx={{
+              bgcolor: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid rgba(99, 102, 241, 0.15)',
+              boxShadow: '0 4px 16px rgba(99, 102, 241, 0.12)',
+              p: 0.5,
+              flexShrink: 0,
+              transition: 'all 0.25s ease-in-out',
+              '&:hover': {
+                boxShadow: '0 6px 20px rgba(99, 102, 241, 0.2)',
+                transform: 'scale(1.03)',
+              },
+            }}
+          >
+            <NotificationBell />
+          </Box>
+        </Box>
       </Box>
+
+      {/* Main Content Container */}
+      <Box sx={{ p: 3, pt: 1 }}>
 
       {(error || success) && (
         <Box sx={{ mb: 3 }}>
           {error ? (
-            <Alert severity="error" onClose={() => setError('')} sx={{ borderRadius: '10px' }}>
-              {error}
-            </Alert>
+            <AlertMessage severity="error" onClose={() => setError('')} message={error} open={!!error} />
           ) : null}
           {success ? (
-            <Alert severity="success" onClose={() => setSuccess('')} sx={{ borderRadius: '10px', mt: error ? 2 : 0 }}>
-              {success}
-            </Alert>
+            <AlertMessage severity="success" onClose={() => setSuccess('')} message={success} open={!!success} />
           ) : null}
         </Box>
       )}
-
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, width: '100%' }}>
-        {statsData.map((stat, index) => (
-          <Box key={index} sx={{ flex: 1, minWidth: 0 }}>
-            <StatCard {...stat} change={stat.change} />
-          </Box>
-        ))}
-      </Box>
 
       <Paper
         elevation={0}
@@ -1414,7 +1513,7 @@ const AIBriefPage = () => {
                   ))}
                 </Box>
               )}
-              
+
               {editMode ? (
                 <TextField
                   multiline
@@ -1744,7 +1843,8 @@ const AIBriefPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </CaseManagerLayout>
+    </Box>
+  </CaseManagerLayout>
   );
 };
 

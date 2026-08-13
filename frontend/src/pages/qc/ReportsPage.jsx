@@ -20,7 +20,6 @@ import {
   Tabs,
   Tab,
   CircularProgress,
-  Alert,
   TablePagination,
 } from '@mui/material';
 import {
@@ -33,7 +32,9 @@ import {
   InsertDriveFile,
 } from '@mui/icons-material';
 import QCLayout from './components/QCLayout';
+import QCNotificationBell from './components/QCNotificationBell';
 import api from '../../services/api';
+import AlertMessage from '../../components/common/AlertMessage';
 import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
 
 const formatEvidenceTimestamp = (photo) => {
@@ -241,21 +242,15 @@ const ReportsPage = () => {
 
   return (
     <QCLayout>
+      <Box sx={{ height: 82, px: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', letterSpacing: '-0.5px' }}>
+          Reports
+        </Typography>
+        <QCNotificationBell />
+      </Box>
       <Box sx={{ p: 3 }}>
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Home / Reports
-          </Typography>
-          <Typography variant="h4" fontWeight={700} sx={{ color: '#2c3e50' }}>
-            Reports
-          </Typography>
-        </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+        <AlertMessage severity="error" onClose={() => setError(null)} message={error} open={!!error} />
 
         {/* Stats Cards */}
         <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
@@ -286,21 +281,19 @@ const ReportsPage = () => {
         </Box>
 
         <Paper sx={{ overflow: 'hidden' }}>
-          <Tabs
-            value={activeTab}
-            onChange={(e, newValue) => {
-              setActiveTab(newValue);
-              setPage(0);
-            }}
-            sx={{
-              backgroundColor: '#34495e',
-              '& .MuiTab-root': { color: '#ecf0f1', fontWeight: 600 },
-              '& .Mui-selected': { color: '#3498db' },
-            }}
-          >
-            <Tab label={`Pending Review (${stats.pending})`} />
-            <Tab label={`Reviewed (${stats.accepted + stats.rejected})`} />
-          </Tabs>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: '#f8f9fa' }}>
+            <Tabs
+              value={activeTab}
+              onChange={(e, newValue) => {
+                setActiveTab(newValue);
+                setPage(0);
+              }}
+              sx={{ '& .MuiTab-root': { textTransform: 'none', fontWeight: 700, fontSize: '14px' } }}
+            >
+              <Tab label={`Pending Review (${stats.pending})`} />
+              <Tab label={`Reviewed (${stats.accepted + stats.rejected})`} />
+            </Tabs>
+          </Box>
 
           <Box sx={{ p: 2 }}>
             <TextField

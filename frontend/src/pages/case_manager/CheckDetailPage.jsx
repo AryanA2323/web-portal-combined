@@ -62,6 +62,8 @@ import {
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { NotificationBell } from '../../components/case_manager';
 
 // Helper to resolve media URLs to full backend origin so audio & images load properly
 const resolveMediaUrl = (rawUrl) => {
@@ -239,7 +241,6 @@ const CASE_FIELDS_DEF = [
   { name: 'case_receive_date', label: 'Receive Date', type: 'date' },
   { name: 'case_due_date', label: 'Due Date', type: 'date' },
   { name: 'completion_date', label: 'Completion Date', type: 'date' },
-  { name: 'tat_days', label: 'TAT Days', type: 'number' },
   { name: 'sla', label: 'SLA', options: ['AT', 'WT'] },
   { name: 'investigation_report_status', label: 'IR Status', options: ['Open', 'Submitted', 'Approved', 'Rejected', 'Under Review', 'Closed'] },
   { name: 'full_case_status', label: 'Case Status', options: ['WIP', 'Completed', 'Pending', 'On Hold', 'Cancelled'] },
@@ -464,6 +465,8 @@ const LoadingSkeleton = () => (
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 const CheckDetailPage = () => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin' || user?.sub_role === 'super_admin';
   const { caseId, checkType } = useParams();
   const navigate = useNavigate();
 
@@ -477,6 +480,13 @@ const CheckDetailPage = () => {
   const [checkData, setCheckData] = useState({});
   const [caseDraft, setCaseDraft] = useState({});
   const [checkDraft, setCheckDraft] = useState({});
+  const [tatRequest, setTatRequest] = useState(null);
+
+  // TAT Change Modal state
+  const [tatChangeOpen, setTatChangeOpen] = useState(false);
+  const [updatedTatDays, setUpdatedTatDays] = useState('');
+  const [tatReason, setTatReason] = useState('');
+  const [tatSubmitting, setTatSubmitting] = useState(false);
 
   // Media preview & upload states
   const [activeMediaTab, setActiveMediaTab] = useState(0);
@@ -497,6 +507,18 @@ const CheckDetailPage = () => {
       const res = await api.get(`/cases/incident-db/${caseId}/check/${checkType}`);
       setCaseData(res.data.case || {});
       setCheckData(res.data.check || {});
+
+      // Fetch TAT Change Request
+      try {
+        const tatRes = await api.get(`/cases/${caseId}/approval/`);
+        if (tatRes.data.has_request) {
+          setTatRequest(tatRes.data.request);
+        } else {
+          setTatRequest(null);
+        }
+      } catch (tatErr) {
+        console.error("Failed to load TAT request status", tatErr);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load details.');
     } finally { setLoading(false); }
@@ -508,6 +530,27 @@ const CheckDetailPage = () => {
   const handleCancelEdit = () => { setEditing(false); setCaseDraft({}); setCheckDraft({}); setSuccess(''); setError(''); };
   const handleCaseChange = (n, v) => setCaseDraft((p) => ({ ...p, [n]: v }));
   const handleCheckChange = (n, v) => setCheckDraft((p) => ({ ...p, [n]: v }));
+
+  const handleTatChangeSubmit = async () => {
+    if (!updatedTatDays || !tatReason) return;
+    setTatSubmitting(true);
+    try {
+      await api.post(`/cases/${caseId}/approval/`, {
+        updated_tat_days: parseInt(updatedTatDays, 10),
+        reason: tatReason,
+      });
+      setSuccess('TAT Change Request submitted successfully.');
+      setTatChangeOpen(false);
+      setUpdatedTatDays('');
+      setTatReason('');
+      await fetchDetail(); // Refresh to get the new request status
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to submit TAT change request.');
+    } finally {
+      setTatSubmitting(false);
+    }
+  };
+
 
   const handleSave = async () => {
     setSaving(true); setError(''); setSuccess('');
@@ -606,19 +649,22 @@ const CheckDetailPage = () => {
           <Box sx={{ position: 'absolute', bottom: -60, left: '30%', width: 280, height: 280, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
 
           {/* Breadcrumb */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, mb: 2.5, opacity: 0.85 }}>
-            <IconButton onClick={() => navigate('/case_manager/cases')} size="small" sx={{ color: '#fff', p: 0.5, '&:hover': { background: 'rgba(255,255,255,0.15)' } }}>
-              <ArrowBack sx={{ fontSize: 18 }} />
-            </IconButton>
-            <Typography sx={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', '&:hover': { color: '#fff' } }} onClick={() => navigate('/case_manager/cases')}>
-              Cases
-            </Typography>
-            <Typography sx={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>›</Typography>
-            <Typography sx={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>
-              {caseData.claim_number || `Case #${caseId}`}
-            </Typography>
-            <Typography sx={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>›</Typography>
-            <Typography sx={{ fontSize: '13px', color: '#fff', fontWeight: 600 }}>{meta.label}</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, opacity: 0.85 }}>
+              <IconButton onClick={() => navigate('/case_manager/cases')} size="small" sx={{ color: '#fff', p: 0.5, '&:hover': { background: 'rgba(255,255,255,0.15)' } }}>
+                <ArrowBack sx={{ fontSize: 18 }} />
+              </IconButton>
+              <Typography sx={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', '&:hover': { color: '#fff' } }} onClick={() => navigate('/case_manager/cases')}>
+                Cases
+              </Typography>
+              <Typography sx={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>›</Typography>
+              <Typography sx={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>
+                {caseData.claim_number || `Case #${caseId}`}
+              </Typography>
+              <Typography sx={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>›</Typography>
+              <Typography sx={{ fontSize: '13px', color: '#fff', fontWeight: 600 }}>{meta.label}</Typography>
+            </Box>
+            <NotificationBell iconColor="#fff" />
           </Box>
 
           {/* Title row */}
@@ -640,26 +686,7 @@ const CheckDetailPage = () => {
 
             {/* Action buttons */}
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Button
-                variant="contained"
-                startIcon={<CloudUpload sx={{ fontSize: 16 }} />}
-                onClick={() => handleOpenUpload('evidence')}
-                sx={{
-                  background: '#fff',
-                  color: meta.color,
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  textTransform: 'none',
-                  borderRadius: '10px',
-                  px: 2.5,
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
-                  '&:hover': { background: 'rgba(255,255,255,0.9)' },
-                }}
-              >
-                Upload File / Media
-              </Button>
-
-              {!loading && !editing && (
+              {!loading && !editing && isSuperAdmin && (
                 <Button
                   variant="contained"
                   startIcon={<Edit sx={{ fontSize: 16 }} />}
@@ -755,6 +782,47 @@ const CheckDetailPage = () => {
                       ) : (
                         <TabularFieldsView fields={CASE_FIELDS_DEF} getVal={caseVal} />
                       )}
+                      
+                      {/* TAT Days Change Management Sub-section */}
+                      <Box sx={{ mt: 3, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
+                        <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', mb: 2 }}>
+                          Change Management - TAT Days
+                        </Typography>
+                        <Grid container spacing={2} alignItems="center">
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="TAT Days"
+                              value={caseData.tat_days !== null ? caseData.tat_days : ''}
+                              InputProps={{ readOnly: true }}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f5f5f5' }, '& .MuiInputBase-input': { fontSize: '13px' } }}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <Button 
+                              variant="outlined" 
+                              size="small" 
+                              onClick={() => setTatChangeOpen(true)}
+                              sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
+                            >
+                              Request Change
+                            </Button>
+                          </Grid>
+                        </Grid>
+                        
+                        {/* Request Status Display */}
+                        {tatRequest && (
+                          <Box sx={{ mt: 2, p: 1.5, borderRadius: '8px', bgcolor: tatRequest.status === 'REJECTED' ? '#fef2f2' : '#eff6ff', border: '1px solid', borderColor: tatRequest.status === 'REJECTED' ? '#fecaca' : '#bfdbfe' }}>
+                            <Typography sx={{ fontSize: '12.5px', fontWeight: 600, color: tatRequest.status === 'REJECTED' ? '#dc2626' : '#2563eb' }}>
+                              Status: {tatRequest.status === 'PENDING' ? 'Pending Super Admin Approval' : tatRequest.status === 'REJECTED' ? 'Rejected' : tatRequest.status}
+                            </Typography>
+                            <Typography sx={{ fontSize: '12px', color: '#475569', mt: 0.5 }}>
+                              Requested TAT: {tatRequest.updated_tat_days} days
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
                     </Box>
                   </Paper>
                 </Grid>
@@ -1152,7 +1220,48 @@ const CheckDetailPage = () => {
           </Box>
         </Dialog>
 
-        {/* ── STICKY SAVE BAR ───────────────────────────────────────────── */}
+        
+        {/* TAT CHANGE REQUEST MODAL */}
+        <Dialog open={tatChangeOpen} onClose={() => setTatChangeOpen(false)} maxWidth="xs" fullWidth>
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>Request TAT Days Change</Typography>
+            <Stack spacing={2}>
+              <TextField
+                label="Updated TAT Days"
+                type="number"
+                fullWidth
+                size="small"
+                value={updatedTatDays}
+                onChange={(e) => setUpdatedTatDays(e.target.value)}
+                autoFocus
+              />
+              <TextField
+                label="Reason for Change"
+                multiline
+                rows={3}
+                fullWidth
+                size="small"
+                value={tatReason}
+                onChange={(e) => setTatReason(e.target.value)}
+                placeholder="Provide a detailed reason for the requested change"
+              />
+            </Stack>
+            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 3 }}>
+              <Button onClick={() => setTatChangeOpen(false)} color="inherit" sx={{ textTransform: 'none' }}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleTatChangeSubmit} 
+                variant="contained" 
+                disabled={!updatedTatDays || !tatReason || tatSubmitting}
+                sx={{ textTransform: 'none', background: '#3b82f6' }}
+              >
+                {tatSubmitting ? 'Submitting...' : 'Submit Request'}
+              </Button>
+            </Box>
+          </Box>
+        </Dialog>
+{/* ── STICKY SAVE BAR ───────────────────────────────────────────── */}
         {editing && !loading && (
           <Box sx={{
             position: 'sticky', bottom: 0, zIndex: 100,

@@ -185,7 +185,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingPhotoName, setDeletingPhotoName] = useState<string | null>(null);
-  const isCompleted = data?.check?.check_status === 'Completed' || data?.check?.check_status === 'Verified';
+  const isCompleted = data?.check?.check_status === 'Completed' || data?.check?.check_status === 'Verified' || data?.check?.check_status === 'Failed';
 
   const CHARGESHEET_STATUS_OPTIONS = [
     'WIP',
@@ -197,6 +197,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   const [selectedChargesheetStatus, setSelectedChargesheetStatus] = useState<string>('WIP');
   const [advocateRemark, setAdvocateRemark] = useState<string>('');
+  const [rtoRemark, setRtoRemark] = useState<string>('');
   const [isSavingStatus, setIsSavingStatus] = useState<boolean>(false);
   const [showStatusModal, setShowStatusModal] = useState<boolean>(false);
 
@@ -209,7 +210,16 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     if (data?.check?.advocate_remark) {
       setAdvocateRemark(data.check.advocate_remark);
     }
-  }, [data?.check?.advocate_status, data?.check?.check_status, data?.check?.advocate_remark]);
+    if (data?.check) {
+      const existingRtoRemark =
+        data.check.vendor_feedback ||
+        data.check.remarks ||
+        data.check.questionnaire?.rto_remark ||
+        data.check.questionnaire?.vendor_feedback ||
+        '';
+      setRtoRemark(existingRtoRemark);
+    }
+  }, [data?.check]);
 
   const handleUpdateChargesheetStatus = (newStatus: string) => {
     setSelectedChargesheetStatus(newStatus);
@@ -306,6 +316,63 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       }
     };
   }, [loadData]);
+
+  const getMediaUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const origin = API_BASE_URL.replace(/\/api\/?$/, '');
+    return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  const handleDownloadDocument = async (rawUrl: string, filename: string) => {
+    try {
+      if (!rawUrl) return;
+      const safeName = (filename || 'document.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const apiOrigin = API_BASE_URL.replace(/\/api\/?$/, '');
+      const downloadUrl = `${apiOrigin}/api/download-file?file_url=${encodeURIComponent(rawUrl)}&filename=${encodeURIComponent(safeName)}`;
+
+      // Opens in browser which receives Content-Disposition: attachment → auto-downloads to phone Downloads folder
+      await Linking.openURL(downloadUrl);
+      showToast({ type: 'success', title: 'Downloading', message: `${safeName} saving to Downloads` });
+    } catch (err: any) {
+      console.error('Download document error:', err);
+      const fullUrl = getMediaUrl(rawUrl);
+      if (fullUrl) Linking.openURL(fullUrl);
+    }
+  };
+
+  const handleShareDocument = async (rawUrl: string, filename: string) => {
+    try {
+      const fullUrl = getMediaUrl(rawUrl);
+      if (!fullUrl) return;
+
+      if (Platform.OS === 'web') {
+        Linking.openURL(fullUrl);
+        return;
+      }
+
+      const safeName = (filename || 'rto_document.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const localUri = `${FileSystem.cacheDirectory}${safeName}`;
+      const downloadRes = await FileSystem.downloadAsync(fullUrl, localUri);
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(downloadRes.uri, {
+          dialogTitle: `Share ${filename}`,
+          mimeType: filename.toLowerCase().endsWith('.pdf')
+            ? 'application/pdf'
+            : filename.toLowerCase().endsWith('.docx')
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : 'application/octet-stream',
+        });
+      } else {
+        Linking.openURL(fullUrl);
+      }
+    } catch (err: any) {
+      console.error('Share document error:', err);
+      const fullUrl = getMediaUrl(rawUrl);
+      if (fullUrl) Linking.openURL(fullUrl);
+    }
+  };
 
   const requestMicrophonePermission = async (): Promise<boolean> => {
     try {
@@ -1742,23 +1809,50 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                           </View>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          {doc.preview_url || doc.url ? (
-                            <TouchableOpacity
-                              onPress={() => Linking.openURL(doc.preview_url || doc.url)}
-                              style={styles.docViewButton}
-                              activeOpacity={0.8}
-                            >
-                              <Text style={styles.docViewButtonText}>View</Text>
-                            </TouchableOpacity>
-                          ) : null}
-                          {!isCompleted && normalizedCheckType !== 'rto' && (
-                            <TouchableOpacity
-                              onPress={() => handleDeleteDocument(doc.filename, false)}
-                              style={{ padding: 4 }}
-                              activeOpacity={0.7}
-                            >
-                              <MaterialCommunityIcons name="delete-outline" size={20} color="#ef4444" />
-                            </TouchableOpacity>
+                          {normalizedCheckType === 'rto' ? (
+                            <>
+                              {(doc.preview_url || doc.url) && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <TouchableOpacity
+                                    onPress={() => handleDownloadDocument(doc.preview_url || doc.url, doc.filename || `Document_${idx + 1}`)}
+                                    style={{ padding: 7, backgroundColor: '#EFF6FF', borderRadius: 8, borderWidth: 1, borderColor: '#BFDBFE' }}
+                                    activeOpacity={0.7}
+                                    accessibilityLabel="Download Document"
+                                  >
+                                    <MaterialCommunityIcons name="download" size={18} color="#1d4ed8" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() => handleShareDocument(doc.preview_url || doc.url, doc.filename || `Document_${idx + 1}`)}
+                                    style={{ padding: 7, backgroundColor: '#F0FDF4', borderRadius: 8, borderWidth: 1, borderColor: '#BBF7D0' }}
+                                    activeOpacity={0.7}
+                                    accessibilityLabel="Share Document"
+                                  >
+                                    <MaterialCommunityIcons name="share-variant" size={18} color="#166534" />
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {doc.preview_url || doc.url ? (
+                                <TouchableOpacity
+                                  onPress={() => Linking.openURL(getMediaUrl(doc.preview_url || doc.url))}
+                                  style={styles.docViewButton}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.docViewButtonText}>View</Text>
+                                </TouchableOpacity>
+                              ) : null}
+                              {!isCompleted && (
+                                <TouchableOpacity
+                                  onPress={() => handleDeleteDocument(doc.filename, false)}
+                                  style={{ padding: 4 }}
+                                  activeOpacity={0.7}
+                                >
+                                  <MaterialCommunityIcons name="delete-outline" size={20} color="#ef4444" />
+                                </TouchableOpacity>
+                              )}
+                            </>
                           )}
                         </View>
                       </View>
@@ -1785,47 +1879,93 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
               </View>
 
               {normalizedCheckType === 'rto' && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionEyebrow}>Generated</Text>
-                  <Text style={styles.sectionTitle}>
-                    Generated RTO Documents ({generatedRtoDocs.length})
-                  </Text>
+                <>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionEyebrow}>Generated</Text>
+                    <Text style={styles.sectionTitle}>
+                      Generated RTO Documents ({generatedRtoDocs.length})
+                    </Text>
 
-                  {generatedRtoDocs.length === 0 ? (
-                    <Text style={styles.noEvidenceText}>No RTO documents generated yet</Text>
-                  ) : (
-                    <View style={{ gap: 8, marginTop: 8 }}>
-                      {generatedRtoDocs.map((doc: any, idx: number) => (
-                        <View key={idx} style={styles.docItemCard}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                            <MaterialCommunityIcons name="file-document-outline" size={24} color={PRIMARY_BLUE} />
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.docNameText} numberOfLines={1}>
-                                {doc.filename || `Document ${idx + 1}`}
-                              </Text>
-                              {!!doc.uploaded_at && (
-                                <Text style={styles.docDateText}>
-                                  {new Date(doc.uploaded_at).toLocaleDateString()}
+                    {generatedRtoDocs.length === 0 ? (
+                      <Text style={styles.noEvidenceText}>No RTO documents generated yet</Text>
+                    ) : (
+                      <View style={{ gap: 8, marginTop: 8 }}>
+                        {generatedRtoDocs.map((doc: any, idx: number) => (
+                          <View key={idx} style={styles.docItemCard}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                              <MaterialCommunityIcons name="file-document-outline" size={24} color={PRIMARY_BLUE} />
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.docNameText} numberOfLines={1}>
+                                  {doc.filename || `Document ${idx + 1}`}
                                 </Text>
-                              )}
+                                {!!doc.uploaded_at && (
+                                  <Text style={styles.docDateText}>
+                                    {new Date(doc.uploaded_at).toLocaleDateString()}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              {(doc.preview_url || doc.url) ? (
+                                <>
+                                  <TouchableOpacity
+                                    onPress={() => handleDownloadDocument(doc.preview_url || doc.url, doc.filename || `RTO_Doc_${idx + 1}`)}
+                                    style={{ padding: 7, backgroundColor: '#EFF6FF', borderRadius: 8, borderWidth: 1, borderColor: '#BFDBFE' }}
+                                    activeOpacity={0.7}
+                                    accessibilityLabel="Download Document"
+                                  >
+                                    <MaterialCommunityIcons name="download" size={18} color="#1d4ed8" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() => handleShareDocument(doc.preview_url || doc.url, doc.filename || `RTO_Doc_${idx + 1}`)}
+                                    style={{ padding: 7, backgroundColor: '#F0FDF4', borderRadius: 8, borderWidth: 1, borderColor: '#BBF7D0' }}
+                                    activeOpacity={0.7}
+                                    accessibilityLabel="Share Document"
+                                  >
+                                    <MaterialCommunityIcons name="share-variant" size={18} color="#166534" />
+                                  </TouchableOpacity>
+                                </>
+                              ) : null}
                             </View>
                           </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            {(doc.preview_url || doc.url) ? (
-                              <TouchableOpacity
-                                onPress={() => Linking.openURL(doc.preview_url || doc.url)}
-                                style={styles.docViewButton}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.docViewButtonText}>View</Text>
-                              </TouchableOpacity>
-                            ) : null}
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={[styles.section, { marginTop: 16 }]}>
+                    <Text style={styles.sectionEyebrow}>Remarks</Text>
+                    <Text style={styles.sectionTitle}>
+                      RTO Check Remark {!isCompleted && <Text style={{ color: '#EF4444', fontSize: 12 }}>(Required for Fail Submit)</Text>}
+                    </Text>
+                    <TextInput
+                      style={{
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        borderRadius: 8,
+                        padding: 12,
+                        marginTop: 8,
+                        minHeight: 80,
+                        textAlignVertical: 'top',
+                        backgroundColor: isCompleted ? '#F8FAFC' : '#FFFFFF',
+                        color: '#1E293B',
+                        fontSize: 14,
+                      }}
+                      multiline
+                      placeholder="Enter RTO check remark..."
+                      placeholderTextColor="#94A3B8"
+                      value={rtoRemark}
+                      onChangeText={(text) => {
+                        setRtoRemark(text);
+                        if (!questionnaireDataRef.current) {
+                          questionnaireDataRef.current = {};
+                        }
+                        questionnaireDataRef.current.vendor_feedback = text;
+                      }}
+                      editable={!isCompleted}
+                    />
+                  </View>
+                </>
               )}
 
               <QuestionnaireForm
@@ -1837,6 +1977,9 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 checkInfo={checkInfo}
                 onChange={(formData) => {
                   questionnaireDataRef.current = formData;
+                  if (normalizedCheckType === 'rto' && rtoRemark) {
+                    questionnaireDataRef.current.vendor_feedback = rtoRemark;
+                  }
                 }}
                 disabled={isCompleted}
               />
@@ -1844,59 +1987,69 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
               {!isCompleted && (
                 <View style={[styles.section, { marginTop: 16 }]}>
-                  {normalizedCheckType !== 'chargesheet' && (
+                  {normalizedCheckType !== 'chargesheet' && normalizedCheckType !== 'rto' && (
                     <DisclaimerSection checked={disclaimerAccepted} onCheck={setDisclaimerAccepted} />
                   )}
 
-                  <View style={{ flexDirection: 'row', gap: 10, marginTop: normalizedCheckType !== 'chargesheet' ? 16 : 0 }}>
-                    <TouchableOpacity
-                      style={[styles.uploadButton, { flex: 1, backgroundColor: (normalizedCheckType !== 'chargesheet' && !disclaimerAccepted) || uploading ? '#A0AEC0' : '#E53935' }]}
-                      onPress={async () => {
-                        showDialog({
-                          type: 'warning',
-                          title: 'Fail & Submit Check',
-                          message: 'Are you sure you want to mark this check as failed?',
-                          actions: [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Confirm Fail',
-                              onPress: async () => {
-                                try {
-                                  setUploading(true);
-                                  if (questionnaireDataRef.current && Object.keys(questionnaireDataRef.current).length > 0) {
-                                    await apiService.saveQuestionnaire(caseId, checkType, questionnaireDataRef.current);
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: (normalizedCheckType !== 'chargesheet' && normalizedCheckType !== 'rto') ? 16 : 0 }}>
+                    {normalizedCheckType === 'rto' && (
+                      <TouchableOpacity
+                        style={[styles.uploadButton, { flex: 1, backgroundColor: uploading ? '#A0AEC0' : '#E53935' }]}
+                        onPress={async () => {
+                          if (!rtoRemark || !rtoRemark.trim()) {
+                            showToast({
+                              type: 'error',
+                              title: 'Remark Required',
+                              message: 'Please enter a remark before marking the RTO check as failed.',
+                            });
+                            return;
+                          }
+                          showDialog({
+                            type: 'warning',
+                            title: 'Fail & Submit Check',
+                            message: 'Are you sure you want to mark this check as failed?',
+                            actions: [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Confirm Fail',
+                                onPress: async () => {
+                                  try {
+                                    setUploading(true);
+                                    const currentQ = questionnaireDataRef.current || {};
+                                    currentQ.vendor_feedback = (rtoRemark || '').trim();
+                                    await apiService.saveQuestionnaire(caseId, checkType, currentQ);
                                     await clearDraftQuestionnaire(caseId, checkType);
+                                    await apiService.updateCheckStatus(caseId, checkType, 'FAILED');
+                                    dispatch(updateCheckStatusInStore({ caseId, status: 'Failed' }));
+                                    showToast({ type: 'success', title: 'Check Failed', message: 'Check marked as failed.' });
+                                    router.back();
+                                  } catch (err: any) {
+                                    console.error('Failed to fail check:', err);
+                                    showToast({ type: 'error', title: 'Submit Failed', message: err?.message || 'Failed to submit check.' });
+                                  } finally {
+                                    setUploading(false);
                                   }
-                                  await apiService.updateCheckStatus(caseId, checkType, 'REJECTED');
-                                  dispatch(updateCheckStatusInStore({ caseId, status: 'REJECTED' }));
-                                  showToast({ type: 'success', title: 'Check Failed', message: 'Check marked as failed.' });
-                                  router.back();
-                                } catch (err: any) {
-                                  console.error('Failed to fail check:', err);
-                                  showToast({ type: 'error', title: 'Submit Failed', message: err?.message || 'Failed to submit check.' });
-                                } finally {
-                                  setUploading(false);
-                                }
+                                },
                               },
-                            },
-                          ],
-                        });
-                      }}
-                      disabled={uploading || (normalizedCheckType !== 'chargesheet' && !disclaimerAccepted)}
-                      activeOpacity={0.8}
-                    >
-                      {uploading ? (
-                        <ActivityIndicator color="#fff" />
-                      ) : (
-                        <View style={styles.uploadButtonContent}>
-                          <MaterialCommunityIcons name="close-circle-outline" size={20} color="#FFFFFF" />
-                          <Text style={styles.uploadButtonText}>Failed Submit</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
+                            ],
+                          });
+                        }}
+                        disabled={uploading}
+                        activeOpacity={0.8}
+                      >
+                        {uploading ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <View style={styles.uploadButtonContent}>
+                            <MaterialCommunityIcons name="close-circle-outline" size={20} color="#FFFFFF" />
+                            <Text style={styles.uploadButtonText}>Failed</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    )}
 
                     <TouchableOpacity
-                      style={[styles.uploadButton, { flex: 1, backgroundColor: (normalizedCheckType !== 'chargesheet' && !disclaimerAccepted) || uploading ? '#A0AEC0' : '#10B981' }]}
+                      style={[styles.uploadButton, { flex: 1, backgroundColor: (normalizedCheckType !== 'chargesheet' && normalizedCheckType !== 'rto' && !disclaimerAccepted) || uploading ? '#A0AEC0' : '#10B981' }]}
                       onPress={async () => {
                         showDialog({
                           type: 'warning',
@@ -1909,8 +2062,12 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                               onPress: async () => {
                                 try {
                                   setUploading(true);
-                                  if (questionnaireDataRef.current && Object.keys(questionnaireDataRef.current).length > 0) {
-                                    await apiService.saveQuestionnaire(caseId, checkType, questionnaireDataRef.current);
+                                  const currentQ = questionnaireDataRef.current || {};
+                                  if (normalizedCheckType === 'rto') {
+                                    currentQ.vendor_feedback = (rtoRemark || '').trim();
+                                  }
+                                  if (Object.keys(currentQ).length > 0 || normalizedCheckType === 'rto') {
+                                    await apiService.saveQuestionnaire(caseId, checkType, currentQ);
                                     await clearDraftQuestionnaire(caseId, checkType);
                                   }
                                   await apiService.markCheckCompleted(caseId, checkType);
@@ -1928,7 +2085,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                           ],
                         });
                       }}
-                      disabled={uploading || (normalizedCheckType !== 'chargesheet' && !disclaimerAccepted)}
+                      disabled={uploading || (normalizedCheckType !== 'chargesheet' && normalizedCheckType !== 'rto' && !disclaimerAccepted)}
                       activeOpacity={0.8}
                     >
                       {uploading ? (
@@ -1936,7 +2093,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                       ) : (
                         <View style={styles.uploadButtonContent}>
                           <MaterialCommunityIcons name="check-circle-outline" size={20} color="#FFFFFF" />
-                          <Text style={styles.uploadButtonText}>Complete &amp; Submit Check</Text>
+                          <Text style={styles.uploadButtonText}>Submit</Text>
                         </View>
                       )}
                     </TouchableOpacity>

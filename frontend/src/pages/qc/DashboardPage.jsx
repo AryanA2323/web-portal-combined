@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Card, CardContent, Divider, CircularProgress, Alert } from '@mui/material';
+import { Box, Typography, Paper, Card, CardContent, Divider, CircularProgress } from '@mui/material';
 import { Assessment, CheckCircle, Pending, Cancel, Description, CheckCircleOutline, CancelOutlined } from '@mui/icons-material';
 import QCLayout from './components/QCLayout';
+import QCNotificationBell from './components/QCNotificationBell';
 import api from '../../services/api';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
+import { useAuth } from '../../context/AuthContext';
+import AlertMessage from '../../components/common/AlertMessage';
 
 const StatCard = ({ title, value, icon: Icon, color, bgColor, loading }) => (
   <Card sx={{ height: '100%', boxShadow: 2 }}>
@@ -35,6 +38,7 @@ const StatCard = ({ title, value, icon: Icon, color, bgColor, loading }) => (
 );
 
 const DashboardPage = () => {
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -117,15 +121,16 @@ const DashboardPage = () => {
 
   return (
     <QCLayout>
-      <Box sx={{ p: 3 }}>
-        <Typography variant="h4" fontWeight={700} sx={{ mb: 3, color: '#2c3e50' }}>
-          Dashboard
+      <Box sx={{ height: 82, px: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a' }}>
+          Welcome {user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.username || 'QC'}
         </Typography>
+        <QCNotificationBell />
+      </Box>
+      <Box sx={{ p: 3 }}>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
+          <AlertMessage severity="error" onClose={() => setError(null)} message={error} open={!!error} />
         )}
 
         <Box sx={{ display: 'flex', gap: 3, mb: 4 }}>

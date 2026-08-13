@@ -29,6 +29,7 @@ const checkStatusColors: Record<string, { solid: string; soft: string; icon: key
   'not found': { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
   Completed: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   Verified: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
+  'Failed': { solid: '#EF4444', soft: '#FEE2E2', icon: 'close-octagon-outline' },
   Reassigned: { solid: '#D64545', soft: '#FDECEC', icon: 'refresh' },
   'Not Initiated': { solid: '#71839A', soft: '#EEF3F8', icon: 'clock-outline' },
   Stop: { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
@@ -68,15 +69,27 @@ export default function CompletedScreen() {
   const [showToPicker, setShowToPicker] = useState(false);
 
   const activeChecks = useMemo(() => {
-    let filtered = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified');
+    let filtered = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Failed');
     
     if (fromDate) {
-      filtered = filtered.filter((c: any) => new Date(c.updated_at) >= fromDate);
+      const startOfDay = new Date(fromDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      filtered = filtered.filter((c: any) => {
+        const rawDate = c.updated_at || c.created_at;
+        if (!rawDate) return true;
+        const parsed = new Date(rawDate);
+        return isNaN(parsed.getTime()) || parsed >= startOfDay;
+      });
     }
     if (toDate) {
       const endOfDay = new Date(toDate);
       endOfDay.setHours(23, 59, 59, 999);
-      filtered = filtered.filter((c: any) => new Date(c.updated_at) <= endOfDay);
+      filtered = filtered.filter((c: any) => {
+        const rawDate = c.updated_at || c.created_at;
+        if (!rawDate) return true;
+        const parsed = new Date(rawDate);
+        return isNaN(parsed.getTime()) || parsed <= endOfDay;
+      });
     }
     
     const seenCum = new Set();
@@ -92,6 +105,12 @@ export default function CompletedScreen() {
       }
     }
     
+    finalFiltered.sort((a: any, b: any) => {
+      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+
     return finalFiltered;
   }, [checks, fromDate, toDate]);
   // Refresh data every time the screen comes into focus
@@ -114,7 +133,7 @@ export default function CompletedScreen() {
   const summary = useMemo(() => {
     const totalChecks = checks.length;
     const wipChecks = checks.filter((c: any) => c.check_status === 'WIP').length;
-    const completedChecks = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified').length;
+    const completedChecks = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Failed').length;
     const notInitiated = checks.filter((c: any) => c.check_status === 'Not Initiated').length;
     return { totalChecks, wipChecks, completedChecks, notInitiated };
   }, [checks]);

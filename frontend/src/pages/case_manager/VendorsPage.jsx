@@ -32,6 +32,7 @@ import CaseManagerLayout from './components/CaseManagerLayout';
 import StatCard from './components/StatCard';
 import api from '../../services/api';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
+import { NotificationBell } from '../../components/case_manager';
 
 const VendorCard = ({ vendor, onViewProfile }) => {
   // Generate initials from company name
@@ -46,131 +47,131 @@ const VendorCard = ({ vendor, onViewProfile }) => {
 
   const initials = getInitials(vendor.company_name);
   const location = `${vendor.city}, ${vendor.state}`;
-  
+
   return (
-  <Card 
-    sx={{ 
-      height: '100%', 
-      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-      borderRadius: '12px',
-      border: '1px solid #f0f0f0',
-      transition: 'all 0.2s ease',
-      '&:hover': { 
-        boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-        transform: 'translateY(-2px)',
-      } 
-    }}
-  >
-    <CardContent sx={{ p: 2.5 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
-        <Box sx={{ display: 'flex', gap: 1.5, flex: 1 }}>
-          <Avatar
-            sx={{
-              width: 44,
-              height: 44,
-              backgroundColor: '#3498db',
-              fontSize: '15px',
-              fontWeight: 600,
-            }}
-          >
-            {initials}
-          </Avatar>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5, fontSize: '16px', lineHeight: 1.3 }}>
-              {vendor.company_name}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <LocationOn sx={{ fontSize: 14, color: '#95a5a6' }} />
-              <Typography variant="body2" sx={{ color: '#7f8c8d', fontSize: '13px' }}>
-                {location}
+    <Card
+      sx={{
+        height: '100%',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        borderRadius: '12px',
+        border: '1px solid #f0f0f0',
+        transition: 'all 0.2s ease',
+        '&:hover': {
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+          transform: 'translateY(-2px)',
+        }
+      }}
+    >
+      <CardContent sx={{ p: 2.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
+          <Box sx={{ display: 'flex', gap: 1.5, flex: 1 }}>
+            <Avatar
+              sx={{
+                width: 44,
+                height: 44,
+                backgroundColor: '#3498db',
+                fontSize: '15px',
+                fontWeight: 600,
+              }}
+            >
+              {initials}
+            </Avatar>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5, fontSize: '16px', lineHeight: 1.3 }}>
+                {vendor.company_name}
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <LocationOn sx={{ fontSize: 14, color: '#95a5a6' }} />
+                <Typography variant="body2" sx={{ color: '#7f8c8d', fontSize: '13px' }}>
+                  {location}
+                </Typography>
+              </Box>
             </Box>
           </Box>
+          <Chip
+            label={vendor.is_active ? 'active' : 'inactive'}
+            size="small"
+            sx={{
+              backgroundColor: vendor.is_active ? '#27ae60' : '#95a5a6',
+              color: '#fff',
+              fontWeight: 500,
+              fontSize: '11px',
+              height: '22px',
+              textTransform: 'lowercase',
+            }}
+          />
         </Box>
-        <Chip
-          label={vendor.is_active ? 'active' : 'inactive'}
-          size="small"
-          sx={{
-            backgroundColor: vendor.is_active ? '#27ae60' : '#95a5a6',
-            color: '#fff',
-            fontWeight: 500,
-            fontSize: '11px',
-            height: '22px',
-            textTransform: 'lowercase',
-          }}
-        />
-      </Box>
 
-      <Box sx={{ mb: 2.5, pl: 0.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.8 }}>
-          <Phone sx={{ fontSize: 14, color: '#95a5a6' }} />
-          <Typography variant="body2" sx={{ color: '#7f8c8d', fontSize: '13px' }}>
-            {vendor.contact_phone || 'N/A'}
-          </Typography>
+        <Box sx={{ mb: 2.5, pl: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.8 }}>
+            <Phone sx={{ fontSize: 14, color: '#95a5a6' }} />
+            <Typography variant="body2" sx={{ color: '#7f8c8d', fontSize: '13px' }}>
+              {vendor.contact_phone || 'N/A'}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Email sx={{ fontSize: 14, color: '#95a5a6' }} />
+            <Typography variant="body2" sx={{ color: '#7f8c8d', fontSize: '13px' }}>
+              {vendor.contact_email}
+            </Typography>
+          </Box>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Email sx={{ fontSize: 14, color: '#95a5a6' }} />
-          <Typography variant="body2" sx={{ color: '#7f8c8d', fontSize: '13px' }}>
-            {vendor.contact_email}
-          </Typography>
-        </Box>
-      </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, mb: 2, pl: 0.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <LocationOn sx={{ fontSize: 16, color: '#3498db' }} />
-          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '14px' }}>
-            {vendor.latitude && vendor.longitude ? 'Location Set' : 'No Location'}
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, mb: 2, pl: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <LocationOn sx={{ fontSize: 16, color: '#3498db' }} />
+            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '14px' }}>
+              {vendor.latitude && vendor.longitude ? 'Location Set' : 'No Location'}
+            </Typography>
+          </Box>
         </Box>
-      </Box>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 2.5 }}>
-        <Chip 
-          label={vendor.city}
-          size="small" 
-          sx={{ 
-            fontSize: '11px',
-            height: '24px',
-            backgroundColor: '#f5f5f5',
-            border: '1px solid #e0e0e0',
-          }} 
-        />
-        {vendor.state && (
-          <Chip 
-            label={vendor.state}
-            size="small" 
-            sx={{ 
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 2.5 }}>
+          <Chip
+            label={vendor.city}
+            size="small"
+            sx={{
               fontSize: '11px',
               height: '24px',
               backgroundColor: '#f5f5f5',
               border: '1px solid #e0e0e0',
-            }} 
+            }}
           />
-        )}
-      </Box>
+          {vendor.state && (
+            <Chip
+              label={vendor.state}
+              size="small"
+              sx={{
+                fontSize: '11px',
+                height: '24px',
+                backgroundColor: '#f5f5f5',
+                border: '1px solid #e0e0e0',
+              }}
+            />
+          )}
+        </Box>
 
-      <Button
-        fullWidth
-        variant="outlined"
-        onClick={() => onViewProfile(vendor)}
-        sx={{
-          borderColor: '#3498db',
-          color: '#3498db',
-          textTransform: 'none',
-          fontWeight: 600,
-          py: 1,
-          fontSize: '14px',
-          '&:hover': {
-            borderColor: '#2980b9',
-            backgroundColor: 'rgba(52, 152, 219, 0.04)',
-          },
-        }}
-      >
-        View Profile
-      </Button>
-    </CardContent>
-  </Card>
+        <Button
+          fullWidth
+          variant="outlined"
+          onClick={() => onViewProfile(vendor)}
+          sx={{
+            borderColor: '#3498db',
+            color: '#3498db',
+            textTransform: 'none',
+            fontWeight: 600,
+            py: 1,
+            fontSize: '14px',
+            '&:hover': {
+              borderColor: '#2980b9',
+              backgroundColor: 'rgba(52, 152, 219, 0.04)',
+            },
+          }}
+        >
+          View Profile
+        </Button>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -196,11 +197,11 @@ const VendorsPage = () => {
       if (!isAutoRefresh) setLoading(true);
       const response = await api.get('/vendors');
       setVendors(response.data || []);
-      
+
       // Calculate stats
       const activeVendors = response.data.filter(v => v.is_active);
       const avgRating = response.data.reduce((acc, curr) => acc + (curr.rating || 0), 0) / (response.data.length || 1);
-      
+
       setStats({
         total: response.data.length,
         active: activeVendors.length,
@@ -247,96 +248,99 @@ const VendorsPage = () => {
           <CircularProgress />
         </Box>
       ) : (
-      <Box sx={{ px: 0.5 }}>
-        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', mb: 0.5 }}>
-              Vendors
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Manage investigation vendors and assignments
-            </Typography>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            sx={{
-              backgroundColor: '#1a1a1a',
-              textTransform: 'none',
-              fontWeight: 600,
-              px: 3,
-              py: 1,
-              '&:hover': { backgroundColor: '#2c2c2c' },
-            }}
-          >
-            Add Vendor
-          </Button>
-        </Box>
-
-        {/* Stats Cards - Full Width Layout */}
-        <Box sx={{ display: 'flex', gap: 2, mb: 4, width: '100%' }}>
-          {statsData.map((stat, index) => (
-            <Box key={index} sx={{ flex: 1, minWidth: 0 }}>
-              <StatCard {...stat} />
+        <Box>
+          <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0', pb: 2 }}>
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', mb: 0.5 }}>
+                Vendors
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Manage investigation vendors and assignments
+              </Typography>
             </Box>
-          ))}
-        </Box>
-
-        <Box sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Vendor Directory
-            </Typography>
-            <TextField
-              placeholder="Search vendors..."
-              size="small"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search sx={{ fontSize: 20, color: '#999' }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ 
-                width: 350,
-                '& .MuiOutlinedInput-root': {
-                  backgroundColor: '#fff',
-                },
-              }}
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                sx={{
+                  backgroundColor: '#1a1a1a',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 3,
+                  py: 1,
+                  '&:hover': { backgroundColor: '#2c2c2c' },
+                }}
+              >
+                Add Vendor
+              </Button>
+              <NotificationBell />
+            </Box>
           </Box>
 
-          {/* Vendor Cards Grid - 3 per row */}
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(3, 1fr)', 
-            gap: 3,
-            '@media (max-width: 1200px)': {
-              gridTemplateColumns: 'repeat(2, 1fr)',
-            },
-            '@media (max-width: 768px)': {
-              gridTemplateColumns: '1fr',
-            },
-          }}>
-            {filteredVendors.map((vendor) => (
-              <VendorCard key={vendor.id} vendor={vendor} onViewProfile={handleViewProfile} />
+          {/* Stats Cards - Full Width Layout */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 4, width: '100%' }}>
+            {statsData.map((stat, index) => (
+              <Box key={index} sx={{ flex: 1, minWidth: 0 }}>
+                <StatCard {...stat} />
+              </Box>
             ))}
           </Box>
 
-          {filteredVendors.length === 0 && (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-              <Typography color="text.secondary">No vendors found</Typography>
+          <Box sx={{ mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                Vendor Directory
+              </Typography>
+              <TextField
+                placeholder="Search vendors..."
+                size="small"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search sx={{ fontSize: 20, color: '#999' }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  width: 350,
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: '#fff',
+                  },
+                }}
+              />
             </Box>
-          )}
+
+            {/* Vendor Cards Grid - 3 per row */}
+            <Box sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 3,
+              '@media (max-width: 1200px)': {
+                gridTemplateColumns: 'repeat(2, 1fr)',
+              },
+              '@media (max-width: 768px)': {
+                gridTemplateColumns: '1fr',
+              },
+            }}>
+              {filteredVendors.map((vendor) => (
+                <VendorCard key={vendor.id} vendor={vendor} onViewProfile={handleViewProfile} />
+              ))}
+            </Box>
+
+            {filteredVendors.length === 0 && (
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Typography color="text.secondary">No vendors found</Typography>
+              </Box>
+            )}
+          </Box>
         </Box>
-      </Box>
       )}
 
       {/* Vendor Profile Modal */}
-      <Dialog 
-        open={modalOpen} 
+      <Dialog
+        open={modalOpen}
         onClose={handleCloseModal}
         maxWidth="md"
         fullWidth
@@ -346,9 +350,9 @@ const VendorsPage = () => {
           }
         }}
       >
-        <DialogTitle sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
+        <DialogTitle sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
           alignItems: 'center',
           pb: 2,
         }}>
@@ -457,7 +461,7 @@ const VendorsPage = () => {
                   Address
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  <Chip 
+                  <Chip
                     label={selectedVendor.address || 'N/A'}
                     sx={{
                       backgroundColor: '#e3f2fd',
@@ -466,7 +470,7 @@ const VendorsPage = () => {
                       fontSize: '14px',
                     }}
                   />
-                  <Chip 
+                  <Chip
                     label={`${selectedVendor.city}, ${selectedVendor.state}`}
                     sx={{
                       backgroundColor: '#e3f2fd',
@@ -475,7 +479,7 @@ const VendorsPage = () => {
                       fontSize: '14px',
                     }}
                   />
-                  <Chip 
+                  <Chip
                     label={selectedVendor.postal_code || 'N/A'}
                     sx={{
                       backgroundColor: '#e3f2fd',
@@ -494,10 +498,10 @@ const VendorsPage = () => {
           <Button onClick={handleCloseModal} variant="outlined" sx={{ textTransform: 'none', px: 3 }}>
             Close
           </Button>
-          <Button 
-            variant="contained" 
-            sx={{ 
-              textTransform: 'none', 
+          <Button
+            variant="contained"
+            sx={{
+              textTransform: 'none',
               px: 3,
               backgroundColor: '#3498db',
               '&:hover': { backgroundColor: '#2980b9' },

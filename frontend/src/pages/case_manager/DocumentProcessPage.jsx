@@ -36,6 +36,8 @@ import {
 import { useDropzone } from 'react-dropzone';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
+import AlertMessage from '../../components/common/AlertMessage';
+import { NotificationBell } from '../../components/case_manager';
 
 // File type icons
 const getFileIcon = (type) => {
@@ -68,7 +70,7 @@ const DocumentProcessPage = () => {
   const [parseResult, setParseResult] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  
+
   // Editable extracted data
   const [editedData, setEditedData] = useState({
     claim_number: '',
@@ -124,7 +126,7 @@ const DocumentProcessPage = () => {
       });
 
       setParseResult(response.data);
-      
+
       // Populate editable fields
       if (response.data.extracted_data) {
         setEditedData(prev => ({
@@ -153,7 +155,7 @@ const DocumentProcessPage = () => {
       const response = await api.post('/documents/parse-text', { text: textContent });
 
       setParseResult(response.data);
-      
+
       // Populate editable fields
       if (response.data.extracted_data) {
         setEditedData(prev => ({
@@ -180,7 +182,7 @@ const DocumentProcessPage = () => {
       const response = await api.post('/documents/create-case-with-data', editedData);
 
       setSuccess(`Case ${response.data.case_number} created successfully!`);
-      
+
       // Reset form
       setFile(null);
       setTextContent('');
@@ -231,25 +233,24 @@ const DocumentProcessPage = () => {
 
   return (
     <CaseManagerLayout>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-          Process Document
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Upload documents or paste email content to automatically extract case details
-        </Typography>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
+            Process Document
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Upload documents or paste email content to automatically extract case details
+          </Typography>
+        </Box>
+        <NotificationBell />
       </Box>
 
       {/* Success/Error Alerts */}
       {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
+        <AlertMessage severity="success" onClose={() => setSuccess(null)} message={success} open={!!success} />
       )}
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
+        <AlertMessage severity="error" onClose={() => setError(null)} message={error} open={!!error} />
       )}
 
       <Grid container spacing={3}>

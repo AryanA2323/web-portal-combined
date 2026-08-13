@@ -14,7 +14,6 @@ import {
   TextField,
   InputAdornment,
   CircularProgress,
-  Alert,
   TablePagination,
   Dialog,
   DialogTitle,
@@ -23,7 +22,9 @@ import {
 } from '@mui/material';
 import { Search, FilterList, FileDownload, Description } from '@mui/icons-material';
 import QCLayout from './components/QCLayout';
+import QCNotificationBell from './components/QCNotificationBell';
 import api from '../../services/api';
+import AlertMessage from '../../components/common/AlertMessage';
 
 const LogsPage = () => {
   const [logs, setLogs] = useState([]);
@@ -101,20 +102,16 @@ const LogsPage = () => {
 
   return (
     <QCLayout>
+      <Box sx={{ height: 82, px: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', letterSpacing: '-0.5px' }}>
+          Logs
+        </Typography>
+        <QCNotificationBell />
+      </Box>
       <Box sx={{ p: 3 }}>
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Home / Logs
-          </Typography>
-          <Typography variant="h4" fontWeight={700} sx={{ color: '#2c3e50', mb: 3 }}>
-            Activity Logs
-          </Typography>
-        </Box>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
+          <AlertMessage severity="error" onClose={() => setError(null)} message={error} open={!!error} />
         )}
 
         <Paper sx={{ overflow: 'hidden' }}>

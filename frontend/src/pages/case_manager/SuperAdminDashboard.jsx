@@ -35,6 +35,9 @@ import CaseManagerLayout from './components/CaseManagerLayout';
 import StatCard from './components/StatCard';
 import superAdminService from '../../services/superAdminService';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
+import AlertMessage from '../../components/common/AlertMessage';
+import { useAuth } from '../../context';
+import { NotificationBell } from '../../components/case_manager';
 
 // Register ChartJS components
 ChartJS.register(
@@ -48,7 +51,16 @@ ChartJS.register(
   ArcElement
 );
 
+const getUserDisplayName = (u) => {
+  if (!u) return 'User';
+  if (u.first_name || u.last_name) {
+    return `${u.first_name || ''} ${u.last_name || ''}`.trim();
+  }
+  return u.username || u.email || 'User';
+};
+
 const SuperAdminDashboard = () => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
   const [error, setError] = useState(null);
@@ -87,7 +99,7 @@ const SuperAdminDashboard = () => {
     return (
       <CaseManagerLayout>
         <Box p={3}>
-          <Typography color="error">{error}</Typography>
+          <AlertMessage severity="error" message={error} open={!!error} />
         </Box>
       </CaseManagerLayout>
     );
@@ -149,15 +161,13 @@ const SuperAdminDashboard = () => {
 
   return (
     <CaseManagerLayout>
-      <Box sx={{ p: 3 }}>
+      <Box>
         {/* Header */}
-        <Box mb={4}>
-          <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-            Super Admin Dashboard
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0', pb: 2 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', letterSpacing: '-0.5px' }}>
+            Welcome {getUserDisplayName(user)}
           </Typography>
-          <Typography variant="body1" color="text.secondary">
-            System overview and user management statistics
-          </Typography>
+          <NotificationBell />
         </Box>
 
         {/* Stats Cards - Using Flexbox for equal width */}
@@ -265,64 +275,64 @@ const SuperAdminDashboard = () => {
               Recently Registered Users
             </Typography>
             <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>User</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Joined</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {recent_users && recent_users.length > 0 ? (
-                      recent_users.map((recentUser) => (
-                        <TableRow key={recentUser.id} hover>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>
-                                {recentUser.username.charAt(0).toUpperCase()}
-                              </Avatar>
-                              <Typography variant="body2">{recentUser.full_name}</Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>{recentUser.email}</TableCell>
-                          <TableCell>
-                            <Chip
-                              label={getRoleLabel(recentUser.role, recentUser.sub_role)}
-                              color={getRoleColor(getRoleLabel(recentUser.role, recentUser.sub_role))}
-                              size="small"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={recentUser.is_active ? 'Active' : 'Inactive'}
-                              color={recentUser.is_active ? 'success' : 'default'}
-                              size="small"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="text.secondary">
-                              {new Date(recentUser.date_joined).toLocaleDateString()}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={5} align="center">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>User</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell>Role</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Joined</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {recent_users && recent_users.length > 0 ? (
+                    recent_users.map((recentUser) => (
+                      <TableRow key={recentUser.id} hover>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>
+                              {recentUser.username.charAt(0).toUpperCase()}
+                            </Avatar>
+                            <Typography variant="body2">{recentUser.full_name}</Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>{recentUser.email}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={getRoleLabel(recentUser.role, recentUser.sub_role)}
+                            color={getRoleColor(getRoleLabel(recentUser.role, recentUser.sub_role))}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={recentUser.is_active ? 'Active' : 'Inactive'}
+                            color={recentUser.is_active ? 'success' : 'default'}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
                           <Typography variant="body2" color="text.secondary">
-                            No recent users
+                            {new Date(recentUser.date_joined).toLocaleDateString()}
                           </Typography>
                         </TableCell>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
-          </Box>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center">
+                        <Typography variant="body2" color="text.secondary">
+                          No recent users
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Box>
       </Box>
     </CaseManagerLayout>
   );

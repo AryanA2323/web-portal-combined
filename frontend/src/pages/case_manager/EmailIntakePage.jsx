@@ -31,6 +31,7 @@ import {
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import StatCard from './components/StatCard';
+import { NotificationBell } from '../../components/case_manager';
 
 // Demo data for stats
 const statsData = [
@@ -269,10 +270,11 @@ const EmailIntakePage = () => {
 
   return (
     <CaseManagerLayout>
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 3, borderBottom: '1px solid #e0e0e0', pb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#333' }}>
           Email Intake
         </Typography>
+        <NotificationBell />
       </Box>
 
       {/* Stats Cards */}

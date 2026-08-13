@@ -1,3 +1,4 @@
+import { showToast } from '@/components/Toast';
 import axios, { create, AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL, API_TIMEOUT, STORAGE_KEYS } from '@/config/constants';
 import storage from '@/services/storage';
@@ -122,7 +123,13 @@ class ApiService {
 
     if (error.response?.data) {
       apiError.details = error.response.data;
+      
+      const resData = error.response.data as any;
+      apiError.message = resData.error || resData.detail || resData.message || error.message;
     }
+
+    // Trigger global popup for any API error
+    showToast({ type: 'error', title: 'Error', message: apiError.message });
 
     return apiError;
   }
