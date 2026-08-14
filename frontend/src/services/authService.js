@@ -136,8 +136,14 @@ const authService = {
   },
 
   // Logout function
-  logout: () => {
-    authStorage.clearAuth();
+  logout: async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Logout API call failed:', error);
+    } finally {
+      authStorage.clearAuth();
+    }
   },
 
   // Get current user

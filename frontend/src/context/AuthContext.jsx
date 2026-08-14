@@ -1,57 +1,56 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../services';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import authService from '../services/authService';
 import api from '../services/api';
-import { authStorage } from '../utils/authStorage';
 
-// Create Auth Context
+// Create context
 const AuthContext = createContext(null);
 
-// Auth Provider Component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch fresh user data from server
-  const refreshUser = async () => {
-    try {
-      const token = authStorage.getItem('accessToken');
-      if (!token) {
-        return null;
-      }
-      
-      const response = await api.get('/auth/me');
-      const freshUser = response.data;
-      authStorage.setItem('user', JSON.stringify(freshUser));
-      setUser(freshUser);
-      return freshUser;
-    } catch (err) {
-      console.error('Failed to refresh user data:', err);
-      // Don't clear auth on refresh failure - user might still be valid
-      return user; // Return current user
-    }
-  };
-
-  // Initialize auth state from tab-scoped sessionStorage and refresh from server
+  // Initialize auth state
   useEffect(() => {
-    const initializeAuth = async () => {
+    const initAuth = async () => {
       try {
         const storedUser = authService.getCurrentUser();
-        const token = authStorage.getItem('accessToken');
-        
-        if (storedUser && token) {
+        if (storedUser && authService.isAuthenticated()) {
           setUser(storedUser);
-          // Don't refresh immediately - user data from login is fresh enough
-          // Only refresh if needed or after some time
         }
       } catch (err) {
-        console.error('Failed to initialize auth:', err);
+        console.error('Error initializing auth:', err);
+        authService.logout();
       } finally {
         setLoading(false);
       }
     };
 
-    initializeAuth();
+    initAuth();
+  }, []);
+
+  // Refresh user data function
+  const refreshUser = useCallback(async () => {
+    if (!authService.isAuthenticated()) return null;
+    
+    try {
+      // Create a temporary endpoint in backend for this, 
+      // or just re-fetch user details if an endpoint exists
+      const response = await api.get('/users/me');
+      if (response.data) {
+        // Update local storage and state
+        authService.updateStoredUser(response.data);
+        setUser(response.data);
+        return response.data;
+      }
+    } catch (err) {
+      console.error('Failed to refresh user:', err);
+      // If unauthorized, might need to logout
+      if (err.response?.status === 401) {
+        logout();
+      }
+    }
+    return null;
   }, []);
 
   // Login function
@@ -104,8 +103,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Logout function
-  const logout = () => {
-    authService.logout();
+  const logout = async () => {
+    await authService.logout();
     setUser(null);
   };
 
