@@ -97,7 +97,8 @@ def _resolve_login_user(identifier: str):
         200: LoginResponseSchema,
         202: Login2FARequiredSchema,
         401: ErrorSchema,
-        400: ErrorSchema
+        400: ErrorSchema,
+        403: ErrorSchema
     },
     summary="User Login",
     description="Authenticate user with username and password. Always requires 2FA - returns 202 with code sent to email.",
