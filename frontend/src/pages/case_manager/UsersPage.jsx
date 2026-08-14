@@ -217,6 +217,7 @@ const UsersPage = () => {
       email: user.email || '',
       role: user.role || 'VENDOR',
       is_active: user.is_active,
+      device_limit: user.device_limit || 1,
       permissions: user.permissions || [],
       password: user.plain_password || '',
       confirm_password: '',
@@ -234,6 +235,7 @@ const UsersPage = () => {
       email: '',
       role: 'VENDOR',
       is_active: true,
+      device_limit: 1,
       permissions: [],
       password: '',
       confirm_password: '',
@@ -300,6 +302,7 @@ const UsersPage = () => {
         email: formData.email,
         role: formData.role,
         is_active: formData.is_active,
+        device_limit: formData.device_limit ? parseInt(formData.device_limit, 10) : 1,
       };
 
       // Only include permissions for CASE_MANAGER users
@@ -703,7 +706,7 @@ const UsersPage = () => {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12}>
+                <Grid item xs={12} sm={6}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -714,6 +717,50 @@ const UsersPage = () => {
                     label="Account Active"
                   />
                 </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Device Limit"
+                    type="number"
+                    InputProps={{ inputProps: { min: 1 } }}
+                    value={formData.device_limit}
+                    onChange={(e) => handleInputChange('device_limit', e.target.value)}
+                    helperText="Max simultaneous logged-in devices allowed"
+                  />
+                </Grid>
+
+                {selectedUser?.active_sessions && selectedUser.active_sessions.length > 0 && (
+                  <Grid item xs={12}>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#334155' }}>
+                      Currently Logged In Devices ({selectedUser.active_sessions.length}/{formData.device_limit || 1})
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {selectedUser.active_sessions.map((session, idx) => (
+                        <Paper key={idx} variant="outlined" sx={{ p: 1.5, backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 500, color: '#0f172a' }}>
+                                IP: {session.ip_address || 'N/A'}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5, whiteSpace: 'normal', maxWidth: 400 }}>
+                                {session.device_info || 'Unknown Device'}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ textAlign: 'right' }}>
+                              <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>
+                                Started: {new Date(session.token_created_at).toLocaleString()}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>
+                                Last Seen: {session.last_used_at ? new Date(session.last_used_at).toLocaleString() : 'N/A'}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Paper>
+                      ))}
+                    </Box>
+                  </Grid>
+                )}
 
                 {formData.role === 'CASE_MANAGER' && (
                   <>

@@ -173,10 +173,20 @@ def login_view(request, payload: LoginWith2FASchema):
     # Create session
     login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
     
-    # ── Single-device enforcement ──
-    # Delete ALL existing tokens for this user so only one session is active
-    AuthToken.objects.filter(user=user).delete()
+    # ── Device Limit Enforcement ──
+    # Check number of active sessions
+    active_sessions_count = AuthToken.objects.filter(
+        user=user, 
+        is_active=True,
+        expires_at__gt=timezone.now()
+    ).count()
     
+    device_limit = getattr(user, 'device_limit', 1)
+    if active_sessions_count >= device_limit:
+        return 403, {
+            "error": f"Device limit reached. This account can only be logged in on {device_limit} device(s) at a time. Please log out from another device.",
+            "code": "DEVICE_LIMIT_REACHED"
+        }
     # Generate API token with session tracking
     client_ip = _get_client_ip(request)
     device = _get_device_info(request)

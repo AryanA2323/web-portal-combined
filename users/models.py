@@ -46,6 +46,10 @@ class CustomUser(AbstractUser):
         help_text='Admin-visible password for accounts created or reset through the Super Admin portal.',
     )
     is_2fa_enabled = models.BooleanField(default=False)
+    device_limit = models.IntegerField(
+        default=1,
+        help_text='Maximum number of simultaneous active devices/sessions allowed.',
+    )
     
     class Meta:
         indexes = [

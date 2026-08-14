@@ -179,22 +179,38 @@ def list_users(request):
         user_data = AdminUserResponseSchema.model_validate(user).model_dump()
         
         # Get active session info
-        active_token = AuthToken.objects.filter(
+        active_tokens = AuthToken.objects.filter(
             user=user, is_active=True
-        ).order_by('-created_at').first()
+        ).order_by('-created_at')
         
-        if active_token and not active_token.is_expired:
+        valid_tokens = [t for t in active_tokens if not t.is_expired]
+        
+        if valid_tokens:
             user_data['is_online'] = True
-            user_data['session_ip'] = active_token.ip_address or ''
-            user_data['session_device'] = active_token.device_info or ''
-            user_data['session_created_at'] = active_token.created_at.isoformat() if active_token.created_at else None
-            user_data['session_last_used'] = active_token.last_used_at.isoformat() if active_token.last_used_at else None
+            # For backward compatibility, populate main fields from the most recent one
+            first_token = valid_tokens[0]
+            user_data['session_ip'] = first_token.ip_address or ''
+            user_data['session_device'] = first_token.device_info or ''
+            user_data['session_created_at'] = first_token.created_at.isoformat() if first_token.created_at else None
+            user_data['session_last_used'] = first_token.last_used_at.isoformat() if first_token.last_used_at else None
+            
+            # Populate array for modal display
+            user_data['active_sessions'] = []
+            for t in valid_tokens:
+                user_data['active_sessions'].append({
+                    'token_created_at': t.created_at,
+                    'last_used_at': t.last_used_at,
+                    'ip_address': t.ip_address or '',
+                    'device_info': t.device_info or '',
+                    'is_active': t.is_active
+                })
         else:
             user_data['is_online'] = False
             user_data['session_ip'] = ''
             user_data['session_device'] = ''
             user_data['session_created_at'] = None
             user_data['session_last_used'] = None
+            user_data['active_sessions'] = []
         
         result.append(user_data)
     
@@ -259,6 +275,10 @@ def create_user(request, payload: UserCreateSchema):
             is_superuser=role_upper == 'SUPER_ADMIN',
             is_active=True,
         )
+        if payload.device_limit is not None:
+            user.device_limit = payload.device_limit
+            user.save(update_fields=["device_limit"])
+            
         if _column_exists(User._meta.db_table, "plain_password"):
             user.plain_password = payload.password
             user.save(update_fields=["plain_password"])
@@ -341,6 +361,9 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
         if User.objects.filter(email=payload.email).exclude(id=user_id).exists():
             return 400, {"error": "Email already in use", "code": "EMAIL_EXISTS"}
         user.email = payload.email
+        
+    if payload.device_limit is not None:
+        user.device_limit = payload.device_limit
     
     # Update role and sub_role
     if payload.role is not None:

@@ -119,6 +119,7 @@ class UserResponseSchema(BaseModel):
     permissions: Optional[List[str]] = None
     is_active: bool
     is_2fa_enabled: bool
+    device_limit: int
     date_joined: datetime
     last_login: Optional[datetime] = None
     
@@ -131,6 +132,8 @@ class AdminUserResponseSchema(UserResponseSchema):
     plain_password: Optional[str] = None
 
 
+
+
 class UserCreateSchema(BaseModel):
     """Schema for user creation."""
     email: EmailStr
@@ -139,6 +142,7 @@ class UserCreateSchema(BaseModel):
     last_name: str = Field(default="", max_length=150)
     role: str = Field(default="CLIENT")
     sub_role: Optional[str] = Field(default=None)
+    device_limit: Optional[int] = Field(default=1)
 
 
 class UserUpdateSchema(BaseModel):
@@ -151,6 +155,7 @@ class UserUpdateSchema(BaseModel):
     sub_role: Optional[str] = None
     permissions: Optional[List[str]] = None
     is_active: Optional[bool] = None
+    device_limit: Optional[int] = None
 
 
 class ProfileUpdateSchema(BaseModel):
@@ -176,6 +181,7 @@ class AdminUserWithSessionSchema(AdminUserResponseSchema):
     session_device: str = ''
     session_created_at: Optional[datetime] = None
     session_last_used: Optional[datetime] = None
+    active_sessions: List[SessionInfoSchema] = Field(default_factory=list)
 
 
 class ActivityLogSchema(BaseModel):
