@@ -176,17 +176,7 @@ def login_view(request, payload: LoginWith2FASchema):
     login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
     
     # ── Device Limit Enforcement ──
-    client_ip = _get_client_ip(request)
-    device = _get_device_info(request)
-    
-    # If the exact same device is logging in again (e.g., cleared cookies), invalidate its old session
-    AuthToken.objects.filter(
-        user=user,
-        ip_address=client_ip,
-        device_info=device
-    ).delete()
-
-    # Check number of remaining active sessions from OTHER devices
+    # Check number of active sessions
     active_sessions_count = AuthToken.objects.filter(
         user=user, 
         is_active=True,
