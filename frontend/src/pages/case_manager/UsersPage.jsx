@@ -220,7 +220,8 @@ const UsersPage = () => {
       device_limit: user.device_limit || 1,
       permissions: user.permissions || [],
       password: user.plain_password || '',
-      confirm_password: '',
+      new_password: '',
+      confirm_new_password: '',
     });
     setShowEditPassword(false);
     setEditDialogOpen(true);
@@ -238,7 +239,8 @@ const UsersPage = () => {
       device_limit: 1,
       permissions: [],
       password: '',
-      confirm_password: '',
+      new_password: '',
+      confirm_new_password: '',
     });
     setShowEditPassword(false);
   };
@@ -280,15 +282,15 @@ const UsersPage = () => {
       setSaveLoading(true);
       setError(null);
 
-      const passwordChanged = formData.password !== (selectedUser?.plain_password || '');
+      const passwordChanged = Boolean(formData.new_password);
 
       if (passwordChanged) {
-        if ((formData.password || '').length < 8) {
-          setError('Password must be at least 8 characters');
+        if ((formData.new_password || '').length < 8) {
+          setError('New Password must be at least 8 characters');
           setSaveLoading(false);
           return;
         }
-        if (formData.password !== formData.confirm_password) {
+        if (formData.new_password !== formData.confirm_new_password) {
           setError('Passwords do not match');
           setSaveLoading(false);
           return;
@@ -311,7 +313,7 @@ const UsersPage = () => {
       }
 
       if (passwordChanged) {
-        payload.password = formData.password;
+        payload.password = formData.new_password;
       }
 
       await api.put(`/users/${selectedUser.id}`, payload);
@@ -646,13 +648,13 @@ const UsersPage = () => {
                     onChange={(e) => handleInputChange('email', e.target.value)}
                   />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid item xs={12}>
                   <TextField
                     fullWidth
                     label="Current Password"
                     type={showEditPassword ? 'text' : 'password'}
                     value={formData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    disabled
                     helperText={selectedUser?.plain_password ? 'Visible for passwords set through Super Admin' : 'Not available for older accounts. Set a new password to store it here.'}
                     InputProps={{
                       endAdornment: (
@@ -672,19 +674,28 @@ const UsersPage = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="Confirm Password"
+                    label="New Password"
                     type={showEditPassword ? 'text' : 'password'}
-                    value={formData.confirm_password}
-                    onChange={(e) => handleInputChange('confirm_password', e.target.value)}
+                    value={formData.new_password}
+                    onChange={(e) => handleInputChange('new_password', e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Confirm New Password"
+                    type={showEditPassword ? 'text' : 'password'}
+                    value={formData.confirm_new_password}
+                    onChange={(e) => handleInputChange('confirm_new_password', e.target.value)}
                     error={Boolean(
-                      formData.password !== (selectedUser?.plain_password || '') &&
-                      formData.confirm_password &&
-                      formData.password !== formData.confirm_password
+                      formData.new_password &&
+                      formData.confirm_new_password &&
+                      formData.new_password !== formData.confirm_new_password
                     )}
                     helperText={
-                      formData.password !== (selectedUser?.plain_password || '') &&
-                        formData.confirm_password &&
-                        formData.password !== formData.confirm_password
+                      formData.new_password &&
+                        formData.confirm_new_password &&
+                        formData.new_password !== formData.confirm_new_password
                         ? 'Passwords do not match'
                         : 'Required only when changing the password'
                     }
