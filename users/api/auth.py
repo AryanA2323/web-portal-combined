@@ -175,8 +175,22 @@ def login_view(request, payload: LoginWith2FASchema):
     # Create session
     login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
     
+    client_ip = _get_client_ip(request)
+    device = _get_device_info(request)
+
+    # ── Same-Device Cleanup ──
+    # If the user is logging in from the EXACT same browser/device, 
+    # we assume the old session was abandoned (e.g. tab closed without logout).
+    # We invalidate it here so it doesn't double-count against their device limit.
+    AuthToken.objects.filter(
+        user=user,
+        ip_address=client_ip,
+        device_info=device,
+        is_active=True
+    ).update(is_active=False)
+    
     # ── Device Limit Enforcement ──
-    # Check number of active sessions
+    # Check number of active sessions after cleaning up identical devices
     active_sessions_count = AuthToken.objects.filter(
         user=user, 
         is_active=True,
@@ -191,8 +205,7 @@ def login_view(request, payload: LoginWith2FASchema):
         }
 
     # Generate API token with session tracking
-    client_ip = _get_client_ip(request)
-    device = _get_device_info(request)
+
     token_obj = AuthToken.objects.create(
         user=user,
         ip_address=client_ip,
