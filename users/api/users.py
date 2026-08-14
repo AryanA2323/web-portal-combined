@@ -156,7 +156,7 @@ def is_super_admin(user) -> bool:
 
 @router.get(
     "/users",
-    response={200: List[AdminUserResponseSchema], 401: ErrorSchema, 403: ErrorSchema},
+    response={200: List[AdminUserWithSessionSchema], 401: ErrorSchema, 403: ErrorSchema},
     summary="List All Users",
     description="Get list of all users. Super Admin only.",
 )
