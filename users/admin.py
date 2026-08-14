@@ -4,7 +4,8 @@ from .models import (
     CustomUser, Vendor, AuthToken, EmailVerificationCode, PasswordResetToken,
     EmailIntake, EmailAttachment, GmailOAuthToken,
     Client, InsuranceCase, CaseDocument,
-    CaseVerification, VerificationDocument, VerificationComment, ClaimantDependent
+    CaseVerification, VerificationDocument, VerificationComment, ClaimantDependent,
+    ActivityLog,
 )
 
 
@@ -12,10 +13,10 @@ from .models import (
 class CustomUserAdmin(UserAdmin):
     """Custom caseManager configuration for the CustomUser model."""
     
-    list_display = ('username', 'email', 'role', 'is_staff', 'is_2fa_enabled')
+    list_display = ('email', 'first_name', 'last_name', 'role', 'is_staff', 'is_2fa_enabled')
     list_filter = ('role', 'is_staff', 'is_superuser', 'is_active', 'is_2fa_enabled')
     search_fields = ('username', 'email', 'first_name', 'last_name')
-    ordering = ('username',)
+    ordering = ('email',)
     
     # Extend the default fieldsets to include custom fields
     fieldsets = UserAdmin.fieldsets + (
@@ -47,15 +48,35 @@ class VendorAdmin(admin.ModelAdmin):
 class AuthTokenAdmin(admin.ModelAdmin):
     """Admin configuration for AuthToken model."""
     
-    list_display = ('user', 'token_preview', 'created_at', 'expires_at', 'is_expired')
-    list_filter = ('created_at',)
-    search_fields = ('user__username', 'user__email')
-    readonly_fields = ('token', 'created_at')
+    list_display = ('user', 'token_preview', 'ip_address', 'device_preview', 'created_at', 'expires_at', 'is_active', 'is_expired')
+    list_filter = ('created_at', 'is_active')
+    search_fields = ('user__username', 'user__email', 'ip_address')
+    readonly_fields = ('token', 'created_at', 'ip_address', 'device_info')
     
     def token_preview(self, obj):
         """Show only first 8 characters of token for security."""
         return f"{obj.token[:8]}..." if obj.token else ""
     token_preview.short_description = 'Token (preview)'
+    
+    def device_preview(self, obj):
+        """Show truncated device info."""
+        return f"{obj.device_info[:60]}..." if obj.device_info and len(obj.device_info) > 60 else (obj.device_info or '')
+    device_preview.short_description = 'Device'
+
+
+@admin.register(ActivityLog)
+class ActivityLogAdmin(admin.ModelAdmin):
+    """Admin configuration for ActivityLog model."""
+    
+    list_display = ('user', 'action', 'details_preview', 'ip_address', 'created_at')
+    list_filter = ('action', 'created_at')
+    search_fields = ('user__username', 'user__email', 'details', 'ip_address')
+    readonly_fields = ('user', 'action', 'details', 'ip_address', 'created_at')
+    ordering = ('-created_at',)
+    
+    def details_preview(self, obj):
+        return f"{obj.details[:80]}..." if obj.details and len(obj.details) > 80 else (obj.details or '')
+    details_preview.short_description = 'Details'
 
 
 @admin.register(EmailVerificationCode)

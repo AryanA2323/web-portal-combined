@@ -135,7 +135,7 @@ const QCSidebar = () => {
             >
               {user?.first_name || user?.last_name
                 ? `${user?.first_name || ''} ${user?.last_name || ''}`.trim()
-                : user?.username || 'User'}
+                : user?.email || 'User'}
             </Typography>
             <Typography
               variant="caption"

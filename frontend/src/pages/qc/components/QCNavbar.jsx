@@ -11,7 +11,7 @@ const QCNavbar = () => {
   if (location.pathname === '/qc/dashboard') {
     const name = user?.first_name && user?.last_name 
       ? `${user.first_name} ${user.last_name}` 
-      : user?.username || 'QC';
+      : user?.email || 'QC';
     pageTitle = `Welcome ${name}`;
   } else if (location.pathname === '/qc/reports') {
     pageTitle = 'Reports';

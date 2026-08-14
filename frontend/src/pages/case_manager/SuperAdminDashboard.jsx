@@ -56,7 +56,7 @@ const getUserDisplayName = (u) => {
   if (u.first_name || u.last_name) {
     return `${u.first_name || ''} ${u.last_name || ''}`.trim();
   }
-  return u.username || u.email || 'User';
+  return u.email || 'User';
 };
 
 const SuperAdminDashboard = () => {
@@ -292,7 +292,7 @@ const SuperAdminDashboard = () => {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                             <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>
-                              {recentUser.username.charAt(0).toUpperCase()}
+                              {(recentUser.first_name || recentUser.email || 'U').charAt(0).toUpperCase()}
                             </Avatar>
                             <Typography variant="body2">{recentUser.full_name}</Typography>
                           </Box>

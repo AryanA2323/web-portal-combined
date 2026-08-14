@@ -133,7 +133,6 @@ class AdminUserResponseSchema(UserResponseSchema):
 
 class UserCreateSchema(BaseModel):
     """Schema for user creation."""
-    username: str = Field(..., min_length=3, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=8)
     first_name: str = Field(default="", max_length=150)
@@ -154,6 +153,44 @@ class UserUpdateSchema(BaseModel):
     is_active: Optional[bool] = None
 
 
+class ProfileUpdateSchema(BaseModel):
+    """Schema for updating own profile."""
+    first_name: Optional[str] = Field(default=None, max_length=150)
+    last_name: Optional[str] = Field(default=None, max_length=150)
+    email: Optional[EmailStr] = None
+
+
+class SessionInfoSchema(BaseModel):
+    """Schema for active session info (used by Super Admin)."""
+    token_created_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+    ip_address: str = ''
+    device_info: str = ''
+    is_active: bool = False
+
+
+class AdminUserWithSessionSchema(AdminUserResponseSchema):
+    """Admin user response enriched with session info."""
+    is_online: bool = False
+    session_ip: str = ''
+    session_device: str = ''
+    session_created_at: Optional[datetime] = None
+    session_last_used: Optional[datetime] = None
+
+
+class ActivityLogSchema(BaseModel):
+    """Schema for activity log entries."""
+    id: int
+    action: str
+    action_display: str = ''
+    details: str = ''
+    ip_address: str = ''
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class UserListSchema(BaseModel):
     """Schema for paginated user list."""
     count: int
@@ -172,6 +209,7 @@ class ErrorSchema(BaseModel):
 
 
 class ValidationErrorSchema(BaseModel):
+
     """Schema for validation error response."""
     error: str = "Validation error"
     details: List[dict]

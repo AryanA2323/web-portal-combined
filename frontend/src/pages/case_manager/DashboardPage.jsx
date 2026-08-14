@@ -47,7 +47,7 @@ const getUserDisplayName = (u) => {
   if (u.first_name || u.last_name) {
     return `${u.first_name || ''} ${u.last_name || ''}`.trim();
   }
-  return u.username || u.email || 'User';
+  return u.email || 'User';
 };
 
 const CaseManagerDashboard = () => {

@@ -40,8 +40,10 @@ from users.schemas import (
     Enable2FASchema,
     Verify2FASchema,
     TwoFactorStatusSchema,
+    ProfileUpdateSchema,
+    ActivityLogSchema,
 )
-from users.models import AuthToken, EmailVerificationCode, PasswordResetToken
+from users.models import AuthToken, EmailVerificationCode, PasswordResetToken, ActivityLog
 from users.auth import SessionOrTokenAuth
 from users.services.email_service import email_service
 
@@ -49,6 +51,21 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 router = Router(tags=["Authentication"])
+
+
+def _get_client_ip(request):
+    """Extract client IP address from request, respecting proxy headers."""
+    x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if x_forwarded:
+        return x_forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', '')
+
+
+def _get_device_info(request):
+    """Extract device / User-Agent from request headers."""
+    ua = request.META.get('HTTP_USER_AGENT', '')
+    # Truncate to 512 chars to fit DB field
+    return ua[:512] if ua else 'Unknown Device'
 
 
 def _resolve_login_user(identifier: str):
@@ -156,8 +173,18 @@ def login_view(request, payload: LoginWith2FASchema):
     # Create session
     login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
     
-    # Generate API token
-    token_obj = AuthToken.objects.create(user=user)
+    # ── Single-device enforcement ──
+    # Delete ALL existing tokens for this user so only one session is active
+    AuthToken.objects.filter(user=user).delete()
+    
+    # Generate API token with session tracking
+    client_ip = _get_client_ip(request)
+    device = _get_device_info(request)
+    token_obj = AuthToken.objects.create(
+        user=user,
+        ip_address=client_ip,
+        device_info=device,
+    )
     
     # Store user data in role-specific table
     _create_role_specific_profile(user)
@@ -165,6 +192,14 @@ def login_view(request, payload: LoginWith2FASchema):
     # Update last login
     user.last_login = datetime.now()
     user.save(update_fields=['last_login'])
+    
+    # Log the login activity
+    ActivityLog.objects.create(
+        user=user,
+        action=ActivityLog.Action.LOGIN,
+        details=f'Logged in from {client_ip} ({device[:80]})',
+        ip_address=client_ip,
+    )
     
     logger.info(f"User logged in successfully: {user.username} (role: {user.role})")
     
@@ -245,7 +280,6 @@ def register_user(request, payload: UserCreateSchema):
     """
     Register a new user account.
     
-    - **username**: Unique username (3-150 characters)
     - **email**: Valid email address (must be unique)
     - **password**: Password (minimum 8 characters)
     - **first_name**: Optional first name
@@ -261,19 +295,23 @@ def register_user(request, payload: UserCreateSchema):
     if role not in valid_roles:
         return 400, {"error": f"Invalid role. Must be one of: {', '.join(valid_roles)}", "code": "INVALID_ROLE"}
     
-    # Check if username already exists
-    if User.objects.filter(username=payload.username).exists():
-        return 400, {"error": "Username already taken", "code": "USERNAME_EXISTS"}
-    
     # Check if email already exists
     if User.objects.filter(email=payload.email).exists():
         return 400, {"error": "Email already registered", "code": "EMAIL_EXISTS"}
+    
+    # Auto-generate username from email (use email prefix, ensure uniqueness)
+    base_username = payload.email.split('@')[0]
+    username = base_username
+    counter = 1
+    while User.objects.filter(username=username).exists():
+        username = f"{base_username}{counter}"
+        counter += 1
     
     try:
         with transaction.atomic():
             # Create user
             user = User.objects.create_user(
-                username=payload.username,
+                username=username,
                 email=payload.email,
                 password=payload.password,
                 first_name=payload.first_name or '',
@@ -287,7 +325,7 @@ def register_user(request, payload: UserCreateSchema):
             # Generate API token (token-based auth, no session needed)
             token_obj = AuthToken.objects.create(user=user)
             
-            logger.info(f"New user registered: {user.username} with role {user.role}")
+            logger.info(f"New user registered: {user.email} with role {user.role}")
             
             # Send welcome email (async/non-blocking)
             try:
@@ -780,6 +818,56 @@ def get_current_user(request):
     return 200, UserResponseSchema.model_validate(request.user)
 
 
+@router.put(
+    "/profile",
+    auth=SessionOrTokenAuth(),
+    response={200: UserResponseSchema, 400: ErrorSchema, 401: ErrorSchema},
+    summary="Update Profile",
+    description="Update the current user's profile information.",
+)
+def update_current_user_profile(request, payload: ProfileUpdateSchema):
+    """
+    Update profile details for the authenticated user.
+    """
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
+    
+    user = request.user
+    changes = []
+    if payload.first_name is not None:
+        old = user.first_name
+        user.first_name = payload.first_name.strip()
+        if old != user.first_name:
+            changes.append(f'First name: "{old}" → "{user.first_name}"')
+    if payload.last_name is not None:
+        old = user.last_name
+        user.last_name = payload.last_name.strip()
+        if old != user.last_name:
+            changes.append(f'Last name: "{old}" → "{user.last_name}"')
+    if payload.email is not None:
+        new_email = payload.email.strip()
+        if new_email and User.objects.filter(email=new_email).exclude(id=user.id).exists():
+            return 400, {"error": "Email already in use", "code": "EMAIL_EXISTS"}
+        if new_email and new_email != user.email:
+            changes.append(f'Email: "{user.email}" → "{new_email}"')
+            user.email = new_email
+    
+    user.save()
+    
+    # Log changes to activity log
+    if changes:
+        ActivityLog.objects.create(
+            user=user,
+            action=ActivityLog.Action.PROFILE_UPDATE,
+            details='; '.join(changes),
+            ip_address=_get_client_ip(request),
+        )
+    
+    logger.info(f"User {user.email} updated profile details")
+    return 200, UserResponseSchema.model_validate(user)
+
+
+
 @router.get(
     "/validate",
     auth=SessionOrTokenAuth(),
@@ -854,16 +942,36 @@ def change_password(request, payload: PasswordChangeSchema):
         user.plain_password = payload.new_password
     user.save()
     
+    # Log the password change
+    ActivityLog.objects.create(
+        user=user,
+        action=ActivityLog.Action.PASSWORD_CHANGE,
+        details='Password changed successfully',
+        ip_address=_get_client_ip(request),
+    )
+    
     # Invalidate all existing tokens (security measure)
     AuthToken.objects.filter(user=user).delete()
     
     # Re-login to refresh session
     login(request, user)
     
+    # Create new token so the user stays logged in
+    client_ip = _get_client_ip(request)
+    device = _get_device_info(request)
+    new_token = AuthToken.objects.create(
+        user=user,
+        ip_address=client_ip,
+        device_info=device,
+    )
+    
     # Send notification
     email_service.send_password_changed_notification(user)
     
-    return 200, {"message": "Password changed successfully"}
+    return 200, {
+        "message": "Password changed successfully",
+        "token": new_token.token,
+    }
 
 
 # =============================================================================
@@ -899,3 +1007,38 @@ def refresh_token(request):
         "token_type": "Bearer",
         "expires_at": token_obj.expires_at.isoformat() if token_obj.expires_at else None,
     }
+
+
+# =============================================================================
+# Activity Log
+# =============================================================================
+
+@router.get(
+    "/activity-log",
+    auth=SessionOrTokenAuth(),
+    response={200: list, 401: ErrorSchema},
+    summary="Get Activity Log",
+    description="Get the activity log for the currently authenticated user.",
+)
+def get_activity_log(request, limit: int = 20, offset: int = 0):
+    """
+    Returns the activity log for the authenticated user.
+    Paginated, most recent first.
+    """
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
+
+    logs = ActivityLog.objects.filter(user=request.user).order_by('-created_at')[offset:offset + limit]
+
+    result = []
+    for log in logs:
+        result.append({
+            "id": log.id,
+            "action": log.action,
+            "action_display": log.get_action_display(),
+            "details": log.details,
+            "ip_address": log.ip_address,
+            "created_at": log.created_at.isoformat(),
+        })
+
+    return 200, result

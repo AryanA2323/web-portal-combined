@@ -43,7 +43,6 @@ const SignupPage = () => {
   } = useForm({
     resolver: yupResolver(signupSchema),
     defaultValues: {
-      username: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -61,7 +60,7 @@ const SignupPage = () => {
     if (activeStep === 0) {
       fieldsToValidate = ['role'];
     } else if (activeStep === 1) {
-      fieldsToValidate = ['username', 'email', 'password', 'confirmPassword', 'firstName', 'lastName'];
+      fieldsToValidate = ['email', 'password', 'confirmPassword', 'firstName', 'lastName'];
     }
     
     const isValid = await trigger(fieldsToValidate);
@@ -80,7 +79,6 @@ const SignupPage = () => {
 
     try {
       await authService.register({
-        username: data.username,
         email: data.email,
         password: data.password,
         first_name: data.firstName,
@@ -109,9 +107,7 @@ const SignupPage = () => {
       if (error.error) {
         const errorCode = error.code;
         switch (errorCode) {
-          case 'USERNAME_EXISTS':
-            errorMessage = 'This username is already taken. Please choose a different username.';
-            break;
+
           case 'EMAIL_EXISTS':
             errorMessage = 'An account with this email already exists. Please use a different email or try logging in.';
             break;
@@ -229,16 +225,7 @@ const SignupPage = () => {
               />
             </Box>
             
-            <FormInput
-              name="username"
-              label="Username"
-              placeholder="johndoe"
-              register={register}
-              error={errors.username}
-              icon={Badge}
-              disabled={isLoading}
-              autoComplete="username"
-            />
+
             
             <FormInput
               name="email"

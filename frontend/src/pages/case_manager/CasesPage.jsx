@@ -358,7 +358,7 @@ const CasesPage = ({ isCompletedView = false }) => {
         try {
           const u = JSON.parse(storedUserRaw);
           const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim();
-          cmName = fullName || u.username || u.name || u.email || '';
+          cmName = fullName || u.name || u.email || '';
         } catch (e) { }
       }
 

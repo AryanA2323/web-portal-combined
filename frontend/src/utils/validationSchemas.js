@@ -84,12 +84,6 @@ export const registerSchema = yup.object().shape({
 
 // Signup validation schema (multi-step form)
 export const signupSchema = yup.object().shape({
-  username: yup
-    .string()
-    .min(3, 'Username must be at least 3 characters')
-    .max(150, 'Username cannot exceed 150 characters')
-    .matches(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores')
-    .required('Username is required'),
   firstName: yup
     .string()
     .max(150, 'First name cannot exceed 150 characters'),

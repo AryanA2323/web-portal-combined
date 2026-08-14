@@ -13,6 +13,7 @@ from ninja.errors import HttpError
 
 from users.schemas import (
     AdminUserResponseSchema,
+    AdminUserWithSessionSchema,
     UserResponseSchema,
     UserUpdateSchema,
     UserCreateSchema,
@@ -20,6 +21,7 @@ from users.schemas import (
     MessageSchema,
 )
 from core.permissions import is_admin
+from users.models import AuthToken, ActivityLog
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -73,6 +75,7 @@ def _delete_user_without_missing_relation_cascade(user):
         "users_qc",
         "users_lawyer",
         "users_admin",
+        "users_activitylog",
     ):
         _delete_if_table_exists(table_name, "user_id", user_id)
 
@@ -169,7 +172,33 @@ def list_users(request):
         return 403, {"error": "Super admin access required", "code": "SUPER_ADMIN_REQUIRED"}
     
     users = User.objects.all().order_by('-date_joined')
-    return 200, [AdminUserResponseSchema.model_validate(user) for user in users]
+    
+    # Build enriched response with session info
+    result = []
+    for user in users:
+        user_data = AdminUserResponseSchema.model_validate(user).model_dump()
+        
+        # Get active session info
+        active_token = AuthToken.objects.filter(
+            user=user, is_active=True
+        ).order_by('-created_at').first()
+        
+        if active_token and not active_token.is_expired:
+            user_data['is_online'] = True
+            user_data['session_ip'] = active_token.ip_address or ''
+            user_data['session_device'] = active_token.device_info or ''
+            user_data['session_created_at'] = active_token.created_at.isoformat() if active_token.created_at else None
+            user_data['session_last_used'] = active_token.last_used_at.isoformat() if active_token.last_used_at else None
+        else:
+            user_data['is_online'] = False
+            user_data['session_ip'] = ''
+            user_data['session_device'] = ''
+            user_data['session_created_at'] = None
+            user_data['session_last_used'] = None
+        
+        result.append(user_data)
+    
+    return 200, result
 
 
 @router.post(
@@ -184,7 +213,6 @@ def create_user(request, payload: UserCreateSchema):
     Only accessible by super admin users.
     
     Payload should include:
-    - username: Unique username (3-150 characters)
     - email: Valid unique email address
     - password: Password (minimum 8 characters)
     - first_name: Optional first name
@@ -203,20 +231,24 @@ def create_user(request, payload: UserCreateSchema):
     if role_upper not in valid_roles:
         return 400, {"error": f"Invalid role. Must be one of: {', '.join(valid_roles)}", "code": "INVALID_ROLE"}
     
-    # Check if username already exists
-    if User.objects.filter(username=payload.username).exists():
-        return 400, {"error": "Username already exists", "code": "USERNAME_EXISTS"}
-    
     # Check if email already exists
     if User.objects.filter(email=payload.email).exists():
         return 400, {"error": "Email already registered", "code": "EMAIL_EXISTS"}
+    
+    # Auto-generate username from email (use email prefix, ensure uniqueness)
+    base_username = payload.email.split('@')[0]
+    username = base_username
+    counter = 1
+    while User.objects.filter(username=username).exists():
+        username = f"{base_username}{counter}"
+        counter += 1
     
     try:
         sub_role = 'SUPER_ADMIN' if role_upper == 'SUPER_ADMIN' else (payload.sub_role or '')
 
         # Create user
         user = User.objects.create_user(
-            username=payload.username,
+            username=username,
             email=payload.email,
             password=payload.password,
             first_name=payload.first_name or '',
@@ -231,7 +263,7 @@ def create_user(request, payload: UserCreateSchema):
             user.plain_password = payload.password
             user.save(update_fields=["plain_password"])
         
-        logger.info(f"New user {user.username} created by caseManager {request.user.username}")
+        logger.info(f"New user {user.email} created by {request.user.email}")
         sync_role_specific_profile(user)
         
         return 201, AdminUserResponseSchema.model_validate(user)
@@ -411,3 +443,45 @@ def delete_user(request, user_id: int):
     except Exception as exc:
         logger.error(f"Failed to delete user id={user_id}: {exc}", exc_info=True)
         return 400, {"error": f"Failed to delete user: {exc}", "code": "USER_DELETE_FAILED"}
+
+
+# =============================================================================
+# Session Management (Super Admin)
+# =============================================================================
+
+@router.post(
+    "/users/{user_id}/force-logout",
+    response={200: MessageSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema},
+    summary="Force Logout User",
+    description="Force logout a user from all devices. Super Admin only.",
+)
+def force_logout_user(request, user_id: int):
+    """
+    Force logout a specific user by deleting all their auth tokens.
+    Only accessible by super admin users.
+    """
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
+    
+    if not is_super_admin(request.user):
+        return 403, {"error": "Super admin access required", "code": "SUPER_ADMIN_REQUIRED"}
+    
+    try:
+        target_user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return 404, {"error": "User not found", "code": "USER_NOT_FOUND"}
+    
+    # Delete all tokens for this user
+    deleted_count = AuthToken.objects.filter(user=target_user).delete()[0]
+    
+    # Log the force logout in activity log
+    ActivityLog.objects.create(
+        user=target_user,
+        action=ActivityLog.Action.FORCE_LOGOUT,
+        details=f'Force logged out by admin {request.user.email} ({deleted_count} session(s) terminated)',
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
+    
+    name = f"{target_user.first_name} {target_user.last_name}".strip() or target_user.email
+    logger.info(f"Super admin {request.user.email} force-logged out user {target_user.email}")
+    return 200, {"message": f"{name} has been logged out from all devices"}

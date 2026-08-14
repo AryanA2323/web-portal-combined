@@ -371,7 +371,7 @@ class QC(models.Model):
 
 
 class AuthToken(models.Model):
-    """Token model for API authentication."""
+    """Token model for API authentication with session tracking."""
     
     user = models.ForeignKey(
         CustomUser,
@@ -382,11 +382,24 @@ class AuthToken(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
+    ip_address = models.CharField(
+        max_length=45, blank=True, default='',
+        help_text='IP address from which the token was created',
+    )
+    device_info = models.CharField(
+        max_length=512, blank=True, default='',
+        help_text='User-Agent / device description',
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Whether this token session is still active',
+    )
     
     class Meta:
         indexes = [
             models.Index(fields=['token']),
             models.Index(fields=['user', 'expires_at']),
+            models.Index(fields=['user', 'is_active']),
         ]
     
     def save(self, *args, **kwargs):
@@ -942,3 +955,40 @@ class CaseDeletionRequest(models.Model):
 
     def __str__(self):
         return f"Deletion Request {self.id} for case {self.case_id}"
+
+
+class ActivityLog(models.Model):
+    """Audit log for tracking user account changes (settings, profile, etc.)."""
+    
+    class Action(models.TextChoices):
+        PROFILE_UPDATE = 'PROFILE_UPDATE', 'Profile Update'
+        PASSWORD_CHANGE = 'PASSWORD_CHANGE', 'Password Change'
+        LOGIN = 'LOGIN', 'Login'
+        LOGOUT = 'LOGOUT', 'Logout'
+        FORCE_LOGOUT = 'FORCE_LOGOUT', 'Force Logout'
+    
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='activity_logs',
+    )
+    action = models.CharField(
+        max_length=30,
+        choices=Action.choices,
+    )
+    details = models.TextField(
+        blank=True, default='',
+        help_text='Human-readable description of the change',
+    )
+    ip_address = models.CharField(max_length=45, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['action']),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.get_action_display()} by {self.user.username} at {self.created_at}"

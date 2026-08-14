@@ -808,7 +808,7 @@ const LegalReviewPage = () => {
                 <MenuItem value="" disabled>Select a qc</MenuItem>
                 {qcs.map((qc) => (
                   <MenuItem key={qc.id} value={qc.id}>
-                    {qc.full_name || qc.username} ({qc.email})
+                    {qc.full_name || qc.email}
                   </MenuItem>
                 ))}
               </Select>

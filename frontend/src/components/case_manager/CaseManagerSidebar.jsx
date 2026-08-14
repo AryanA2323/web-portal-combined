@@ -52,7 +52,7 @@ const getUserFullName = (u) => {
   if (nameParts.length > 0) {
     return nameParts.join(' ');
   }
-  return u.username || u.email || 'User';
+  return u.email || 'User';
 };
 
 const getUserRoleLabel = (u) => {

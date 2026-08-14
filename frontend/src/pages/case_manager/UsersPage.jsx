@@ -43,6 +43,8 @@ import {
   AccountCircle,
   Visibility,
   VisibilityOff,
+  Logout as LogoutIcon,
+  FiberManualRecord,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
@@ -79,7 +81,6 @@ const UsersPage = () => {
   // Create user dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createFormData, setCreateFormData] = useState({
-    username: '',
     email: '',
     password: '',
     confirm_password: '',
@@ -126,7 +127,6 @@ const UsersPage = () => {
 
   const handleOpenCreateDialog = () => {
     setCreateFormData({
-      username: '',
       email: '',
       password: '',
       confirm_password: '',
@@ -141,7 +141,6 @@ const UsersPage = () => {
   const handleCloseCreateDialog = () => {
     setCreateDialogOpen(false);
     setCreateFormData({
-      username: '',
       email: '',
       password: '',
       confirm_password: '',
@@ -162,10 +161,7 @@ const UsersPage = () => {
   const handleCreateUser = async () => {
     try {
       // Validation
-      if (!createFormData.username.trim()) {
-        setError('Username is required');
-        return;
-      }
+
       if (!createFormData.email.trim()) {
         setError('Email is required');
         return;
@@ -187,7 +183,6 @@ const UsersPage = () => {
       setError(null);
 
       const payload = {
-        username: createFormData.username.trim(),
         email: createFormData.email.trim(),
         password: createFormData.password,
         first_name: createFormData.first_name.trim() || '',
@@ -361,6 +356,22 @@ const UsersPage = () => {
     }
   };
 
+  const handleForceLogout = async (user) => {
+    const name = (user.first_name || user.last_name)
+      ? `${user.first_name} ${user.last_name}`.trim()
+      : user.email;
+    if (!window.confirm(`Force logout "${name}" from all devices?`)) {
+      return;
+    }
+    try {
+      const response = await api.post(`/users/${user.id}/force-logout`);
+      setSuccessMessage(response.data?.message || `${name} has been logged out`);
+      await fetchUsers();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to force logout user');
+    }
+  };
+
   const getRoleBadgeColor = (role) => {
     switch (role.toUpperCase()) {
       case 'CASE_MANAGER':
@@ -472,11 +483,12 @@ const UsersPage = () => {
           <Table>
             <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
               <TableRow>
-                <TableCell><strong>Username</strong></TableCell>
+
                 <TableCell><strong>Name</strong></TableCell>
                 <TableCell><strong>Email</strong></TableCell>
                 <TableCell><strong>Role</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
+                <TableCell><strong>Session</strong></TableCell>
                 <TableCell><strong>Custom Permissions</strong></TableCell>
                 <TableCell align="right"><strong>Actions</strong></TableCell>
               </TableRow>
@@ -484,7 +496,7 @@ const UsersPage = () => {
             <TableBody>
               {filteredUsers.map((user) => (
                 <TableRow key={user.id} hover>
-                  <TableCell>{user.username}</TableCell>
+
                   <TableCell>
                     {user.first_name || user.last_name
                       ? `${user.first_name} ${user.last_name}`.trim()
@@ -518,6 +530,46 @@ const UsersPage = () => {
                     )}
                   </TableCell>
                   <TableCell>
+                    {user.is_online ? (
+                      <Tooltip
+                        title={
+                          <Box sx={{ p: 0.5 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>Active Session</Typography>
+                            <Typography variant="caption" sx={{ display: 'block' }}>IP: {user.session_ip || 'N/A'}</Typography>
+                            <Typography variant="caption" sx={{ display: 'block', whiteSpace: 'normal', maxWidth: 280 }}>Device: {user.session_device ? (user.session_device.length > 80 ? user.session_device.substring(0, 80) + '...' : user.session_device) : 'N/A'}</Typography>
+                            {user.session_last_used && <Typography variant="caption" sx={{ display: 'block' }}>Last active: {new Date(user.session_last_used).toLocaleString()}</Typography>}
+                          </Box>
+                        }
+                        arrow
+                      >
+                        <Chip
+                          icon={<FiberManualRecord sx={{ fontSize: 10 }} />}
+                          label="Online"
+                          size="small"
+                          sx={{
+                            backgroundColor: '#dcfce7',
+                            color: '#166534',
+                            fontWeight: 600,
+                            '& .MuiChip-icon': { color: '#16a34a' },
+                            cursor: 'pointer',
+                          }}
+                        />
+                      </Tooltip>
+                    ) : (
+                      <Chip
+                        icon={<FiberManualRecord sx={{ fontSize: 10 }} />}
+                        label="Offline"
+                        size="small"
+                        sx={{
+                          backgroundColor: '#f1f5f9',
+                          color: '#64748b',
+                          fontWeight: 500,
+                          '& .MuiChip-icon': { color: '#94a3b8' },
+                        }}
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {user.permissions && user.permissions.length > 0 ? (
                       <Chip label={`${user.permissions.length} pages`} size="small" color="primary" variant="outlined" />
                     ) : (
@@ -534,6 +586,17 @@ const UsersPage = () => {
                         <Edit />
                       </IconButton>
                     </Tooltip>
+                    {user.is_online && (
+                      <Tooltip title="Force Logout">
+                        <IconButton
+                          size="small"
+                          sx={{ color: '#ea580c' }}
+                          onClick={() => handleForceLogout(user)}
+                        >
+                          <LogoutIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     <Tooltip title="Delete User">
                       <IconButton
                         size="small"
@@ -553,7 +616,7 @@ const UsersPage = () => {
         {/* Edit User Dialog */}
         <Dialog open={editDialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
           <DialogTitle>
-            Edit User: {selectedUser?.username}
+            Edit User: {selectedUser?.email}
           </DialogTitle>
           <DialogContent>
             <Box sx={{ pt: 2 }}>
@@ -774,36 +837,6 @@ const UsersPage = () => {
                   Account Information
                 </Typography>
                 <Grid container spacing={2.5}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Username"
-                      placeholder="Enter unique username"
-                      value={createFormData.username}
-                      onChange={(e) => handleCreateInputChange('username', e.target.value)}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <Person sx={{ color: '#667eea' }} />
-                          </InputAdornment>
-                        ),
-                      }}
-                      helperText="3-150 characters, must be unique"
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          '&:hover fieldset': {
-                            borderColor: '#667eea',
-                          },
-                          '&.Mui-focused fieldset': {
-                            borderColor: '#667eea',
-                          },
-                        },
-                        '& .MuiInputLabel-root.Mui-focused': {
-                          color: '#667eea',
-                        },
-                      }}
-                    />
-                  </Grid>
 
                   <Grid item xs={12}>
                     <TextField
