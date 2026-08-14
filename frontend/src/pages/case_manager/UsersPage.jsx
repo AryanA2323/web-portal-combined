@@ -536,27 +536,17 @@ const UsersPage = () => {
                   </TableCell>
                   <TableCell>
                     {user.is_online ? (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Chip
-                          icon={<FiberManualRecord sx={{ fontSize: 10 }} />}
-                          label="Online"
-                          size="small"
-                          sx={{
-                            backgroundColor: '#dcfce7',
-                            color: '#166534',
-                            fontWeight: 600,
-                            '& .MuiChip-icon': { color: '#16a34a' },
-                            width: 'fit-content',
-                            mb: 0.5,
-                          }}
-                        />
-                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 500 }}>
-                          <strong>IP:</strong> {user.session_ip || 'N/A'}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 500, whiteSpace: 'normal', maxWidth: 250 }}>
-                          <strong>Device:</strong> {user.session_device || 'N/A'}
-                        </Typography>
-                      </Box>
+                      <Chip
+                        icon={<FiberManualRecord sx={{ fontSize: 10 }} />}
+                        label="Online"
+                        size="small"
+                        sx={{
+                          backgroundColor: '#dcfce7',
+                          color: '#166534',
+                          fontWeight: 600,
+                          '& .MuiChip-icon': { color: '#16a34a' },
+                        }}
+                      />
                     ) : (
                       <Chip
                         icon={<FiberManualRecord sx={{ fontSize: 10 }} />}
@@ -588,17 +578,6 @@ const UsersPage = () => {
                         <Edit />
                       </IconButton>
                     </Tooltip>
-                    {user.is_online && (
-                      <Tooltip title="Force Logout">
-                        <IconButton
-                          size="small"
-                          sx={{ color: '#ea580c' }}
-                          onClick={() => handleForceLogout(user)}
-                        >
-                          <LogoutIcon />
-                        </IconButton>
-                      </Tooltip>
-                    )}
                     <Tooltip title="Delete User">
                       <IconButton
                         size="small"
@@ -743,9 +722,20 @@ const UsersPage = () => {
                 {selectedUser?.active_sessions && selectedUser.active_sessions.length > 0 && (
                   <Grid item xs={12}>
                     <Divider sx={{ my: 1 }} />
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#334155' }}>
-                      Currently Logged In Devices ({selectedUser.active_sessions.length}/{formData.device_limit || 1})
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#334155' }}>
+                        Currently Logged In Devices ({selectedUser.active_sessions.length}/{formData.device_limit || 1})
+                      </Typography>
+                      <Button 
+                        size="small" 
+                        color="error" 
+                        variant="outlined" 
+                        startIcon={<LogoutIcon />}
+                        onClick={() => handleForceLogout(selectedUser)}
+                      >
+                        Force Logout All
+                      </Button>
+                    </Box>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                       {selectedUser.active_sessions.map((session, idx) => (
                         <Paper key={idx} variant="outlined" sx={{ p: 1.5, backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
