@@ -488,7 +488,7 @@ const UsersPage = () => {
                 <TableCell><strong>Email</strong></TableCell>
                 <TableCell><strong>Role</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
-                <TableCell><strong>Session</strong></TableCell>
+                <TableCell><strong>Active Session Info</strong></TableCell>
                 <TableCell><strong>Custom Permissions</strong></TableCell>
                 <TableCell align="right"><strong>Actions</strong></TableCell>
               </TableRow>
@@ -531,17 +531,7 @@ const UsersPage = () => {
                   </TableCell>
                   <TableCell>
                     {user.is_online ? (
-                      <Tooltip
-                        title={
-                          <Box sx={{ p: 0.5 }}>
-                            <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>Active Session</Typography>
-                            <Typography variant="caption" sx={{ display: 'block' }}>IP: {user.session_ip || 'N/A'}</Typography>
-                            <Typography variant="caption" sx={{ display: 'block', whiteSpace: 'normal', maxWidth: 280 }}>Device: {user.session_device ? (user.session_device.length > 80 ? user.session_device.substring(0, 80) + '...' : user.session_device) : 'N/A'}</Typography>
-                            {user.session_last_used && <Typography variant="caption" sx={{ display: 'block' }}>Last active: {new Date(user.session_last_used).toLocaleString()}</Typography>}
-                          </Box>
-                        }
-                        arrow
-                      >
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                         <Chip
                           icon={<FiberManualRecord sx={{ fontSize: 10 }} />}
                           label="Online"
@@ -551,10 +541,17 @@ const UsersPage = () => {
                             color: '#166534',
                             fontWeight: 600,
                             '& .MuiChip-icon': { color: '#16a34a' },
-                            cursor: 'pointer',
+                            width: 'fit-content',
+                            mb: 0.5,
                           }}
                         />
-                      </Tooltip>
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 500 }}>
+                          <strong>IP:</strong> {user.session_ip || 'N/A'}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 500, whiteSpace: 'normal', maxWidth: 250 }}>
+                          <strong>Device:</strong> {user.session_device || 'N/A'}
+                        </Typography>
+                      </Box>
                     ) : (
                       <Chip
                         icon={<FiberManualRecord sx={{ fontSize: 10 }} />}
