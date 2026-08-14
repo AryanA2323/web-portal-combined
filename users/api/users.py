@@ -198,6 +198,7 @@ def list_users(request):
             user_data['active_sessions'] = []
             for t in valid_tokens:
                 user_data['active_sessions'].append({
+                    'session_id': t.id,
                     'token_created_at': t.created_at,
                     'last_used_at': t.last_used_at,
                     'ip_address': t.ip_address or '',
@@ -508,3 +509,42 @@ def force_logout_user(request, user_id: int):
     name = f"{target_user.first_name} {target_user.last_name}".strip() or target_user.email
     logger.info(f"Super admin {request.user.email} force-logged out user {target_user.email}")
     return 200, {"message": f"{name} has been logged out from all devices"}
+
+
+@router.post(
+    "/users/{user_id}/force-logout/{session_id}",
+    response={200: MessageSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema},
+    summary="Force Logout Specific Session",
+    description="Force logout a user from a specific device session. Super Admin only.",
+)
+def force_logout_session(request, user_id: int, session_id: int):
+    """
+    Force logout a specific session by deleting its auth token.
+    Only accessible by super admin users.
+    """
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
+    
+    if not is_super_admin(request.user):
+        return 403, {"error": "Super admin access required", "code": "SUPER_ADMIN_REQUIRED"}
+    
+    try:
+        target_user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return 404, {"error": "User not found", "code": "USER_NOT_FOUND"}
+    
+    deleted_count, _ = AuthToken.objects.filter(id=session_id, user=target_user).delete()
+    if deleted_count == 0:
+        return 404, {"error": "Session not found", "code": "SESSION_NOT_FOUND"}
+    
+    ActivityLog.objects.create(
+        user=target_user,
+        action=ActivityLog.Action.FORCE_LOGOUT,
+        details=f'Specific session (ID: {session_id}) terminated by admin {request.user.email}',
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
+    
+    name = f"{target_user.first_name} {target_user.last_name}".strip() or target_user.email
+    logger.info(f"Super admin {request.user.email} force-logged out specific session {session_id} for user {target_user.email}")
+    return 200, {"message": f"Session terminated for {name}"}
+

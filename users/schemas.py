@@ -167,6 +167,7 @@ class ProfileUpdateSchema(BaseModel):
 
 class SessionInfoSchema(BaseModel):
     """Schema for active session info (used by Super Admin)."""
+    session_id: int
     token_created_at: Optional[datetime] = None
     last_used_at: Optional[datetime] = None
     ip_address: str = ''

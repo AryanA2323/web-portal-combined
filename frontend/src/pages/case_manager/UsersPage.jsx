@@ -372,8 +372,33 @@ const UsersPage = () => {
       const response = await api.post(`/users/${user.id}/force-logout`);
       setSuccessMessage(response.data?.message || `${name} has been logged out`);
       await fetchUsers();
+      
+      // Update selected user to remove active sessions
+      if (selectedUser && selectedUser.id === user.id) {
+        setSelectedUser({ ...selectedUser, active_sessions: [] });
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to force logout user');
+    }
+  };
+
+  const handleForceLogoutSession = async (user, sessionId) => {
+    if (!window.confirm('Force logout this specific device session?')) {
+      return;
+    }
+    try {
+      const response = await api.post(`/users/${user.id}/force-logout/${sessionId}`);
+      setSuccessMessage(response.data?.message || 'Session logged out successfully');
+      
+      // Update selected user locally
+      if (selectedUser && selectedUser.id === user.id) {
+        const updatedSessions = (selectedUser.active_sessions || []).filter(s => s.session_id !== sessionId);
+        setSelectedUser({ ...selectedUser, active_sessions: updatedSessions });
+      }
+      
+      await fetchUsers();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to force logout session');
     }
   };
 
@@ -748,13 +773,21 @@ const UsersPage = () => {
                                 {session.device_info || 'Unknown Device'}
                               </Typography>
                             </Box>
-                            <Box sx={{ textAlign: 'right' }}>
+                            <Box sx={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
                               <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>
                                 Started: {new Date(session.token_created_at).toLocaleString()}
                               </Typography>
                               <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>
                                 Last Seen: {session.last_used_at ? new Date(session.last_used_at).toLocaleString() : 'N/A'}
                               </Typography>
+                              <Button
+                                size="small"
+                                color="error"
+                                onClick={() => handleForceLogoutSession(selectedUser, session.session_id)}
+                                sx={{ textTransform: 'none', mt: 0.5 }}
+                              >
+                                Logout Device
+                              </Button>
                             </Box>
                           </Box>
                         </Paper>
