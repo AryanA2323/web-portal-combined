@@ -17,6 +17,20 @@ export const AuthProvider = ({ children }) => {
         const storedUser = authService.getCurrentUser();
         if (storedUser && authService.isAuthenticated()) {
           setUser(storedUser);
+          // Fetch fresh user data from backend (picks up permission changes)
+          try {
+            const response = await api.get('/auth/me');
+            if (response.data) {
+              authService.updateStoredUser(response.data);
+              setUser(response.data);
+            }
+          } catch (refreshErr) {
+            // If token is invalid/expired, keep stale data until next action
+            if (refreshErr.response?.status === 401) {
+              authService.logout();
+              setUser(null);
+            }
+          }
         }
       } catch (err) {
         console.error('Error initializing auth:', err);
@@ -36,7 +50,7 @@ export const AuthProvider = ({ children }) => {
     try {
       // Create a temporary endpoint in backend for this, 
       // or just re-fetch user details if an endpoint exists
-      const response = await api.get('/users/me');
+      const response = await api.get('/auth/me');
       if (response.data) {
         // Update local storage and state
         authService.updateStoredUser(response.data);

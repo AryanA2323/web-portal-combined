@@ -146,7 +146,7 @@ const QCSidebar = () => {
                 textTransform: 'capitalize',
               }}
             >
-              {user?.role === 'QC' ? 'Quality Check' : user?.role || 'Quality Check'}
+              {user?.role === 'QC' ? 'Quality Analyst' : user?.role || 'Quality Analyst'}
             </Typography>
           </Box>
         </Box>

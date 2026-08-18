@@ -287,6 +287,16 @@ def create_user(request, payload: UserCreateSchema):
         logger.info(f"New user {user.email} created by {request.user.email}")
         sync_role_specific_profile(user)
         
+        try:
+            ActivityLog.objects.create(
+                user=request.user,
+                action='USER_CREATED',
+                details=f"Created new user '{user.email}' with role '{role_upper}'",
+                ip_address=request.META.get('REMOTE_ADDR', ''),
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log user creation: {log_err}")
+            
         return 201, AdminUserResponseSchema.model_validate(user)
     except Exception as e:
         error_msg = str(e)
@@ -352,18 +362,29 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
         log_payload["password"] = "***"
     logger.info(f"Updating user {user.username} with payload: {log_payload}")
     
+    # Track changes
+    changes = []
+    
     # Update basic fields
     if payload.first_name is not None:
+        if user.first_name != payload.first_name:
+            changes.append(f"First Name to '{payload.first_name}'")
         user.first_name = payload.first_name
     if payload.last_name is not None:
+        if user.last_name != payload.last_name:
+            changes.append(f"Last Name to '{payload.last_name}'")
         user.last_name = payload.last_name
     if payload.email is not None:
-        # Check if email is already used by another user
-        if User.objects.filter(email=payload.email).exclude(id=user_id).exists():
-            return 400, {"error": "Email already in use", "code": "EMAIL_EXISTS"}
+        if user.email != payload.email:
+            # Check if email is already used by another user
+            if User.objects.filter(email=payload.email).exclude(id=user_id).exists():
+                return 400, {"error": "Email already in use", "code": "EMAIL_EXISTS"}
+            changes.append(f"Email to '{payload.email}'")
         user.email = payload.email
         
     if payload.device_limit is not None:
+        if user.device_limit != payload.device_limit:
+            changes.append(f"Device Limit to '{payload.device_limit}'")
         user.device_limit = payload.device_limit
     
     # Update role and sub_role
@@ -372,6 +393,8 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
         valid_roles = ['SUPER_ADMIN', 'CASE_MANAGER', 'VENDOR', 'CLIENT', 'QC', 'ADVOCATE']
         if role_upper not in valid_roles:
             return 400, {"error": f"Invalid role. Must be one of: {', '.join(valid_roles)}", "code": "INVALID_ROLE"}
+        if user.role != role_upper:
+            changes.append(f"Role to '{role_upper}'")
         user.role = role_upper
         if role_upper == 'SUPER_ADMIN' and payload.sub_role is None:
             user.sub_role = 'SUPER_ADMIN'
@@ -388,13 +411,35 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
             valid_sub_roles = ['SUPER_ADMIN', 'CASE_HANDLER', 'REPORT_MANAGER', 'LOG_MANAGER']
             if sub_role_upper not in valid_sub_roles:
                 return 400, {"error": f"Invalid sub_role. Must be one of: {', '.join(valid_sub_roles)}", "code": "INVALID_SUB_ROLE"}
+            if user.sub_role != sub_role_upper:
+                changes.append(f"Sub-Role to '{sub_role_upper}'")
             user.sub_role = sub_role_upper
         else:
+            if user.sub_role is not None:
+                changes.append(f"Sub-Role to 'None'")
             user.sub_role = None
     
     # Update permissions (stored as JSON)
     if payload.permissions is not None:
         if isinstance(payload.permissions, list):
+            if user.permissions != payload.permissions:
+                old_p = set(user.permissions or [])
+                new_p = set(payload.permissions or [])
+                changed_p = old_p.symmetric_difference(new_p)
+                path_labels = {
+                    '/case_manager/dashboard': 'Dashboard',
+                    '/case_manager/cases': 'Cases',
+                    '/case_manager/ai-brief': 'AI Brief Review',
+                    '/case_manager/legal-review': 'Legal Review',
+                    '/case_manager/reports': 'Reports',
+                    '/case_manager/audit-logs': 'Audit Logs',
+                    '/case_manager/settings': 'Settings',
+                }
+                changed_names = [path_labels.get(p, p) for p in changed_p]
+                if changed_names:
+                    changes.append(f"Permissions modified ({', '.join(changed_names)})")
+                else:
+                    changes.append("Permissions modified")
             user.permissions = payload.permissions
         else:
             logger.warning(f"Invalid permissions format: {payload.permissions}")
@@ -402,17 +447,37 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
     
     # Update active status
     if payload.is_active is not None:
+        if user.is_active != bool(payload.is_active):
+            changes.append(f"Status to '{'Active' if payload.is_active else 'Inactive'}'")
         user.is_active = bool(payload.is_active)
 
     if payload.password:
+        changes.append("Password updated")
         user.set_password(payload.password)
         if _column_exists(User._meta.db_table, "plain_password"):
             user.plain_password = payload.password
     
     user.save()
     sync_role_specific_profile(user)
-    logger.info(f"User {user.username} updated successfully by caseManager {request.user.username}")
+    logger.info(f"User {user.username} updated successfully by admin {request.user.username}")
     
+    try:
+        target_name = f"{user.first_name} {user.last_name}".strip() or user.username
+        details_msg = f"Updated user account '{target_name}'"
+        if changes:
+            details_msg += f"\nChanges: {', '.join(changes)}"
+        else:
+            details_msg += f"\n(No fields changed)"
+            
+        ActivityLog.objects.create(
+            user=request.user,
+            action='USER_UPDATED',
+            details=details_msg,
+            ip_address=request.META.get('REMOTE_ADDR', ''),
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to log user update: {log_err}")
+        
     return 200, AdminUserResponseSchema.model_validate(user)
 
 
@@ -460,7 +525,17 @@ def delete_user(request, user_id: int):
                 "code": "USER_DELETE_CONSTRAINT",
             }
 
-        logger.info(f"User {username} deleted by caseManager {request.user.username}")
+        try:
+            ActivityLog.objects.create(
+                user=request.user,
+                action='USER_DELETED',
+                details=f"Deleted user '{username}' ({user.email})",
+                ip_address=request.META.get('REMOTE_ADDR', ''),
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log user deletion: {log_err}")
+
+        logger.info(f"User {username} deleted by admin {request.user.username}")
         return 200, {"message": f"User {username} deleted successfully"}
     except User.DoesNotExist:
         return 404, {"error": "User not found", "code": "USER_NOT_FOUND"}

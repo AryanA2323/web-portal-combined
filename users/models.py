@@ -10,10 +10,10 @@ class CustomUser(AbstractUser):
     class Role(models.TextChoices):
         SUPER_ADMIN = 'SUPER_ADMIN', 'Super Admin'
         CASE_MANAGER = 'CASE_MANAGER', 'Case Manager'
-        VENDOR = 'VENDOR', 'Vendor'
+        VENDOR = 'VENDOR', 'Business Partner'
         CLIENT = 'CLIENT', 'Client'
-        QC = 'QC', 'QC'
-        ADVOCATE = 'ADVOCATE', 'Advocate'
+        QC = 'QC', 'Quality Analyst'
+        ADVOCATE = 'ADVOCATE', 'Legal Partner'
     
     class CaseManagerSubRole(models.TextChoices):
         CASE_HANDLER = 'CASE_HANDLER', 'Case Handler'

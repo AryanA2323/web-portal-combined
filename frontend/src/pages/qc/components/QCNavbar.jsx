@@ -7,11 +7,11 @@ const QCNavbar = () => {
   const { user } = useAuth();
   const location = useLocation();
 
-  let pageTitle = 'QC Portal';
+  let pageTitle = 'Quality Analyst Portal';
   if (location.pathname === '/qc/dashboard') {
-    const name = user?.first_name && user?.last_name 
-      ? `${user.first_name} ${user.last_name}` 
-      : user?.email || 'QC';
+    const name = user?.first_name || user?.last_name 
+      ? `${user?.first_name || ''} ${user?.last_name || ''}`.trim() 
+      : user?.username || user?.email || 'Quality Analyst';
     pageTitle = `Welcome ${name}`;
   } else if (location.pathname === '/qc/reports') {
     pageTitle = 'Reports';

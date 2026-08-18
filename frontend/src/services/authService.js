@@ -156,6 +156,13 @@ const authService = {
   isAuthenticated: () => {
     return !!authStorage.getItem('accessToken');
   },
+
+  // Update stored user data (e.g. after permissions change)
+  updateStoredUser: (userData) => {
+    if (userData) {
+      authStorage.setItem('user', JSON.stringify(userData));
+    }
+  },
 };
 
 export default authService;

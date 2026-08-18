@@ -15,3 +15,4 @@ export { default as ClientsPage } from './ClientsPage';
 
 export { default as CompletedCasesPage } from './CompletedCasesPage';
 export { default as ApprovalsPage } from './ApprovalsPage';
+export { default as SuperAdminLogsPage } from './SuperAdminLogsPage';

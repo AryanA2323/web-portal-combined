@@ -21,6 +21,7 @@ import {
   ClientsPage,
   CompletedCasesPage,
   ApprovalsPage,
+  SuperAdminLogsPage,
 } from './pages/case_manager';
 import {
   DashboardPage as QCDashboardPage,
@@ -95,7 +96,7 @@ function App() {
       <CssBaseline />
       <ToastProvider>
         <AuthProvider>
-          <Router>
+          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -145,6 +146,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['super_admin']}>
                   <ApprovalsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/super-admin/logs"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <SuperAdminLogsPage />
                 </ProtectedRoute>
               }
             />

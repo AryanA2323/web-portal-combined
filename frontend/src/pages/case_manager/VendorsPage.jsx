@@ -289,10 +289,10 @@ const VendorsPage = () => {
           <Box sx={{ mb: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Vendor Directory
+                Business Partner Directory
               </Typography>
               <TextField
-                placeholder="Search vendors..."
+                placeholder="Search business partners..."
                 size="small"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -357,7 +357,7 @@ const VendorsPage = () => {
           pb: 2,
         }}>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            Vendor Profile
+            Business Partner Profile
           </Typography>
           <IconButton onClick={handleCloseModal} size="small">
             <Close />

@@ -123,7 +123,7 @@ const DashboardPage = () => {
     <QCLayout>
       <Box sx={{ height: 82, px: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a' }}>
-          Welcome {user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.email || 'QC'}
+          Welcome {user?.first_name || user?.last_name ? `${user?.first_name || ''} ${user?.last_name || ''}`.trim() : user?.username || user?.email || 'QC'}
         </Typography>
         <QCNotificationBell />
       </Box>

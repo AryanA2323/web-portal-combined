@@ -101,7 +101,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               <View style={styles.brandBadge}>
                 <MaterialCommunityIcons name="shield-check-outline" size={24} color="#0F5FA8" />
               </View>
-              <Text style={styles.appTitle}>Vendor Portal</Text>
+              <Text style={styles.appTitle}>Business Partner Portal</Text>
               <Text style={styles.subtitle}>Simple, fast field updates for on-site investigation work.</Text>
               <View style={styles.heroPoints}>
                 <View style={styles.heroPoint}>
@@ -124,7 +124,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               )}
 
               <Text style={styles.formTitle}>Sign in to continue</Text>
-              <Text style={styles.formHint}>Use your assigned vendor credentials.</Text>
+              <Text style={styles.formHint}>Use your assigned credentials.</Text>
 
               <Controller
                 control={control}

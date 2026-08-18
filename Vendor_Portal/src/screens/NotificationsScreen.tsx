@@ -252,7 +252,7 @@ export default function NotificationsScreen() {
             <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
           </TouchableOpacity>
           <View>
-            <Text style={styles.kicker}>Vendor portal</Text>
+            <Text style={styles.kicker}>Business Partner Portal</Text>
             <Text style={styles.title}>Alerts</Text>
           </View>
         </View>

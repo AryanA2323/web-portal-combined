@@ -390,12 +390,12 @@ const CreateCaseDialog = ({ open, onClose, onSuccess }) => {
 
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
-                <InputLabel>Assign Vendor</InputLabel>
+                <InputLabel>Assign Business Partner</InputLabel>
                 <Select
                   name="vendor_id"
                   value={formData.vendor_id}
                   onChange={handleChange}
-                  label="Assign Vendor"
+                  label="Assign Business Partner"
                 >
                   <MenuItem value="">
                     <em>Not Assigned</em>

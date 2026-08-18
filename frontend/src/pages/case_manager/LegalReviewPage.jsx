@@ -594,7 +594,7 @@ const LegalReviewPage = () => {
                     Client
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
-                    Assigned QC
+                    Assigned Quality Analyst
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>
                     Created
@@ -729,7 +729,7 @@ const LegalReviewPage = () => {
                                 },
                               }}
                             >
-                              {row.assigned_qc_name ? 'Reassign' : 'Assign QC'}
+                              {row.assigned_qc_name ? 'Reassign' : 'Assign Quality Analyst'}
                             </Button>
                           )}
                         </Box>
@@ -783,13 +783,13 @@ const LegalReviewPage = () => {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 700, fontSize: '18px', pb: 1 }}>
-          {qcModalMode === 'reassign' ? 'Reassign QC' : 'Assign QC'}
+          {qcModalMode === 'reassign' ? 'Reassign Quality Analyst' : 'Assign Quality Analyst'}
         </DialogTitle>
         <DialogContent>
           <Typography sx={{ fontSize: '13px', color: '#666', mb: 2 }}>
             {qcModalMode === 'reassign'
-              ? 'Select a qc to reassign this updated report for legal review.'
-              : 'Select a qc to assign for legal review of this report.'}
+              ? 'Select a quality analyst to reassign this updated report for legal review.'
+              : 'Select a quality analyst to assign for legal review of this report.'}
           </Typography>
           {qcsLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
@@ -805,7 +805,7 @@ const LegalReviewPage = () => {
                 displayEmpty
                 sx={{ borderRadius: '8px' }}
               >
-                <MenuItem value="" disabled>Select a qc</MenuItem>
+                <MenuItem value="" disabled>Select a quality analyst</MenuItem>
                 {qcs.map((qc) => (
                   <MenuItem key={qc.id} value={qc.id}>
                     {qc.full_name || qc.email}
@@ -816,7 +816,7 @@ const LegalReviewPage = () => {
           )}
           {!qcsLoading && !qcsError && qcs.length === 0 && (
             <Typography sx={{ fontSize: '13px', color: '#ff6b6b', mt: 1 }}>
-              No qcs available. Please add qcs to the system first.
+              No quality analysts available. Please add quality analysts to the system first.
             </Typography>
           )}
         </DialogContent>
@@ -1103,7 +1103,7 @@ const LegalReviewPage = () => {
                 },
               }}
             >
-              Reassign QC
+              Reassign Quality Analyst
             </Button>
           )}
           {selectedReport?.status === 'REJECTED' && (
@@ -1137,7 +1137,7 @@ const LegalReviewPage = () => {
                 '&:hover': { backgroundColor: '#5568d3' },
               }}
             >
-              {selectedReport.assigned_qc_name ? 'Reassign QC' : 'Assign QC'}
+              {selectedReport.assigned_qc_name ? 'Reassign Quality Analyst' : 'Assign Quality Analyst'}
             </Button>
           )}
         </DialogActions>

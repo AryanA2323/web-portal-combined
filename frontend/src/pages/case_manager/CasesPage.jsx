@@ -1353,10 +1353,10 @@ const CasesPage = ({ isCompletedView = false }) => {
                                   const renderTable = (items, mode) => {
                                     if (items.length === 0) return null;
                                     const headers = mode === 'chargesheet'
-                                      ? ['Sub ID', 'Type', 'Court Name', 'Check Status', 'Advocate Status', 'Assigned Advocate', 'File RTI']
+                                      ? ['Sub ID', 'Type', 'Court Name', 'Check Status', 'Legal Partner Status', 'Assigned Legal Partner', 'File RTI']
                                       : mode === 'rto'
-                                        ? ['Sub ID', 'Type', 'RTO Name', 'Location', 'Check Status', 'Assigned Vendor', 'Formats']
-                                        : ['Sub ID', 'Type', 'Name / Subject', 'Contact', 'Location', 'Check Status', 'Negative Check Status', 'Assigned Vendor', 'Review'];
+                                        ? ['Sub ID', 'Type', 'RTO Name', 'Location', 'Check Status', 'Assigned Business Partner', 'Formats']
+                                        : ['Sub ID', 'Type', 'Name / Subject', 'Contact', 'Location', 'Check Status', 'Negative Check Status', 'Assigned Business Partner', 'Review'];
 
                                     return (
                                       <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #d0d5f5', borderRadius: '6px', mb: 2 }}>
@@ -1540,7 +1540,7 @@ const CasesPage = ({ isCompletedView = false }) => {
 
                                                   {mode === 'other' && (
                                                     <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                                                      <Tooltip title={!isVendorAssigned ? "Assign vendor to enable this button" : ""} arrow placement="top">
+                                                      <Tooltip title={!isVendorAssigned ? "Assign business partner to enable this button" : ""} arrow placement="top">
                                                         <Box component="span" sx={{ display: 'inline-block', cursor: !isVendorAssigned ? 'not-allowed' : 'default' }}>
                                                           {sub.check_status === 'Verified' ? (
                                                             <Button size="small" variant="text" disabled={!isVendorAssigned} onClick={() => openReviewModal(row.id, sub.type)} sx={{ textTransform: 'none', p: 0, minWidth: 'auto', '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'not-allowed' } }}>
@@ -1654,12 +1654,12 @@ const CasesPage = ({ isCompletedView = false }) => {
         >
           <DialogTitle sx={{ fontWeight: 700, fontSize: '18px', pb: 1 }}>
             {selectedVendorId
-              ? (vendorModalTarget?.checkType === 'Chargesheet' ? 'Change Advocate' : 'Change Vendor')
-              : (vendorModalTarget?.checkType === 'Chargesheet' ? 'Assign Advocate' : 'Assign Vendor')}
+              ? (vendorModalTarget?.checkType === 'Chargesheet' ? 'Change Legal Partner' : 'Change Business Partner')
+              : (vendorModalTarget?.checkType === 'Chargesheet' ? 'Assign Legal Partner' : 'Assign Business Partner')}
           </DialogTitle>
           <DialogContent>
             <Typography sx={{ fontSize: '13px', color: '#666', mb: 2 }}>
-              Select {vendorModalTarget?.checkType === 'Chargesheet' ? 'an advocate' : 'a vendor'} for this check, or clear the assignment to remove it from the current {vendorModalTarget?.checkType === 'Chargesheet' ? 'advocate' : 'vendor'}.
+              Select {vendorModalTarget?.checkType === 'Chargesheet' ? 'a legal partner' : 'a business partner'} for this check, or clear the assignment to remove it from the current {vendorModalTarget?.checkType === 'Chargesheet' ? 'legal partner' : 'business partner'}.
             </Typography>
             <FormControl fullWidth size="small">
               <Select
@@ -2496,7 +2496,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                       {currentCheckObj.check_type_label}
                                     </Typography>
                                     <Typography variant="caption" sx={{ color: '#64748b' }}>
-                                      Assigned Vendor: <strong>{checkData.assigned_vendor_name || 'Unassigned'}</strong>
+                                      Assigned Business Partner: <strong>{checkData.assigned_vendor_name || 'Unassigned'}</strong>
                                     </Typography>
                                   </Box>
                                   <Chip

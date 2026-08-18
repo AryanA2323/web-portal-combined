@@ -116,7 +116,7 @@ export default function ProfileScreen() {
         <View style={styles.headerMetaRow}>
           <View style={styles.metaChip}>
             <MaterialCommunityIcons name="briefcase-outline" size={14} color="#FFFFFF" />
-            <Text style={styles.metaChipText}>{user.company || 'Vendor'}</Text>
+            <Text style={styles.metaChipText}>{user.company || 'Business Partner'}</Text>
           </View>
           <View style={styles.metaChip}>
             <MaterialCommunityIcons name="check-circle-outline" size={14} color="#FFFFFF" />
@@ -173,7 +173,7 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.accountRow}>
             <Text style={styles.accountLabel}>Account Type</Text>
-            <Text style={styles.accountValue}>Vendor</Text>
+            <Text style={styles.accountValue}>Business Partner</Text>
           </View>
           <View style={styles.accountRow}>
             <Text style={styles.accountLabel}>Status</Text>

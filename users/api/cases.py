@@ -2979,10 +2979,13 @@ def get_audit_logs(
                         SELECT
                             c.case_number,
                             t.{event_time_column} AS event_time,
-                            uv.company_name
+                            uv.company_name,
+                            COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
                         FROM {table_name} t
                         JOIN cases c ON c.id = t.case_id
                         JOIN users_vendor uv ON uv.id = t.assigned_vendor_id
+                        LEFT JOIN insurance_case ic ON ic.case_number = c.case_number
+                        LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
                         WHERE t.assigned_vendor_id IS NOT NULL
                           AND t.{event_time_column} IS NOT NULL
                         ORDER BY t.{event_time_column} DESC
@@ -2991,11 +2994,11 @@ def get_audit_logs(
                         [safe_limit],
                     )
 
-                    for case_number, event_time, vendor_name in cursor.fetchall():
+                    for case_number, event_time, vendor_name, cm_name in cursor.fetchall():
                         _add_event(
                             event_time,
                             "VENDOR_ASSIGNED",
-                            "Admin/System",
+                            cm_name,
                             f"Vendor '{vendor_name}' assigned to {check_label}",
                             case_number,
                             "Vendor Assignment",
@@ -3009,21 +3012,23 @@ def get_audit_logs(
                 SELECT
                     ic.case_number,
                     r.assigned_at,
-                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name
+                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name,
+                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
                 FROM reports r
                 JOIN insurance_case ic ON ic.id = r.case_id
                 LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
+                LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
                 WHERE r.assigned_at IS NOT NULL
                 ORDER BY r.assigned_at DESC
                 LIMIT %s
                 """,
                 [safe_limit],
             )
-            for case_number, assigned_at, qc_name in cursor.fetchall():
+            for case_number, assigned_at, qc_name, cm_name in cursor.fetchall():
                 _add_event(
                     assigned_at,
                     "QC_ASSIGNED",
-                    "Admin/System",
+                    cm_name,
                     f"Report assigned to qc '{qc_name}'",
                     case_number,
                     "Legal Review",
@@ -3402,6 +3407,18 @@ def create_client(request: HttpRequest, payload: CreateClientSchema):
         hospital_rate=payload.hospital_rate,
         is_active=payload.is_active,
     )
+
+    try:
+        from users.models import ActivityLog
+        ActivityLog.objects.create(
+            user=request.user,
+            action='CLIENT_CREATED',
+            details=f"Created client '{client.client_name}' ({client.client_code})",
+            ip_address=request.META.get('REMOTE_ADDR', ''),
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to log client creation: {log_err}")
+
     return {"success": True, "message": "Client created successfully", "id": client.id}
 
 
@@ -3453,6 +3470,17 @@ def update_client(request: HttpRequest, client_id: int, payload: CreateClientSch
     client.hospital_rate = payload.hospital_rate
     client.is_active = payload.is_active
     client.save()
+
+    try:
+        from users.models import ActivityLog
+        ActivityLog.objects.create(
+            user=request.user,
+            action='CLIENT_UPDATED',
+            details=f"Updated client '{client.client_name}' ({client.client_code})",
+            ip_address=request.META.get('REMOTE_ADDR', ''),
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to log client update: {log_err}")
 
     return {"success": True, "message": "Client updated successfully"}
 
@@ -4328,7 +4356,7 @@ class TatChangeRequestCreateSchema(Schema):
 class TatChangeRequestReviewSchema(Schema):
     action: str  # 'APPROVE' or 'REJECT'
 
-@router.post('/{case_id}/approval/', tags=["TAT Change"], summary="Request TAT Change")
+@router.post('/cases/{case_id}/approval/', tags=["TAT Change"], summary="Request TAT Change")
 def create_tat_change_request(request, case_id: str, data: TatChangeRequestCreateSchema):
     from users.models import TatChangeRequest, CustomUser
     from ninja.errors import HttpError
@@ -4362,7 +4390,7 @@ def create_tat_change_request(request, case_id: str, data: TatChangeRequestCreat
 
     return {"success": True, "message": "TAT change request submitted successfully", "request_id": tat_req.id}
 
-@router.get('/{case_id}/approval/', tags=["TAT Change"], summary="Get Latest TAT Change Request")
+@router.get('/cases/{case_id}/approval/', tags=["TAT Change"], summary="Get Latest TAT Change Request")
 def get_latest_tat_change_request(request, case_id: str):
     from users.models import TatChangeRequest
     
@@ -4459,6 +4487,18 @@ def review_tat_change_request(request, request_id: int, data: TatChangeRequestRe
             cursor.execute("UPDATE cases SET case_due_date = %s WHERE id = %s", [new_due_date, tat_req.case_id])
 
     action_past = "APPROVED" if action == "APPROVE" else "REJECTED"
+
+    try:
+        from users.models import ActivityLog
+        ActivityLog.objects.create(
+            user=request.user,
+            action=f"TAT_{action_past}",
+            details=f"TAT change request for case #{tat_req.case_id} was {action_past.lower()} by {request.user.email}",
+            ip_address=request.META.get('REMOTE_ADDR', ''),
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to log TAT request review: {log_err}")
+
     return {"success": True, "message": f"TAT change request {action_past.lower()} successfully"}
 
 

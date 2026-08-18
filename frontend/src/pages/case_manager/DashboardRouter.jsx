@@ -10,7 +10,7 @@ const DashboardRouter = () => {
   const { user } = useAuth();
 
   // Check if user is super admin
-  const isSuperAdmin = user?.sub_role?.toUpperCase() === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.sub_role?.toUpperCase() === 'SUPER_ADMIN' || user?.role?.toUpperCase() === 'SUPER_ADMIN';
 
   // Render appropriate dashboard
   if (isSuperAdmin) {

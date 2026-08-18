@@ -531,7 +531,7 @@ const AIBriefPage = () => {
     const metadata = [
       { label: 'Case Number', value: caseNum },
       { label: 'Claim Number', value: activeReportCase.claim_number || 'N/A' },
-      { label: 'Vendor', value: activeReportCase.vendorName || 'Unassigned' },
+      { label: 'Business Partner', value: activeReportCase.vendorName || 'Unassigned' },
       { label: 'Generated', value: new Date(activeReport.generatedAt).toLocaleString() },
       { label: 'Statement Source', value: activeReport.sourceFileName || 'Stored Vendor Statements' },
       { label: 'Vendor Statements', value: (activeReport.vendorStatements || []).length },
@@ -547,7 +547,7 @@ const AIBriefPage = () => {
       }
 
       evidenceItems.push({
-        title: `Vendor Evidence ${index + 1}`,
+        title: `Business Partner Evidence ${index + 1}`,
         caption: getEvidenceWatermarkLines(photo).join(' | '),
         imageDataUrl,
       });
@@ -667,7 +667,7 @@ const AIBriefPage = () => {
       doc.setDrawColor(200, 200, 200);
       doc.line(margin, y, pageWidth - margin, y);
       y += 8;
-      addText('VENDOR VISIT PHOTOS', 13, true, [51, 65, 85]);
+      addText('BUSINESS PARTNER VISIT PHOTOS', 13, true, [51, 65, 85]);
       y += 6;
 
       for (const photo of evidencePhotos) {
@@ -684,10 +684,10 @@ const AIBriefPage = () => {
       y = 20;
 
       if (vendorDocs.length > 0) {
-        addText('VENDOR DOCUMENTS', 13, true, [51, 65, 85]);
+        addText('BUSINESS PARTNER DOCUMENTS', 13, true, [51, 65, 85]);
         y += 6;
         for (let i = 0; i < vendorDocs.length; i++) {
-          addText(`Vendor Document ${i + 1}: ${vendorDocs[i].filename || 'Document'}`, 11, false);
+          addText(`Business Partner Document ${i + 1}: ${vendorDocs[i].filename || 'Document'}`, 11, false);
           y += 1;
         }
         y += 8;
@@ -730,7 +730,7 @@ const AIBriefPage = () => {
 
     if (vendorDocs.length > 0) {
       for (let i = 0; i < vendorDocs.length; i++) {
-        await drawDocumentHeadingAndQueue(vendorDocs[i], `Vendor Document ${i + 1}`);
+        await drawDocumentHeadingAndQueue(vendorDocs[i], `Business Partner Document ${i + 1}`);
       }
     }
 
@@ -1145,7 +1145,7 @@ const AIBriefPage = () => {
                   '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
                 }}
               >
-                <MenuItem value="all">All Vendors</MenuItem>
+                <MenuItem value="all">All Business Partners</MenuItem>
                 {vendors.map((vendor) => (
                   <MenuItem key={vendor.id} value={String(vendor.id)}>
                     {vendor.company_name}
@@ -1214,8 +1214,8 @@ const AIBriefPage = () => {
               <TableRow sx={{ backgroundColor: '#f8f9fa' }}>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Case ID</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Summary</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Assigned Vendor</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Vendor Status</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Assigned Business Partner</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Business Partner Status</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Generated</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>IR Status</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Report Status</TableCell>
@@ -1394,11 +1394,11 @@ const AIBriefPage = () => {
         <DialogContent dividers>
           <Typography sx={{ fontSize: '14px', color: '#475569', mb: 2 }}>
             {selectedCase
-              ? `Generate AI brief for case ${selectedCase.case_number || selectedCase.id} using statements already stored by the vendor across checks.`
+              ? `Generate AI brief for case ${selectedCase.case_number || selectedCase.id} using statements already stored by the business partner across checks.`
               : 'Select a case first.'}
           </Typography>
           <Typography sx={{ fontSize: '13px', color: '#64748b' }}>
-            The report will include all available vendor statements and evidence already saved in the database.
+            The report will include all available statements and evidence already saved in the database.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
@@ -1476,7 +1476,7 @@ const AIBriefPage = () => {
           {activeReport && activeReportCase ? (
             <Box>
               <Typography sx={{ fontSize: '13px', color: '#64748b', mb: 2 }}>
-                Source: {activeReport.sourceFileName || 'Stored Vendor Statements'} | Generated {formatRelativeDate(activeReport.generatedAt)}
+                Source: {activeReport.sourceFileName || 'Stored Statements'} | Generated {formatRelativeDate(activeReport.generatedAt)}
               </Typography>
 
               {activeReport.vendorStatements && activeReport.vendorStatements.length > 0 && (
@@ -1490,7 +1490,7 @@ const AIBriefPage = () => {
                   }}
                 >
                   <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 1 }}>
-                    Vendor Statements ({activeReport.vendorStatements.length})
+                    Statements ({activeReport.vendorStatements.length})
                   </Typography>
                   {activeReport.vendorStatements.map((item, index) => (
                     <Box
@@ -1558,7 +1558,7 @@ const AIBriefPage = () => {
               {!editMode && activeReport.evidencePhotos && activeReport.evidencePhotos.length > 0 && (
                 <Box sx={{ mt: 3 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
-                    Vendor Evidence
+                    Business Partner Evidence
                   </Typography>
                   <Box
                     sx={{
@@ -1586,7 +1586,7 @@ const AIBriefPage = () => {
                           <Box sx={{ position: 'relative', backgroundColor: '#0f172a' }}>
                             <img
                               src={resolveEvidencePhotoUrl(photoUrl)}
-                              alt={`Vendor Evidence ${idx + 1}`}
+                              alt={`Business Partner Evidence ${idx + 1}`}
                               style={{
                                 display: 'block',
                                 width: '100%',
@@ -1634,7 +1634,7 @@ const AIBriefPage = () => {
               {!editMode && activeReport.vendorDocuments && activeReport.vendorDocuments.length > 0 && (
                 <Box sx={{ mt: 3 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
-                    Vendor Documents
+                    Business Partner Documents
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     {activeReport.vendorDocuments.map((doc, idx) => (
@@ -1648,7 +1648,7 @@ const AIBriefPage = () => {
                         startIcon={<InsertDriveFile fontSize="small" />}
                         sx={{ justifyContent: 'flex-start', textTransform: 'none', borderRadius: '6px', maxWidth: '400px' }}
                       >
-                        {doc.filename || `Vendor Document ${idx + 1}`}
+                        {doc.filename || `Business Partner Document ${idx + 1}`}
                       </Button>
                     ))}
                   </Box>

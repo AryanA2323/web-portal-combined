@@ -215,13 +215,14 @@ const LoginPage = () => {
               variant={isMobile ? 'h5' : 'h4'}
               component="h1"
               sx={{
+                fontFamily: "'Montserrat', sans-serif",
                 fontWeight: 700,
                 color: '#1a1a1a',
                 mb: 1.5,
                 letterSpacing: '-0.5px',
               }}
             >
-              Welcome Back
+              Welcome
             </Typography>
             <Typography
               variant="body1"
@@ -312,7 +313,7 @@ const LoginPage = () => {
               fontWeight: 400,
             }}
           >
-            © 2026 Shovel Screen. All rights reserved.
+            © 2026 Shovel Screening Solutions.
           </Typography>
         </Paper>
       </Container>

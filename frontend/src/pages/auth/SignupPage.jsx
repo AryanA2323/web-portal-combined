@@ -183,7 +183,7 @@ const SignupPage = () => {
                   )}
                   {selectedRole === 'vendor' && (
                     <>
-                      <strong>🔧 Vendor Account</strong>
+                      <strong>🔧 Business Partner Account</strong>
                       <br />
                       Receive and resolve assigned incidents from clients.
                     </>

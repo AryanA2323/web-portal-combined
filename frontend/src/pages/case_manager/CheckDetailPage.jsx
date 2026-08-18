@@ -401,7 +401,7 @@ const EditFormGrid = ({ fields, getVal, onChange }) => {
 
         if (fd.options) {
           return (
-            <Grid item xs={12} sm={6} key={fd.name}>
+            <Grid size={{ xs: 12, sm: 6 }} key={fd.name}>
               <FormControl fullWidth size="small" sx={{ mb: 1 }}>
                 <InputLabel sx={{ fontSize: '13px' }}>{fd.label}</InputLabel>
                 <Select value={val} label={fd.label} onChange={(e) => onChange(fd.name, e.target.value)} sx={{ fontSize: '13px', borderRadius: '8px' }}>
@@ -414,7 +414,7 @@ const EditFormGrid = ({ fields, getVal, onChange }) => {
 
         if (fd.type === 'boolean') {
           return (
-            <Grid item xs={12} sm={6} key={fd.name}>
+            <Grid size={{ xs: 12, sm: 6 }} key={fd.name}>
               <FormControl fullWidth size="small" sx={{ mb: 1 }}>
                 <InputLabel sx={{ fontSize: '13px' }}>{fd.label}</InputLabel>
                 <Select
@@ -432,7 +432,7 @@ const EditFormGrid = ({ fields, getVal, onChange }) => {
         }
 
         return (
-          <Grid item xs={12} sm={isLong ? 12 : 6} key={fd.name}>
+          <Grid size={{ xs: 12, sm: isLong ? 12 : 6 }} key={fd.name}>
             <TextField
               fullWidth
               size="small"
@@ -456,8 +456,8 @@ const LoadingSkeleton = () => (
   <Box>
     <Skeleton variant="rounded" height={80} sx={{ mb: 2.5, borderRadius: '12px' }} />
     <Grid container spacing={3}>
-      <Grid item xs={12} md={6}><Skeleton variant="rounded" height={460} sx={{ borderRadius: '14px' }} /></Grid>
-      <Grid item xs={12} md={6}><Skeleton variant="rounded" height={460} sx={{ borderRadius: '14px' }} /></Grid>
+      <Grid size={{ xs: 12, md: 6 }}><Skeleton variant="rounded" height={460} sx={{ borderRadius: '14px' }} /></Grid>
+      <Grid size={{ xs: 12, md: 6 }}><Skeleton variant="rounded" height={460} sx={{ borderRadius: '14px' }} /></Grid>
     </Grid>
   </Box>
 );
@@ -765,7 +765,7 @@ const CheckDetailPage = () => {
               <Grid container spacing={3} alignItems="stretch">
 
                 {/* ── LEFT: Case Information (Tabular) ────────────────────── */}
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Paper elevation={0} sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', height: '100%', bgcolor: '#fff', display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ px: 2.5, pt: 2, pb: 1.5, borderBottom: '1px solid #edf2f7', display: 'flex', alignItems: 'center', gap: 1.2, bgcolor: '#f8fafc' }}>
                       <Box sx={{ width: 4, height: 24, borderRadius: '2px', background: 'linear-gradient(135deg,#667eea,#764ba2)' }} />
@@ -789,7 +789,7 @@ const CheckDetailPage = () => {
                           Change Management - TAT Days
                         </Typography>
                         <Grid container spacing={2} alignItems="center">
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                               fullWidth
                               size="small"
@@ -799,7 +799,7 @@ const CheckDetailPage = () => {
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f5f5f5' }, '& .MuiInputBase-input': { fontSize: '13px' } }}
                             />
                           </Grid>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <Button 
                               variant="outlined" 
                               size="small" 
@@ -828,7 +828,7 @@ const CheckDetailPage = () => {
                 </Grid>
 
                 {/* ── RIGHT: Check Details (Tabular) ───────────────────────── */}
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Paper elevation={0} sx={{ borderRadius: '14px', border: `1px solid ${meta.color}35`, overflow: 'hidden', height: '100%', bgcolor: '#fff', display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ px: 2.5, pt: 2, pb: 1.5, borderBottom: '1px solid #edf2f7', display: 'flex', alignItems: 'center', gap: 1.2, bgcolor: meta.bg }}>
                       <Avatar sx={{ width: 28, height: 28, background: meta.color, color: '#fff', fontSize: '15px' }}>
@@ -864,7 +864,7 @@ const CheckDetailPage = () => {
                       {[{ key: latKey, label: 'Latitude' }, { key: lngKey, label: 'Longitude' }].map((c) => {
                         const raw = checkData[c.key];
                         return (
-                          <Grid item xs={12} sm={5} key={c.key}>
+                          <Grid size={{ xs: 12, sm: 5 }} key={c.key}>
                             <Box sx={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', px: 2, py: 1.2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                               <PinDrop sx={{ fontSize: 18, color: '#06b6d4', flexShrink: 0 }} />
                               <Box>
@@ -878,7 +878,7 @@ const CheckDetailPage = () => {
                         );
                       })}
                       {checkData[latKey] != null && checkData[lngKey] != null && (
-                        <Grid item xs={12} sm={2}>
+                        <Grid size={{ xs: 12, sm: 2 }}>
                           <Button
                             fullWidth
                             size="medium"
@@ -987,7 +987,7 @@ const CheckDetailPage = () => {
                           const rawPhotoUrl = photo.url || photo.preview_url || photo.photo_url;
                           const photoUrl = resolveMediaUrl(rawPhotoUrl);
                           return (
-                            <Grid item xs={12} sm={6} md={3} key={`photo-${idx}`}>
+                            <Grid size={{ xs: 12, sm: 6, md: 3 }} key={`photo-${idx}`}>
                               <Card elevation={0} sx={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', position: 'relative', '&:hover .overlay': { opacity: 1 } }}>
                                 <Box sx={{ position: 'relative', height: 160, bgcolor: '#0f172a' }}>
                                   <CardMedia component="img" height="160" image={photoUrl} alt={photo.filename || `Evidence ${idx + 1}`} sx={{ objectFit: 'cover' }} />

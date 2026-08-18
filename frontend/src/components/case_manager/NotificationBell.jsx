@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   IconButton,
   Badge,
@@ -15,11 +15,16 @@ import {
 import { Notifications } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 const READ_STORAGE_KEY = 'read_notifications_ids';
 
 const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.sub_role?.toUpperCase() === 'SUPER_ADMIN' || user?.role?.toUpperCase() === 'SUPER_ADMIN';
+
   const [anchorEl, setAnchorEl] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +54,8 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/audit-logs', { params: { limit: 15 } });
+      const endpoint = isSuperAdmin ? '/super-admin/notifications' : '/audit-logs';
+      const response = await api.get(endpoint, { params: { limit: 25 } });
       const rawData = response.data || [];
 
       const stored = localStorage.getItem(READ_STORAGE_KEY);
@@ -62,8 +68,19 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
           description: item.description || item.event_type,
           actor: item.actor || 'System',
           event_time: item.event_time,
+          event_type: item.event_type,
+          target_user_email: item.target_user_email,
+          target_user_id: item.target_user_id,
+          case_id: item.case_id,
           is_read: currentReadIds.includes(id),
         };
+      });
+
+      // Guarantee latest logs are on top (descending timestamp sort)
+      formatted.sort((a, b) => {
+        const timeA = a.event_time ? new Date(a.event_time).getTime() : 0;
+        const timeB = b.event_time ? new Date(b.event_time).getTime() : 0;
+        return timeB - timeA;
       });
 
       setNotifications(formatted);
@@ -74,6 +91,9 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
       setLoading(false);
     }
   };
+
+  // Auto-refresh notifications every 30 seconds and on tab focus
+  useAutoRefresh(fetchNotifications, 30000);
 
   const handleNotificationsClick = (event) => {
     setAnchorEl(event.currentTarget);
@@ -102,6 +122,91 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: !n.is_read } : n))
     );
+  };
+
+  const handleNotificationItemClick = (item) => {
+    if (!item.is_read) {
+      handleToggleRead(item.id);
+    }
+    handleClose();
+
+    const evType = (item.event_type || '').toUpperCase();
+    const desc = item.description || '';
+
+    // 1. User Created / Modified / Deleted notifications -> Navigate to Users page and open modal!
+    if (
+      evType.startsWith('USER_') ||
+      desc.toLowerCase().includes('user') ||
+      item.target_user_email
+    ) {
+      let userQuery = item.target_user_email;
+      if (desc.includes("'")) {
+        const match = desc.match(/'([^']+)'/);
+        if (match) {
+          const quotedName = match[1];
+          if (!userQuery || userQuery === item.actor || (item.actor && userQuery.includes(item.actor))) {
+            userQuery = quotedName;
+          }
+        }
+      }
+      if (!userQuery) {
+        userQuery = item.target_user_email || item.actor || '';
+      }
+      const isUserAction = evType.startsWith('USER_') || desc.toLowerCase().includes('user') || Boolean(item.target_user_email);
+
+      navigate('/case_manager/users', {
+        state: {
+          openUserEmail: userQuery,
+          highlightPermissions: isUserAction,
+          permissionDesc: isUserAction ? desc : undefined,
+        },
+      });
+      return;
+    }
+
+    // 2. Approvals / Rejections (TAT / Cases / Change Management)
+    if (
+      evType.startsWith('TAT_') ||
+      evType.startsWith('CASE_DELETION') ||
+      evType.includes('APPROVAL') ||
+      evType.includes('REJECT') ||
+      desc.toLowerCase().includes('tat') ||
+      item.case_id
+    ) {
+      if (isSuperAdmin && (evType.startsWith('TAT_') || evType.startsWith('CASE_DELETION') || desc.toLowerCase().includes('tat'))) {
+        const isDel = evType.startsWith('CASE_DELETION');
+        const match = item.id ? item.id.toString().match(/-(\d+)$/) : null;
+        const reqId = match ? match[1] : null;
+
+        navigate('/super-admin/approvals', {
+          state: {
+            tab: isDel ? 1 : 0,
+            requestId: reqId
+          }
+        });
+        return;
+      }
+      
+      let caseSearch = item.case_id || '';
+      if (!caseSearch && desc.includes('#')) {
+        const match = desc.match(/#(\d+)/);
+        if (match) caseSearch = match[1];
+      }
+      navigate('/case_manager/cases', {
+        state: {
+          search: String(caseSearch),
+          openCaseId: caseSearch,
+        },
+      });
+      return;
+    }
+
+    // Fallback
+    if (isSuperAdmin) {
+      navigate('/case_manager/users');
+    } else {
+      navigate('/case_manager/cases');
+    }
   };
 
   const formatActivityTime = (value) => {
@@ -155,7 +260,7 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
         <Box sx={{ px: 2.25, py: 1.75, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
             <Typography sx={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>
-              Notifications
+              {isSuperAdmin ? 'Super Admin Activity' : 'Notifications'}
             </Typography>
             {unreadCount > 0 && (
               <Chip
@@ -214,6 +319,7 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
               <ListItem
                 key={item.id}
                 alignItems="flex-start"
+                onClick={() => handleNotificationItemClick(item)}
                 sx={{
                   px: 2.25,
                   py: 1.5,
@@ -221,9 +327,13 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
                   alignItems: 'center',
                   justify: 'space-between',
                   gap: 1.5,
+                  cursor: 'pointer',
                   backgroundColor: item.is_read ? 'transparent' : '#f0f4ff',
                   borderBottom: index < filteredNotifications.length - 1 ? '1px solid #f1f5f9' : 'none',
                   transition: 'background-color 0.2s',
+                  '&:hover': {
+                    backgroundColor: item.is_read ? '#f8fafc' : '#e0e7ff',
+                  },
                 }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -233,6 +343,7 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
                       fontWeight: item.is_read ? 500 : 700,
                       color: item.is_read ? '#334155' : '#0f172a',
                       lineHeight: 1.3,
+                      whiteSpace: 'pre-line',
                     }}
                   >
                     {item.description}
@@ -241,12 +352,15 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
                     component="span"
                     sx={{ display: 'block', mt: 0.5, fontSize: 12, color: '#64748b' }}
                   >
-                    {item.actor} • {formatActivityTime(item.event_time)}
+                    By {item.actor} • {formatActivityTime(item.event_time)}
                   </Typography>
                 </Box>
                 <Button
                   size="small"
-                  onClick={() => handleToggleRead(item.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleRead(item.id);
+                  }}
                   sx={{
                     fontSize: 11.5,
                     textTransform: 'none',
@@ -267,7 +381,7 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
 
         <Divider />
 
-        {/* Footer with Read/Unread Filter on left and View Audit Logs on right */}
+        {/* Footer with Read/Unread Filter on left and View Action on right */}
         <Box sx={{ px: 2, py: 1.25, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
             <Chip
@@ -302,11 +416,15 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
             size="small"
             onClick={() => {
               handleClose();
-              navigate('/case_manager/audit-logs');
+              if (isSuperAdmin) {
+                navigate('/super-admin/approvals');
+              } else {
+                navigate('/case_manager/audit-logs');
+              }
             }}
             sx={{ textTransform: 'none', fontWeight: 700 }}
           >
-            View Audit Logs
+            {isSuperAdmin ? 'View Approvals' : 'View Audit Logs'}
           </Button>
         </Box>
       </Popover>

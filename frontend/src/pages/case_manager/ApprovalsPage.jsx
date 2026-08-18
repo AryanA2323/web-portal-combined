@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -25,13 +25,16 @@ import {
   Close,
   AccessTime,
 } from '@mui/icons-material';
+import { useLocation } from 'react-router-dom';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
 import AlertMessage from '../../components/common/AlertMessage';
 import { NotificationBell } from '../../components/case_manager';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 const ApprovalsPage = () => {
-  const [activeTab, setActiveTab] = useState(0);
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(location.state?.tab ?? 0);
   const [requests, setRequests] = useState([]);
   const [deletionRequests, setDeletionRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +44,7 @@ const ApprovalsPage = () => {
 
   const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedReq, setSelectedReq] = useState(null);
+  const hasHandledNavState = useRef(false);
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -62,12 +66,36 @@ const ApprovalsPage = () => {
     fetchRequests();
   }, []);
 
+  // Auto-refresh approvals every 30 seconds and on tab focus
+  useAutoRefresh(fetchRequests, 30000);
+
+  useEffect(() => {
+    if (hasHandledNavState.current) return;
+    if (location.state?.tab !== undefined) {
+      setActiveTab(location.state.tab);
+    }
+    if (location.state?.requestId) {
+      const targetId = location.state.requestId;
+      const isDel = (location.state.tab === 1);
+      const reqList = isDel ? deletionRequests : requests;
+      if (reqList && reqList.length > 0) {
+        const found = reqList.find((r) => String(r.id) === String(targetId));
+        if (found) {
+          setSelectedReq(found);
+          setReviewOpen(true);
+        }
+        hasHandledNavState.current = true;
+        window.history.replaceState({}, '');
+      }
+    }
+  }, [location.state, requests, deletionRequests]);
+
   const handleReviewAction = async (action) => {
     if (!selectedReq) return;
     setActionLoading(true);
     try {
       if (activeTab === 0) {
-        await api.post(`/super-admin/approvals/${selectedReq.id}/review`, { action });
+        await api.post(`/super-admin/tat-change-requests/${selectedReq.id}/review`, { action });
       } else {
         await api.post(`/super-admin/deletion-requests/${selectedReq.id}/review`, { action });
       }

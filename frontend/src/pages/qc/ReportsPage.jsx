@@ -474,7 +474,7 @@ const ReportsPage = () => {
                 {selectedReport.evidence_photos && selectedReport.evidence_photos.length > 0 && (
                   <Box sx={{ mt: 3 }}>
                     <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
-                      Vendor Evidence
+                      Business Partner Evidence
                     </Typography>
                     <Box
                       sx={{
@@ -501,7 +501,7 @@ const ReportsPage = () => {
                             <Box sx={{ position: 'relative', backgroundColor: '#0f172a' }}>
                               <img
                                 src={resolveEvidencePhotoUrl(photoUrl)}
-                                alt={`Vendor Evidence ${idx + 1}`}
+                                alt={`Business Partner Evidence ${idx + 1}`}
                                 style={{
                                   display: 'block',
                                   width: '100%',
@@ -549,7 +549,7 @@ const ReportsPage = () => {
                 {selectedReport.vendor_documents && selectedReport.vendor_documents.length > 0 && (
                   <Box sx={{ mt: 3 }}>
                     <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
-                      Vendor Documents
+                      Business Partner Documents
                     </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                       {selectedReport.vendor_documents.map((doc, idx) => (
@@ -563,7 +563,7 @@ const ReportsPage = () => {
                           startIcon={<InsertDriveFile fontSize="small" />}
                           sx={{ justifyContent: 'flex-start', textTransform: 'none', borderRadius: '6px', maxWidth: '400px' }}
                         >
-                          {doc.filename || `Vendor Document ${idx + 1}`}
+                          {doc.filename || `Business Partner Document ${idx + 1}`}
                         </Button>
                       ))}
                     </Box>

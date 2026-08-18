@@ -204,7 +204,7 @@ const ReportsPage = () => {
         }
 
         evidenceItems.push({
-          title: `Vendor Evidence ${index + 1}`,
+          title: `Business Partner Evidence ${index + 1}`,
           caption: getEvidenceWatermarkLines(photo).join(' | '),
           imageDataUrl,
         });
@@ -255,7 +255,7 @@ const ReportsPage = () => {
 
       if (evidenceItems.length > 0) {
         y += 8;
-        addLine('Vendor Evidence', 13, true);
+        addLine('Business Partner Evidence', 13, true);
         y += 2;
 
         for (const evidenceItem of evidenceItems) {
@@ -293,7 +293,7 @@ const ReportsPage = () => {
           addLine('VENDOR DOCUMENTS', 13, true);
           y += 4;
           for (let i = 0; i < vendorDocs.length; i++) {
-            addLine(`Vendor Document ${i + 1}: ${vendorDocs[i].filename || 'Document'}`, 11, false);
+            addLine(`Business Partner Document ${i + 1}: ${vendorDocs[i].filename || 'Document'}`, 11, false);
           }
           y += 6;
         }
@@ -345,7 +345,7 @@ const ReportsPage = () => {
 
       if (vendorDocs.length > 0) {
         for (let i = 0; i < vendorDocs.length; i++) {
-          await drawDocumentHeadingAndQueue(vendorDocs[i], `Vendor Document ${i + 1}`);
+          await drawDocumentHeadingAndQueue(vendorDocs[i], `Business Partner Document ${i + 1}`);
         }
       }
 
@@ -511,7 +511,7 @@ const ReportsPage = () => {
         <Box sx={{ p: 2.5, borderBottom: '1px solid #e0e0e0' }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#333' }}>
-              QC Approved Reports
+              Quality Analyst Approved Reports
             </Typography>
 
             <TextField
@@ -560,7 +560,7 @@ const ReportsPage = () => {
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Claim Number</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Client Name</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Category</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Assigned QC</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Assigned Quality Analyst</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Approved On</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Download</TableCell>

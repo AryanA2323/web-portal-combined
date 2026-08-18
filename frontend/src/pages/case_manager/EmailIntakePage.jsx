@@ -368,7 +368,7 @@ const EmailIntakePage = () => {
                   '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
                 }}
               >
-                <MenuItem value="all">All Vendors</MenuItem>
+                <MenuItem value="all">All Business Partners</MenuItem>
                 <MenuItem value="smith">Smith Investigation</MenuItem>
                 <MenuItem value="metro">Metro Detective Agency</MenuItem>
                 <MenuItem value="elite">Elite Investigators</MenuItem>
@@ -442,7 +442,7 @@ const EmailIntakePage = () => {
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Subject</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Case Type</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Vendor</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Business Partner</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Received</TableCell>
                 <TableCell></TableCell>
               </TableRow>
