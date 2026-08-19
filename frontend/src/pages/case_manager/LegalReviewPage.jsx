@@ -434,7 +434,7 @@ const LegalReviewPage = () => {
               gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
               gap: 1.25,
               flex: 1,
-              maxWidth: 440,
+              maxWidth: 480,
             }}
           >
             {statsData.map((stat, index) => (

@@ -23,7 +23,7 @@ const StatCard = ({
         elevation={0}
         sx={{
           p: 0.75,
-          width: { xs: '100%', md: 94 },
+          width: { xs: '100%', md: 104 },
           height: { xs: '100%', md: 82 },
           borderRadius: '12px',
           border: '1px solid rgba(226, 232, 240, 0.9)',
@@ -48,11 +48,11 @@ const StatCard = ({
           <Typography
             variant="h4"
             sx={{
-              fontWeight: 800,
-              mb: 0.65,
-              fontSize: '22px',
+              fontWeight: 500,
+              mb: 1,
+              fontSize: '28px',
               color: themeColor,
-              lineHeight: 1.05,
+              lineHeight: 1,
               letterSpacing: '-0.5px',
             }}
           >
@@ -64,8 +64,8 @@ const StatCard = ({
             sx={{
               color: '#64748b',
               fontWeight: 600,
-              fontSize: '11px',
-              lineHeight: 1.1,
+              fontSize: '12px',
+              lineHeight: 1.15,
               whiteSpace: 'nowrap',
               letterSpacing: '-0.2px',
             }}
@@ -148,8 +148,8 @@ const StatCard = ({
         <Typography
           variant="h4"
           sx={{
-            fontWeight: 800,
-            fontSize: dense ? '24px' : '28px',
+            fontWeight: 500,
+            fontSize: dense ? '28px' : '32px',
             color: themeColor,
             lineHeight: 1.1,
             letterSpacing: '-0.5px',
@@ -163,10 +163,10 @@ const StatCard = ({
           variant="body2"
           sx={{
             color: '#1e293b',
-            fontWeight: 700,
-            fontSize: dense ? '12.5px' : '13.5px',
+            fontWeight: 600,
+            fontSize: dense ? '13px' : '14px',
             lineHeight: 1.25,
-            mt: 0.25,
+            mt: 0.5,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
