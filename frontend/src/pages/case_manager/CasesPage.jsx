@@ -1207,16 +1207,16 @@ const CasesPage = ({ isCompletedView = false }) => {
                       onChange={handleSelectAll}
                     />
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px', width: 40 }}></TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px', width: 50 }}>#</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px' }}>Case Number</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px' }}>Claim Number</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px' }}>Client Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px' }}>Case Type</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px' }}>Category</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px' }}>Case Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px' }}>TAT Days</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '14px', borderRight: 'none' }}>Last Updated</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 40 }}></TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 50 }}>#</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Case Number</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Claim Number</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Client Name</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Case Type</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Category</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Case Status</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>TAT Days</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', borderRight: 'none' }}>Last Updated</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1259,11 +1259,11 @@ const CasesPage = ({ isCompletedView = false }) => {
                           <Typography
                             onClick={() => openFullCaseModal(row.id)}
                             sx={{
-                              fontWeight: 700,
-                              fontSize: '14px',
+                              fontWeight: 500,
+                              fontSize: '15px',
                               color: '#4f46e5',
                               cursor: 'pointer',
-                              textDecoration: 'underline',
+                              textDecoration: 'none',
                               '&:hover': { color: '#3730a3' },
                             }}
                             title="Click to view full case details, recordings, documents & evidence"
@@ -1293,8 +1293,8 @@ const CasesPage = ({ isCompletedView = false }) => {
                               backgroundColor: `${ctColor}18`,
                               color: ctColor,
                               fontWeight: 600,
-                              fontSize: '12px',
-                              height: '24px',
+                              fontSize: '13px',
+                              height: '26px',
                               borderRadius: '6px',
                             }}
                           />
@@ -1314,8 +1314,8 @@ const CasesPage = ({ isCompletedView = false }) => {
                               backgroundColor: `${fcColor}20`,
                               color: fcColor,
                               fontWeight: 600,
-                              fontSize: '12px',
-                              height: '24px',
+                              fontSize: '13px',
+                              height: '26px',
                               borderRadius: '6px',
                             }}
                           />
@@ -1330,7 +1330,7 @@ const CasesPage = ({ isCompletedView = false }) => {
 
                         {/* Last Updated */}
                         <TableCell>
-                          <Typography sx={{ fontSize: '14px', color: '#666' }}>
+                          <Typography sx={{ fontSize: '15px', color: '#666' }}>
                             {formatDate(row.updated_at)}
                           </Typography>
                         </TableCell>
@@ -1364,7 +1364,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                           <TableHead sx={{ backgroundColor: '#eef0fb' }}>
                                             <TableRow>
                                               {headers.map((h) => (
-                                                <TableCell key={h} align="center" sx={{ fontSize: '12px', fontWeight: 700, color: '#667eea', textTransform: 'uppercase', letterSpacing: '0.4px', borderRight: '1px solid #d0d5f5', py: 2 }}>
+                                                <TableCell key={h} align="center" sx={{ fontSize: '13px', fontWeight: 700, color: '#667eea', textTransform: 'uppercase', letterSpacing: '0.4px', borderRight: '1px solid #d0d5f5', py: 2 }}>
                                                   {h}
                                                 </TableCell>
                                               ))}
@@ -1389,30 +1389,30 @@ const CasesPage = ({ isCompletedView = false }) => {
                                                     '&:last-child td, &:last-child th': { borderBottom: 0 }
                                                   }}
                                                 >
-                                                  <TableCell align="center" sx={{ fontWeight: 700, fontSize: '14px', color: '#667eea' }}>{sub.sub_id}</TableCell>
-                                                  <TableCell align="center" sx={{ fontSize: '13px', fontWeight: 600, color: '#444' }}>{sub.type}</TableCell>
+                                                  <TableCell align="center" sx={{ fontWeight: 700, fontSize: '15px', color: '#667eea' }}>{sub.sub_id}</TableCell>
+                                                  <TableCell align="center" sx={{ fontSize: '14px', fontWeight: 600, color: '#444' }}>{sub.type}</TableCell>
 
                                                   {mode === 'chargesheet' ? (
-                                                    <TableCell align="center" sx={{ fontSize: '13px', color: '#333' }}><Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.name}</Typography></TableCell>
+                                                    <TableCell align="center" sx={{ fontSize: '14px', color: '#333' }}><Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.name}</Typography></TableCell>
                                                   ) : mode === 'rto' ? (
                                                     <>
-                                                      <TableCell align="center" sx={{ fontSize: '13px', color: '#333' }}><Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.name}</Typography></TableCell>
-                                                      <TableCell align="center" sx={{ fontSize: '13px', color: '#555' }}><Typography align="center" noWrap title={sub.location} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.location}</Typography></TableCell>
+                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#333' }}><Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.name}</Typography></TableCell>
+                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}><Typography align="center" noWrap title={sub.location} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.location}</Typography></TableCell>
                                                     </>
                                                   ) : (
                                                     <>
-                                                      <TableCell align="center" sx={{ fontSize: '13px', color: '#333' }}><Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.name}</Typography></TableCell>
-                                                      <TableCell align="center" sx={{ fontSize: '13px', color: '#555' }}><Typography align="center" noWrap title={sub.contact} sx={{ fontSize: 'inherit', maxWidth: '120px', mx: 'auto' }}>{sub.contact}</Typography></TableCell>
-                                                      <TableCell align="center" sx={{ fontSize: '13px', color: '#555' }}><Typography align="center" noWrap title={sub.location} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.location}</Typography></TableCell>
+                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#333' }}><Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.name}</Typography></TableCell>
+                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}><Typography align="center" noWrap title={sub.contact} sx={{ fontSize: 'inherit', maxWidth: '120px', mx: 'auto' }}>{sub.contact}</Typography></TableCell>
+                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}><Typography align="center" noWrap title={sub.location} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.location}</Typography></TableCell>
                                                     </>
                                                   )}
 
                                                   <TableCell align="center">
-                                                    <Chip label={sub.check_status} size="small" sx={{ backgroundColor: `${sc}22`, color: sc, fontWeight: 700, fontSize: '12px', height: '26px', borderRadius: '6px' }} />
+                                                    <Chip label={sub.check_status} size="small" sx={{ backgroundColor: `${sc}22`, color: sc, fontWeight: 700, fontSize: '13px', height: '26px', borderRadius: '6px' }} />
                                                   </TableCell>
 
                                                   {mode === 'chargesheet' && (
-                                                    <TableCell align="center" sx={{ fontSize: '13px', color: '#555' }}>
+                                                    <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}>
                                                       <Typography align="center" noWrap title={sub.advocate_status || 'N/A'} sx={{ fontSize: 'inherit', maxWidth: '120px', mx: 'auto' }}>
                                                         {sub.advocate_status || 'N/A'}
                                                       </Typography>
@@ -1432,7 +1432,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                                           variant="contained"
                                                           sx={{
                                                             textTransform: 'none',
-                                                            fontSize: '11px',
+                                                            fontSize: '12px',
                                                             fontWeight: 700,
                                                             backgroundColor: '#ef4444',
                                                             color: 'white',
@@ -1452,7 +1452,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                                           label="Shifted"
                                                           size="small"
                                                           sx={{
-                                                            fontSize: '11px',
+                                                            fontSize: '12px',
                                                             fontWeight: 800,
                                                             backgroundColor: '#fee2e2',
                                                             color: '#991b1b',
@@ -1461,7 +1461,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                                           }}
                                                         />
                                                       ) : (
-                                                        <Typography align="center" noWrap title={sub.negative_status || 'N/A'} sx={{ fontSize: '13px', color: '#555', maxWidth: '120px', mx: 'auto' }}>
+                                                        <Typography align="center" noWrap title={sub.negative_status || 'N/A'} sx={{ fontSize: '14px', color: '#555', maxWidth: '120px', mx: 'auto' }}>
                                                           {sub.negative_status || 'N/A'}
                                                         </Typography>
                                                       )}
@@ -1470,11 +1470,11 @@ const CasesPage = ({ isCompletedView = false }) => {
 
                                                   <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                                                     {sub.assigned_vendor_name ? (
-                                                      <Button size="small" variant="text" startIcon={<Edit sx={{ fontSize: 14 }} />} onClick={() => openVendorModal(row.id, sub.type, sub.assigned_vendor_id)} sx={{ textTransform: 'none', fontSize: '12px', fontWeight: 700, color: '#2e7d32', py: 0, px: 0.5, minWidth: 0, justifyContent: 'center', mx: 'auto' }} title={`Change vendor from ${sub.assigned_vendor_name}`}>
+                                                      <Button size="small" variant="text" startIcon={<Edit sx={{ fontSize: 14 }} />} onClick={() => openVendorModal(row.id, sub.type, sub.assigned_vendor_id)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 700, color: '#2e7d32', py: 0, px: 0.5, minWidth: 0, justifyContent: 'center', mx: 'auto' }} title={`Change vendor from ${sub.assigned_vendor_name}`}>
                                                         <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100px' }}>{sub.assigned_vendor_name}</Box>
                                                       </Button>
                                                     ) : (
-                                                      <Button size="small" variant="outlined" onClick={() => openVendorModal(row.id, sub.type)} sx={{ textTransform: 'none', fontSize: '12px', fontWeight: 600, borderColor: '#667eea', color: '#667eea', py: 0.5, px: 1.5, minWidth: 'auto', mx: 'auto' }}>Assign</Button>
+                                                      <Button size="small" variant="outlined" onClick={() => openVendorModal(row.id, sub.type)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 600, borderColor: '#667eea', color: '#667eea', py: 0.5, px: 1.5, minWidth: 'auto', mx: 'auto' }}>Assign</Button>
                                                     )}
                                                   </TableCell>
 
@@ -1487,7 +1487,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                                         onClick={() => handleOpenFileRti(row.id, sub.sub_id)}
                                                         sx={{
                                                           textTransform: 'none',
-                                                          fontSize: '12px',
+                                                          fontSize: '13px',
                                                           fontWeight: 600,
                                                           borderColor: '#f59e0b',
                                                           color: '#f59e0b',
@@ -1519,7 +1519,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                                         onClick={() => handleOpenRtoDocModal(row.id)}
                                                         sx={{
                                                           textTransform: 'none',
-                                                          fontSize: '13px',
+                                                          fontSize: '13.5px',
                                                           fontWeight: 700,
                                                           backgroundColor: '#4527a0',
                                                           color: '#fff',
@@ -1544,7 +1544,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                                         <Box component="span" sx={{ display: 'inline-block', cursor: !isVendorAssigned ? 'not-allowed' : 'default' }}>
                                                           {sub.check_status === 'Verified' ? (
                                                             <Button size="small" variant="text" disabled={!isVendorAssigned} onClick={() => openReviewModal(row.id, sub.type)} sx={{ textTransform: 'none', p: 0, minWidth: 'auto', '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'not-allowed' } }}>
-                                                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#48bb78', fontSize: '13px', textDecoration: 'underline' }}>Accepted</Typography>
+                                                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#48bb78', fontSize: '13.5px', textDecoration: 'underline' }}>Accepted</Typography>
                                                             </Button>
                                                           ) : (
                                                             <Button
@@ -1555,7 +1555,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                                               onClick={() => openReviewModal(row.id, sub.type)}
                                                               sx={{
                                                                 textTransform: 'none',
-                                                                fontSize: '13px',
+                                                                fontSize: '13.5px',
                                                                 fontWeight: 700,
                                                                 backgroundColor: '#667eea',
                                                                 color: '#fff',

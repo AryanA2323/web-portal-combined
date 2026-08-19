@@ -55,6 +55,7 @@ import {
   VpnKey as KeyIcon,
   Computer as ComputerIcon,
   Shield as ShieldIcon,
+  HelpOutline as HelpOutlineIcon,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
@@ -231,6 +232,10 @@ const UsersPage = () => {
   const [saveLoading, setSaveLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showCreateConfirmPassword, setShowCreateConfirmPassword] = useState(false);
 
   useEffect(() => {
     fetchUsers(false);
@@ -281,12 +286,19 @@ const UsersPage = () => {
       last_name: '',
       role: 'VENDOR',
       sub_role: '',
+      device_limit: 1,
+      permissions: [],
     });
+    setShowCreatePassword(false);
+    setShowCreateConfirmPassword(false);
+    setError(null);
     setCreateDialogOpen(true);
   };
 
   const handleCloseCreateDialog = () => {
     setCreateDialogOpen(false);
+    setShowCreatePassword(false);
+    setShowCreateConfirmPassword(false);
     setCreateFormData({
       email: '',
       password: '',
@@ -295,7 +307,10 @@ const UsersPage = () => {
       last_name: '',
       role: 'VENDOR',
       sub_role: '',
+      device_limit: 1,
+      permissions: [],
     });
+    setError(null);
   };
 
   const handleCreateInputChange = (field, value) => {
@@ -371,6 +386,8 @@ const UsersPage = () => {
       confirm_new_password: '',
     });
     setShowEditPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     setEditDialogOpen(true);
   };
 
@@ -391,6 +408,8 @@ const UsersPage = () => {
       confirm_new_password: '',
     });
     setShowEditPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const handleInputChange = (field, value) => {
@@ -783,20 +802,20 @@ const UsersPage = () => {
           <Table>
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
-                <TableCell align="center"><strong>Name</strong></TableCell>
-                <TableCell align="center"><strong>Email</strong></TableCell>
-                <TableCell align="center"><strong>Role</strong></TableCell>
-                <TableCell align="center"><strong>Status</strong></TableCell>
-                <TableCell align="center"><strong>Active Session Info</strong></TableCell>
-                <TableCell align="center"><strong>Custom Permissions</strong></TableCell>
-                <TableCell align="center"><strong>Actions</strong></TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, fontSize: '15px' }}>Name</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, fontSize: '15px' }}>Email</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, fontSize: '15px' }}>Role</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, fontSize: '15px' }}>Status</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, fontSize: '15px' }}>Active Session Info</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, fontSize: '15px' }}>Custom Permissions</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, fontSize: '15px' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredUsers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                    <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    <Typography variant="body2" sx={{ color: '#64748b', fontSize: '15px' }}>
                       No users found matching the selected search and filter criteria.
                     </Typography>
                   </TableCell>
@@ -809,12 +828,12 @@ const UsersPage = () => {
                   onClick={() => handleRowClick(user)}
                   sx={{ cursor: 'pointer' }}
                 >
-                  <TableCell align="center">
+                  <TableCell align="center" sx={{ fontSize: '15px', fontWeight: 500 }}>
                     {user.first_name || user.last_name
                       ? `${user.first_name} ${user.last_name}`.trim()
                       : '-'}
                   </TableCell>
-                  <TableCell align="center">{user.email}</TableCell>
+                  <TableCell align="center" sx={{ fontSize: '15px' }}>{user.email}</TableCell>
                   <TableCell align="center">
                     {(() => {
                       const style = getRoleStyle(user.role);
@@ -827,7 +846,8 @@ const UsersPage = () => {
                             color: style.textColor,
                             border: `1px solid ${style.borderColor}`,
                             fontWeight: 700,
-                            fontSize: '12px',
+                            fontSize: '13px',
+                            height: '26px',
                             px: 0.5,
                           }}
                         />
@@ -837,19 +857,21 @@ const UsersPage = () => {
                   <TableCell align="center">
                     {user.is_active ? (
                       <Chip
-                        icon={<CheckCircle />}
+                        icon={<CheckCircle sx={{ fontSize: 16 }} />}
                         label="Active"
                         size="small"
                         color="success"
                         variant="outlined"
+                        sx={{ fontSize: '13px', height: '26px' }}
                       />
                     ) : (
                       <Chip
-                        icon={<Cancel />}
+                        icon={<Cancel sx={{ fontSize: 16 }} />}
                         label="Inactive"
                         size="small"
                         color="default"
                         variant="outlined"
+                        sx={{ fontSize: '13px', height: '26px' }}
                       />
                     )}
                   </TableCell>
@@ -863,6 +885,8 @@ const UsersPage = () => {
                           backgroundColor: '#dcfce7',
                           color: '#166534',
                           fontWeight: 600,
+                          fontSize: '13px',
+                          height: '26px',
                           '& .MuiChip-icon': { color: '#16a34a' },
                         }}
                       />
@@ -875,6 +899,8 @@ const UsersPage = () => {
                           backgroundColor: '#f1f5f9',
                           color: '#64748b',
                           fontWeight: 500,
+                          fontSize: '13px',
+                          height: '26px',
                           '& .MuiChip-icon': { color: '#94a3b8' },
                         }}
                       />
@@ -882,9 +908,9 @@ const UsersPage = () => {
                   </TableCell>
                   <TableCell align="center">
                     {user.permissions && user.permissions.length > 0 ? (
-                      <Chip label={`${user.permissions.length} pages`} size="small" color="primary" variant="outlined" />
+                      <Chip label={`${user.permissions.length} pages`} size="small" color="primary" variant="outlined" sx={{ fontSize: '13px', height: '26px' }} />
                     ) : (
-                      <Typography variant="caption" color="text.secondary">Default</Typography>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontSize: '15px' }}>Default</Typography>
                     )}
                   </TableCell>
                   <TableCell align="center" onClick={(e) => e.stopPropagation()}>
@@ -898,7 +924,7 @@ const UsersPage = () => {
                             handleEditClick(user);
                           }}
                         >
-                          <Edit />
+                          <Edit sx={{ fontSize: 19 }} />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Delete User">
@@ -910,7 +936,7 @@ const UsersPage = () => {
                             handleDeleteUser(user.id);
                           }}
                         >
-                          <Delete />
+                          <Delete sx={{ fontSize: 19 }} />
                         </IconButton>
                       </Tooltip>
                     </Box>
@@ -1139,9 +1165,14 @@ const UsersPage = () => {
 
                     <Grid item xs={12} sm={6}>
                       <Paper id="field-device-limit" variant="outlined" sx={getFieldSx('device_limit')}>
-                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '11px' }}>
-                          Device Limit
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '11px' }}>
+                            Device Limit
+                          </Typography>
+                          <Tooltip title="Max simultaneous logged-in devices allowed" arrow placement="top">
+                            <HelpOutlineIcon sx={{ fontSize: 14, color: '#64748b', cursor: 'pointer', '&:hover': { color: '#6366f1' } }} />
+                          </Tooltip>
+                        </Box>
                         <Typography variant="body1" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.5 }}>
                           {selectedViewUser.device_limit || 1} simultaneous device(s)
                         </Typography>
@@ -1583,8 +1614,8 @@ const UsersPage = () => {
                   Profile Information
                 </Typography>
 
-                <Grid container spacing={3}>
-                  <Grid item xs={12} sm={6}>
+                <Grid container spacing={2.5}>
+                  <Grid item xs={12} sm={3.5}>
                     <TextField
                       fullWidth
                       label="First Name"
@@ -1612,7 +1643,7 @@ const UsersPage = () => {
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={12} sm={3.5}>
                     <TextField
                       fullWidth
                       label="Last Name"
@@ -1640,7 +1671,7 @@ const UsersPage = () => {
                     />
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid item xs={12} sm={5}>
                     <TextField
                       fullWidth
                       label="Email Address"
@@ -1697,99 +1728,93 @@ const UsersPage = () => {
                   <SecurityIcon sx={{ fontSize: 18, color: '#6366f1' }} />
                   Role & System Access
                 </Typography>
-
-                <Grid container spacing={3}>
-                  <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth sx={{ '& .MuiInputLabel-root': { color: '#334155', fontWeight: 600 } }}>
-                      <InputLabel>Role</InputLabel>
-                      <Select
-                        value={formData.role}
-                        label="Role"
-                        onChange={(e) => handleInputChange('role', e.target.value)}
-                        sx={{
-                          borderRadius: '10px',
-                          color: '#0f172a',
-                          fontWeight: 600,
-                          backgroundColor: '#ffffff',
-                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#6366f1' },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#6366f1' },
-                        }}
-                      >
-                        <MenuItem value="CASE_MANAGER">Case Manager</MenuItem>
-                        <MenuItem value="SUPER_ADMIN">Super Admin</MenuItem>
-                        <MenuItem value="VENDOR">Business Partner</MenuItem>
-                        <MenuItem value="QC">Quality Analyst</MenuItem>
-                        <MenuItem value="ADVOCATE">Legal Partner</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Device Limit"
-                      type="number"
-                      InputProps={{ inputProps: { min: 1 } }}
-                      value={formData.device_limit}
-                      onChange={(e) => handleInputChange('device_limit', e.target.value)}
-                      helperText="Max simultaneous logged-in devices allowed"
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2.5, alignItems: 'center' }}>
+                  <FormControl sx={{ width: '220px', '& .MuiInputLabel-root': { color: '#334155', fontWeight: 600 } }}>
+                    <InputLabel>Role</InputLabel>
+                    <Select
+                      value={formData.role}
+                      label="Role"
+                      onChange={(e) => handleInputChange('role', e.target.value)}
                       sx={{
-                        '& .MuiInputLabel-root': { color: '#334155', fontWeight: 600 },
-                        '& .MuiFormHelperText-root': { color: '#64748b', fontWeight: 500, fontSize: '12px' },
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: '10px',
-                          color: '#0f172a',
-                          fontWeight: 600,
-                          backgroundColor: '#ffffff',
-                          '&:hover fieldset': { borderColor: '#6366f1' },
-                          '&.Mui-focused fieldset': { borderColor: '#6366f1' },
-                        },
-                      }}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Paper
-                      variant="outlined"
-                      sx={{
-                        p: 2.5,
-                        borderRadius: '12px',
-                        backgroundColor: formData.is_active ? '#f0fdf4' : '#f8fafc',
-                        borderColor: formData.is_active ? '#86efac' : '#cbd5e1',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
+                        borderRadius: '10px',
+                        color: '#0f172a',
+                        fontWeight: 600,
+                        backgroundColor: '#ffffff',
+                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#6366f1' },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#6366f1' },
                       }}
                     >
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
-                          Account Status
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#475569', fontWeight: 500, mt: 0.25 }}>
-                          {formData.is_active ? 'Account is currently active and can sign in' : 'Account is disabled and blocked from login'}
-                        </Typography>
+                      <MenuItem value="CASE_MANAGER">Case Manager</MenuItem>
+                      <MenuItem value="SUPER_ADMIN">Super Admin</MenuItem>
+                      <MenuItem value="VENDOR">Business Partner</MenuItem>
+                      <MenuItem value="QC">Quality Analyst</MenuItem>
+                      <MenuItem value="ADVOCATE">Legal Partner</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <TextField
+                    label={
+                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                        Device Limit
+                        <Tooltip title="Max simultaneous logged-in devices allowed" arrow placement="top">
+                          <HelpOutlineIcon sx={{ fontSize: 16, color: '#64748b', cursor: 'pointer', '&:hover': { color: '#6366f1' } }} />
+                        </Tooltip>
                       </Box>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={formData.is_active}
-                            onChange={(e) => handleInputChange('is_active', e.target.checked)}
-                            color="success"
-                          />
-                        }
-                        label={
-                          <Chip
-                            label={formData.is_active ? 'Active' : 'Inactive'}
-                            size="small"
-                            color={formData.is_active ? 'success' : 'default'}
-                            sx={{ fontWeight: 700, px: 0.5 }}
-                          />
-                        }
-                        labelPlacement="start"
+                    }
+                    type="number"
+                    InputProps={{ inputProps: { min: 1 } }}
+                    value={formData.device_limit}
+                    onChange={(e) => handleInputChange('device_limit', e.target.value)}
+                    sx={{
+                      width: '120px',
+                      '& .MuiInputLabel-root': { color: '#334155', fontWeight: 600, fontSize: '15px' },
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '10px',
+                        color: '#0f172a',
+                        fontWeight: 600,
+                        backgroundColor: '#ffffff',
+                        '&:hover fieldset': { borderColor: '#6366f1' },
+                        '&.Mui-focused fieldset': { borderColor: '#6366f1' },
+                      },
+                    }}
+                  />
+
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      minHeight: '56px',
+                      height: '56px',
+                      borderRadius: '10px',
+                      backgroundColor: formData.is_active ? '#f0fdf4' : '#f8fafc',
+                      borderColor: formData.is_active ? '#86efac' : '#cbd5e1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#0f172a', fontSize: '13.5px', whiteSpace: 'nowrap' }}>
+                      Account Status
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip
+                        label={formData.is_active ? 'Active' : 'Inactive'}
+                        size="small"
+                        color={formData.is_active ? 'success' : 'default'}
+                        sx={{ fontWeight: 700, px: 0.5, height: '24px', fontSize: '12px' }}
                       />
-                    </Paper>
-                  </Grid>
-                </Grid>
+                      <Switch
+                        checked={formData.is_active}
+                        onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                        color="success"
+                        size="small"
+                        sx={{ m: 0 }}
+                      />
+                    </Box>
+                  </Paper>
+                </Box>
               </Box>
 
               <Divider sx={{ borderColor: '#e2e8f0' }} />
@@ -1819,54 +1844,52 @@ const UsersPage = () => {
                   Password Management
                 </Typography>
 
-                <Grid container spacing={3}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Current Password"
-                      type={showEditPassword ? 'text' : 'password'}
-                      value={formData.password}
-                      disabled
-                      helperText={selectedUser?.plain_password ? 'Visible for passwords set through Super Admin' : 'Not available for older accounts. Set a new password to store it here.'}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <Lock sx={{ color: '#475569', fontSize: 20 }} />
-                          </InputAdornment>
-                        ),
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton
-                              aria-label={showEditPassword ? 'Hide password' : 'Show password'}
-                              edge="end"
-                              onClick={() => setShowEditPassword((value) => !value)}
-                            >
-                              {showEditPassword ? <VisibilityOff sx={{ color: '#475569' }} /> : <Visibility sx={{ color: '#475569' }} />}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      }}
-                      sx={{
-                        '& .MuiInputLabel-root': { color: '#334155', fontWeight: 600 },
-                        '& .MuiFormHelperText-root': { color: '#475569', fontWeight: 500, fontSize: '12px', mt: 0.75 },
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: '10px',
-                          backgroundColor: '#f8fafc',
-                          '& .MuiInputBase-input.Mui-disabled': {
-                            color: '#0f172a',
-                            WebkitTextFillColor: '#0f172a',
-                            fontWeight: 600,
-                          },
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                  {/* Row 1: Current Password */}
+                  <TextField
+                    label="Current Password"
+                    type={showEditPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    disabled
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Lock sx={{ color: '#475569', fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            aria-label={showEditPassword ? 'Hide current password' : 'Show current password'}
+                            edge="end"
+                            onClick={() => setShowEditPassword((value) => !value)}
+                          >
+                            {showEditPassword ? <VisibilityOff sx={{ color: '#475569' }} /> : <Visibility sx={{ color: '#475569' }} />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{
+                      width: '280px',
+                      '& .MuiInputLabel-root': { color: '#334155', fontWeight: 600 },
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '10px',
+                        backgroundColor: '#f8fafc',
+                        '& .MuiInputBase-input.Mui-disabled': {
+                          color: '#0f172a',
+                          WebkitTextFillColor: '#0f172a',
+                          fontWeight: 600,
                         },
-                      }}
-                    />
-                  </Grid>
+                      },
+                    }}
+                  />
 
-                  <Grid item xs={12} sm={6}>
+                  {/* Row 2: New Password & Confirm New Password */}
+                  <Box sx={{ display: 'flex', gap: 2.5 }}>
                     <TextField
-                      fullWidth
                       label="New Password"
-                      type={showEditPassword ? 'text' : 'password'}
+                      placeholder="Enter new password"
+                      type={showNewPassword ? 'text' : 'password'}
                       value={formData.new_password}
                       onChange={(e) => handleInputChange('new_password', e.target.value)}
                       InputProps={{
@@ -1875,8 +1898,20 @@ const UsersPage = () => {
                             <Lock sx={{ color: '#64748b', fontSize: 20 }} />
                           </InputAdornment>
                         ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                              edge="end"
+                              onClick={() => setShowNewPassword((value) => !value)}
+                            >
+                              {showNewPassword ? <VisibilityOff sx={{ color: '#64748b' }} /> : <Visibility sx={{ color: '#64748b' }} />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
                       }}
                       sx={{
+                        width: '280px',
                         '& .MuiInputLabel-root': { color: '#334155', fontWeight: 600 },
                         '& .MuiOutlinedInput-root': {
                           borderRadius: '10px',
@@ -1888,13 +1923,11 @@ const UsersPage = () => {
                         },
                       }}
                     />
-                  </Grid>
 
-                  <Grid item xs={12} sm={6}>
                     <TextField
-                      fullWidth
                       label="Confirm New Password"
-                      type={showEditPassword ? 'text' : 'password'}
+                      placeholder="Confirm new password"
+                      type={showConfirmPassword ? 'text' : 'password'}
                       value={formData.confirm_new_password}
                       onChange={(e) => handleInputChange('confirm_new_password', e.target.value)}
                       error={Boolean(
@@ -1907,7 +1940,7 @@ const UsersPage = () => {
                           formData.confirm_new_password &&
                           formData.new_password !== formData.confirm_new_password
                           ? 'Passwords do not match'
-                          : 'Required only when changing the password'
+                          : undefined
                       }
                       InputProps={{
                         startAdornment: (
@@ -1915,10 +1948,22 @@ const UsersPage = () => {
                             <Lock sx={{ color: '#64748b', fontSize: 20 }} />
                           </InputAdornment>
                         ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                              edge="end"
+                              onClick={() => setShowConfirmPassword((value) => !value)}
+                            >
+                              {showConfirmPassword ? <VisibilityOff sx={{ color: '#64748b' }} /> : <Visibility sx={{ color: '#64748b' }} />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
                       }}
                       sx={{
+                        width: '280px',
                         '& .MuiInputLabel-root': { color: '#334155', fontWeight: 600 },
-                        '& .MuiFormHelperText-root': { color: '#64748b', fontWeight: 500, fontSize: '12px' },
+                        '& .MuiFormHelperText-root': { color: '#ef4444', fontWeight: 500, fontSize: '12px' },
                         '& .MuiOutlinedInput-root': {
                           borderRadius: '10px',
                           color: '#0f172a',
@@ -1929,8 +1974,8 @@ const UsersPage = () => {
                         },
                       }}
                     />
-                  </Grid>
-                </Grid>
+                  </Box>
+                </Box>
               </Box>
 
               {/* SECTION 4: Active Session Info */}
@@ -2331,7 +2376,7 @@ const UsersPage = () => {
                     <TextField
                       fullWidth
                       label="Password"
-                      type="password"
+                      type={showCreatePassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       value={createFormData.password}
                       onChange={(e) => handleCreateInputChange('password', e.target.value)}
@@ -2339,6 +2384,17 @@ const UsersPage = () => {
                         startAdornment: (
                           <InputAdornment position="start">
                             <Lock sx={{ color: '#667eea' }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              aria-label={showCreatePassword ? 'Hide password' : 'Show password'}
+                              edge="end"
+                              onClick={() => setShowCreatePassword((value) => !value)}
+                            >
+                              {showCreatePassword ? <VisibilityOff sx={{ color: '#667eea' }} /> : <Visibility sx={{ color: '#667eea' }} />}
+                            </IconButton>
                           </InputAdornment>
                         ),
                       }}
@@ -2363,7 +2419,7 @@ const UsersPage = () => {
                     <TextField
                       fullWidth
                       label="Confirm Password"
-                      type="password"
+                      type={showCreateConfirmPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       value={createFormData.confirm_password}
                       onChange={(e) => handleCreateInputChange('confirm_password', e.target.value)}
@@ -2371,6 +2427,17 @@ const UsersPage = () => {
                         startAdornment: (
                           <InputAdornment position="start">
                             <Lock sx={{ color: '#667eea' }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              aria-label={showCreateConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                              edge="end"
+                              onClick={() => setShowCreateConfirmPassword((value) => !value)}
+                            >
+                              {showCreateConfirmPassword ? <VisibilityOff sx={{ color: '#667eea' }} /> : <Visibility sx={{ color: '#667eea' }} />}
+                            </IconButton>
                           </InputAdornment>
                         ),
                       }}
