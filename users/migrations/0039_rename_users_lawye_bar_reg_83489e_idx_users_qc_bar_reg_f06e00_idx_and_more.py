@@ -6,6 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
+        ('users', '0009_alter_lawyer_options_and_more'),
         ('users', '0038_add_fir_date_and_reason_to_claimant'),
     ]
 
