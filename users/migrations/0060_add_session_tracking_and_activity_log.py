@@ -10,7 +10,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0059_casedeletionrequest'),
+        ('users', '0048_update_chargesheet_check_status_constraint'),
     ]
 
     operations = [

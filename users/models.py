@@ -566,6 +566,13 @@ class Client(models.Model):
     location = models.CharField(max_length=200, blank=True)
     date_of_commencement = models.DateField(null=True, blank=True)
     
+    # Company details
+    corporate_address = models.TextField(blank=True)
+    gst_no = models.CharField(max_length=50, blank=True)
+    pan_no = models.CharField(max_length=20, blank=True)
+    agreement_copy = models.FileField(upload_to='client_agreements/', null=True, blank=True)
+    scope_of_work = models.JSONField(default=list, blank=True)
+    
     # Pricing per investigation type
     insured_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     notice_134_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

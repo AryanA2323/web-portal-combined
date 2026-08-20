@@ -83,7 +83,24 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
         return timeB - timeA;
       });
 
-      setNotifications(formatted);
+      // Deduplicate notifications (e.g. USER_CREATED duplicate entries for the same target)
+      const seenKeys = new Set();
+      const deduplicated = formatted.filter((item) => {
+        const evType = (item.event_type || '').toUpperCase();
+        let targetKey = item.target_user_email || item.target_user_id || '';
+        if (!targetKey && item.description && item.description.includes("'")) {
+          const match = item.description.match(/'([^']+)'/);
+          if (match) targetKey = match[1].toLowerCase();
+        }
+        if (evType === 'USER_CREATED' && targetKey) {
+          const key = `USER_CREATED-${targetKey.toLowerCase()}`;
+          if (seenKeys.has(key)) return false;
+          seenKeys.add(key);
+        }
+        return true;
+      });
+
+      setNotifications(deduplicated);
     } catch (error) {
       console.error('Failed to load notifications:', error);
       setNotifications([]);
@@ -133,11 +150,38 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
     const evType = (item.event_type || '').toUpperCase();
     const desc = item.description || '';
 
-    // 1. User Created / Modified / Deleted notifications -> Navigate to Users page and open modal!
+    // 1. Client Notifications -> Navigate to Clients page
     if (
-      evType.startsWith('USER_') ||
+      evType.startsWith('CLIENT_') ||
+      desc.toLowerCase().includes('client')
+    ) {
+      let clientQuery = '';
+      if (desc.includes("'")) {
+        const match = desc.match(/'([^']+)'/);
+        if (match) clientQuery = match[1];
+      }
+      if (!clientQuery && desc.includes("(")) {
+        const match = desc.match(/\(([^)]+)\)/);
+        if (match) clientQuery = match[1];
+      }
+      const isCreateAction = evType.includes('CREATED') || desc.toLowerCase().includes('created');
+      navigate('/case_manager/clients', {
+        state: {
+          openClientQuery: clientQuery || desc,
+          highlightFields: !isCreateAction,
+          highlightDesc: desc,
+        }
+      });
+      return;
+    }
+
+    // 2. User Created / Modified / Deleted notifications -> Navigate to Users page and open modal!
+    if (
+      (evType.startsWith('USER_') ||
       desc.toLowerCase().includes('user') ||
-      item.target_user_email
+      item.target_user_email) &&
+      !evType.startsWith('CLIENT_') &&
+      !desc.toLowerCase().includes('client')
     ) {
       let userQuery = item.target_user_email;
       if (desc.includes("'")) {
@@ -164,7 +208,7 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
       return;
     }
 
-    // 2. Approvals / Rejections (TAT / Cases / Change Management)
+    // 3. Approvals / Rejections (TAT / Cases / Change Management)
     if (
       evType.startsWith('TAT_') ||
       evType.startsWith('CASE_DELETION') ||

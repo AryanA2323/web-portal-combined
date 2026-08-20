@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0046_add_questionnaire_vendor_feedback_columns'),
+        ('users', '0042_alter_customuser_role_alter_vendor_user'),
     ]
 
     operations = [

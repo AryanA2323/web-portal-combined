@@ -45,6 +45,7 @@ const NewCasePage = () => {
   const getCaseTypeTatDays = (caseType) => {
     if (caseType === 'Full Case') return 30;
     if (caseType === 'Partial Case') return 15;
+    if (caseType === 'Reassessment') return 15;
     return null;
   };
 

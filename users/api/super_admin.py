@@ -506,17 +506,18 @@ def get_super_admin_notifications_endpoint(request, limit: int = 50):
         actor_name = f"{act.user.first_name} {act.user.last_name}".strip() or act.user.email or act.user.username if act.user else "System"
         
         target_email = None
-        if act.details:
-            email_match = re.search(r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", act.details)
-            if email_match:
-                target_email = email_match.group(1)
-            else:
-                quote_match = re.search(r"'([^']+)'", act.details)
-                if quote_match:
-                    target_email = quote_match.group(1)
+        if not act.action.startswith('CLIENT_'):
+            if act.details:
+                email_match = re.search(r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", act.details)
+                if email_match:
+                    target_email = email_match.group(1)
+                else:
+                    quote_match = re.search(r"'([^']+)'", act.details)
+                    if quote_match:
+                        target_email = quote_match.group(1)
 
-        if not target_email and act.user and act.action not in ['USER_CREATED', 'USER_UPDATED', 'USER_DELETED']:
-            target_email = act.user.email
+            if not target_email and act.user and act.action not in ['USER_CREATED', 'USER_UPDATED', 'USER_DELETED']:
+                target_email = act.user.email
 
         target_name = None
         if target_email:
@@ -536,9 +537,11 @@ def get_super_admin_notifications_endpoint(request, limit: int = 50):
                 pass
 
         desc = act.details or f"{act.action} by {actor_name}"
-        if act.action == 'USER_UPDATED' and act.details:
+        if act.action in ['USER_UPDATED', 'CLIENT_UPDATED'] and act.details:
             if ". Changes: " in desc:
                 desc = desc.replace(". Changes: ", "\nChanges: ")
+            elif " (Changes: " in desc:
+                desc = desc.replace(" (Changes: ", "\nChanges: ").rstrip(")")
             if ". (No fields changed)" in desc:
                 desc = desc.replace(". (No fields changed)", "\n(No fields changed)")
 
@@ -563,9 +566,24 @@ def get_super_admin_notifications_endpoint(request, limit: int = 50):
             "target_user_id": act.user.id if act.user else None,
         })
 
-    # 2. Fetch User creations/registrations directly
+    # 2. Fetch User creations/registrations directly (skip if already captured by ActivityLog)
+    logged_user_creations = set()
+    for act in activity_logs:
+        if act.action == 'USER_CREATED' and act.details:
+            email_match = re.search(r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", act.details)
+            if email_match:
+                logged_user_creations.add(email_match.group(1).lower())
+            quote_match = re.search(r"'([^']+)'", act.details)
+            if quote_match:
+                logged_user_creations.add(quote_match.group(1).lower())
+
     users_qs = User.objects.all().order_by('-date_joined')[:limit]
     for u in users_qs:
+        u_email = (u.email or '').lower()
+        u_name = (f"{u.first_name} {u.last_name}".strip() or u.username or '').lower()
+        if (u_email and u_email in logged_user_creations) or (u_name and u_name in logged_user_creations):
+            continue
+
         name = f"{u.first_name} {u.last_name}".strip() or u.email or u.username
         role_label = u.sub_role or u.role or "USER"
         logs.append({

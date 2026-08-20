@@ -409,6 +409,10 @@ class ClientDetailSchema(Schema):
     client_code: str
     client_name: str
     location: str
+    corporate_address: Optional[str] = ''
+    gst_no: Optional[str] = ''
+    pan_no: Optional[str] = ''
+    scope_of_work: Optional[List[str]] = None
     date_of_commencement: Optional[str] = None
     insured_rate: Optional[float] = None
     notice_134_rate: Optional[float] = None
@@ -424,15 +428,20 @@ class ClientDetailSchema(Schema):
     rti_rate: Optional[float] = None
     hospital_rate: Optional[float] = None
     is_active: bool = True
+    agreement_copy: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
 
 class CreateClientSchema(Schema):
     """Schema for creating/updating a client."""
-    client_code: str
+    client_code: Optional[str] = ''
     client_name: str
     location: str = ''
+    corporate_address: Optional[str] = ''
+    gst_no: Optional[str] = ''
+    pan_no: Optional[str] = ''
+    scope_of_work: Optional[str] = '[]'
     date_of_commencement: Optional[str] = None
     insured_rate: Optional[float] = None
     notice_134_rate: Optional[float] = None
@@ -2951,6 +2960,32 @@ def get_audit_logs(
                     "User Management",
                 )
 
+            # Activity Log events (e.g. deletions)
+            cursor.execute(
+                """
+                SELECT
+                    al.created_at,
+                    al.action,
+                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
+                    al.details
+                FROM users_activitylog al
+                LEFT JOIN users_customuser cu ON cu.id = al.user_id
+                WHERE al.created_at IS NOT NULL
+                ORDER BY al.created_at DESC
+                LIMIT %s
+                """,
+                [safe_limit],
+            )
+            for created_at, action, actor_name, details in cursor.fetchall():
+                _add_event(
+                    created_at,
+                    action,
+                    actor_name,
+                    details,
+                    "",
+                    "Activity Logs",
+                )
+
             # Vendor assignment events from check tables
             assignment_tables = [
                 ("claimant_checks", "Claimant Check"),
@@ -3337,11 +3372,18 @@ def list_all_clients(request):
     clients = Client.objects.all().order_by('client_name')
     result = []
     for c in clients:
+        agreement_url = None
+        if c.agreement_copy and hasattr(c.agreement_copy, 'name') and c.agreement_copy.name:
+            agreement_url = f"/media/{c.agreement_copy.name}"
         result.append(ClientDetailSchema(
             id=c.id,
             client_code=c.client_code,
             client_name=c.client_name,
             location=c.location or '',
+            corporate_address=c.corporate_address or '',
+            gst_no=c.gst_no or '',
+            pan_no=c.pan_no or '',
+            scope_of_work=c.scope_of_work if isinstance(c.scope_of_work, list) else [],
             date_of_commencement=c.date_of_commencement.isoformat() if c.date_of_commencement else None,
             insured_rate=float(c.insured_rate) if c.insured_rate else None,
             notice_134_rate=float(c.notice_134_rate) if c.notice_134_rate else None,
@@ -3357,6 +3399,7 @@ def list_all_clients(request):
             rti_rate=float(c.rti_rate) if c.rti_rate else None,
             hospital_rate=float(c.hospital_rate) if c.hospital_rate else None,
             is_active=c.is_active,
+            agreement_copy=agreement_url,
             created_at=c.created_at,
             updated_at=c.updated_at,
         ))
@@ -3368,7 +3411,7 @@ def list_all_clients(request):
     summary="Create Client",
     description="Create a new client. Admin access required."
 )
-def create_client(request: HttpRequest, payload: CreateClientSchema):
+def create_client(request: HttpRequest, payload: CreateClientSchema = Form(...), agreement_copy: UploadedFile = File(None)):
     """Create a new client."""
     if not is_admin_or_super_admin(request.user):
         raise HttpError(403, "Admin access required")
@@ -3376,9 +3419,22 @@ def create_client(request: HttpRequest, payload: CreateClientSchema):
     from users.models import Client
     from datetime import datetime as _dt
 
+    client_code = payload.client_code
+    if not client_code and payload.client_name:
+        initial = payload.client_name.strip()[0].upper() if payload.client_name.strip() else 'C'
+        # Get latest sequence for this initial
+        last_client = Client.objects.filter(client_code__startswith=initial).order_by('-client_code').first()
+        new_seq = 1
+        if last_client and len(last_client.client_code) >= 4:
+            # Try to parse the numeric part
+            num_part = last_client.client_code[len(initial):]
+            if num_part.isdigit():
+                new_seq = int(num_part) + 1
+        client_code = f"{initial}{new_seq:03d}"
+
     # Check for duplicate client_code
-    if Client.objects.filter(client_code=payload.client_code).exists():
-        raise HttpError(400, f"Client with code '{payload.client_code}' already exists.")
+    if Client.objects.filter(client_code=client_code).exists():
+        raise HttpError(400, f"Client with code '{client_code}' already exists.")
 
     date_val = None
     if payload.date_of_commencement:
@@ -3386,11 +3442,24 @@ def create_client(request: HttpRequest, payload: CreateClientSchema):
             date_val = _dt.strptime(payload.date_of_commencement, '%Y-%m-%d').date()
         except ValueError:
             raise HttpError(400, "Invalid date format. Use YYYY-MM-DD.")
+            
+    scope_of_work_list = []
+    if payload.scope_of_work:
+        try:
+            parsed = json.loads(payload.scope_of_work)
+            if isinstance(parsed, list):
+                scope_of_work_list = parsed
+        except (ValueError, TypeError):
+            pass
 
-    client = Client.objects.create(
-        client_code=payload.client_code,
+    client = Client(
+        client_code=client_code,
         client_name=payload.client_name,
         location=payload.location,
+        corporate_address=payload.corporate_address,
+        gst_no=payload.gst_no,
+        pan_no=payload.pan_no,
+        scope_of_work=scope_of_work_list,
         date_of_commencement=date_val,
         insured_rate=payload.insured_rate,
         notice_134_rate=payload.notice_134_rate,
@@ -3407,6 +3476,11 @@ def create_client(request: HttpRequest, payload: CreateClientSchema):
         hospital_rate=payload.hospital_rate,
         is_active=payload.is_active,
     )
+    
+    if agreement_copy:
+        client.agreement_copy = agreement_copy
+        
+    client.save()
 
     try:
         from users.models import ActivityLog
@@ -3427,7 +3501,7 @@ def create_client(request: HttpRequest, payload: CreateClientSchema):
     summary="Update Client",
     description="Update an existing client. Admin access required."
 )
-def update_client(request: HttpRequest, client_id: int, payload: CreateClientSchema):
+def update_client(request: HttpRequest, client_id: int, payload: CreateClientSchema = Form(...), agreement_copy: UploadedFile = File(None)):
     """Update a client."""
     if not is_admin_or_super_admin(request.user):
         raise HttpError(403, "Admin access required")
@@ -3440,9 +3514,12 @@ def update_client(request: HttpRequest, client_id: int, payload: CreateClientSch
     except Client.DoesNotExist:
         raise HttpError(404, "Client not found")
 
+    # If payload.client_code is provided, update it. If not, keep existing.
+    new_client_code = payload.client_code if payload.client_code else client.client_code
+
     # Check for duplicate client_code (excluding current client)
-    if Client.objects.filter(client_code=payload.client_code).exclude(id=client_id).exists():
-        raise HttpError(400, f"Client with code '{payload.client_code}' already exists.")
+    if Client.objects.filter(client_code=new_client_code).exclude(id=client_id).exists():
+        raise HttpError(400, f"Client with code '{new_client_code}' already exists.")
 
     date_val = None
     if payload.date_of_commencement:
@@ -3450,33 +3527,68 @@ def update_client(request: HttpRequest, client_id: int, payload: CreateClientSch
             date_val = _dt.strptime(payload.date_of_commencement, '%Y-%m-%d').date()
         except ValueError:
             raise HttpError(400, "Invalid date format. Use YYYY-MM-DD.")
+            
+    scope_of_work_list = client.scope_of_work
+    if payload.scope_of_work:
+        try:
+            parsed = json.loads(payload.scope_of_work)
+            if isinstance(parsed, list):
+                scope_of_work_list = parsed
+        except (ValueError, TypeError):
+            pass
 
-    client.client_code = payload.client_code
-    client.client_name = payload.client_name
-    client.location = payload.location
-    client.date_of_commencement = date_val
-    client.insured_rate = payload.insured_rate
-    client.notice_134_rate = payload.notice_134_rate
-    client.claimant_rate = payload.claimant_rate
-    client.income_rate = payload.income_rate
-    client.driver_rate = payload.driver_rate
-    client.dl_rate = payload.dl_rate
-    client.rc_rate = payload.rc_rate
-    client.permit_rate = payload.permit_rate
-    client.spot_rate = payload.spot_rate
-    client.court_rate = payload.court_rate
-    client.notice_rate = payload.notice_rate
-    client.rti_rate = payload.rti_rate
-    client.hospital_rate = payload.hospital_rate
-    client.is_active = payload.is_active
+    changes = []
+    
+    def _update_field(field_name, new_val):
+        old_val = getattr(client, field_name)
+        if old_val != new_val:
+            setattr(client, field_name, new_val)
+            changes.append(field_name)
+
+    _update_field('client_code', new_client_code)
+    _update_field('client_name', payload.client_name)
+    _update_field('location', payload.location)
+    _update_field('corporate_address', payload.corporate_address)
+    _update_field('gst_no', payload.gst_no)
+    _update_field('pan_no', payload.pan_no)
+    
+    if client.scope_of_work != scope_of_work_list:
+        client.scope_of_work = scope_of_work_list
+        changes.append('scope_of_work')
+
+    _update_field('date_of_commencement', date_val)
+    _update_field('insured_rate', payload.insured_rate)
+    _update_field('notice_134_rate', payload.notice_134_rate)
+    _update_field('claimant_rate', payload.claimant_rate)
+    _update_field('income_rate', payload.income_rate)
+    _update_field('driver_rate', payload.driver_rate)
+    _update_field('dl_rate', payload.dl_rate)
+    _update_field('rc_rate', payload.rc_rate)
+    _update_field('permit_rate', payload.permit_rate)
+    _update_field('spot_rate', payload.spot_rate)
+    _update_field('court_rate', payload.court_rate)
+    _update_field('notice_rate', payload.notice_rate)
+    _update_field('rti_rate', payload.rti_rate)
+    _update_field('hospital_rate', payload.hospital_rate)
+    _update_field('is_active', payload.is_active)
+    
+    if agreement_copy:
+        client.agreement_copy = agreement_copy
+        changes.append('agreement_copy')
+        
     client.save()
 
     try:
         from users.models import ActivityLog
+        details = f"Updated client '{client.client_name}' ({client.client_code})"
+        if changes:
+            details += f"\nChanges: {', '.join(changes)}"
+        else:
+            details += f"\n(No fields changed)"
         ActivityLog.objects.create(
             user=request.user,
             action='CLIENT_UPDATED',
-            details=f"Updated client '{client.client_name}' ({client.client_code})",
+            details=details,
             ip_address=request.META.get('REMOTE_ADDR', ''),
         )
     except Exception as log_err:
@@ -3501,6 +3613,17 @@ def delete_client(request: HttpRequest, client_id: int):
         client = Client.objects.get(id=client_id)
     except Client.DoesNotExist:
         raise HttpError(404, "Client not found")
+
+    try:
+        from users.models import ActivityLog
+        ActivityLog.objects.create(
+            user=request.user,
+            action='CLIENT_DELETED',
+            details=f"Deleted client '{client.client_name}' ({client.client_code})",
+            ip_address=request.META.get('REMOTE_ADDR', ''),
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to log client deletion: {log_err}")
 
     client.delete()
     return {"success": True, "message": "Client deleted successfully"}
