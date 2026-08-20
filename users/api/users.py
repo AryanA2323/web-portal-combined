@@ -3,11 +3,13 @@ User management API endpoints.
 """
 
 import logging
+from datetime import timedelta
 from typing import List, Optional
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 from django.db.models import ProtectedError
 from django.db.utils import DatabaseError, ProgrammingError
+from django.utils import timezone
 from ninja import Router
 from ninja.errors import HttpError
 
@@ -183,7 +185,20 @@ def list_users(request):
             user=user, is_active=True
         ).order_by('-created_at')
         
-        valid_tokens = [t for t in active_tokens if not t.is_expired]
+        # Filter out expired and stale sessions (last_used_at > 15 sec ago)
+        # and auto-deactivate them so they don't count toward device limit
+        stale_cutoff = timezone.now() - timedelta(seconds=15)
+        valid_tokens = []
+        for t in active_tokens:
+            if t.is_expired:
+                t.is_active = False
+                t.save(update_fields=['is_active'])
+            elif t.last_used_at and t.last_used_at < stale_cutoff:
+                # Session hasn't sent a heartbeat in 3+ minutes — consider dead
+                t.is_active = False
+                t.save(update_fields=['is_active'])
+            else:
+                valid_tokens.append(t)
         
         if valid_tokens:
             user_data['is_online'] = True
@@ -203,6 +218,7 @@ def list_users(request):
                     'last_used_at': t.last_used_at,
                     'ip_address': t.ip_address or '',
                     'device_info': t.device_info or '',
+                    'device_name': t.device_name or '',
                     'is_active': t.is_active
                 })
         else:
@@ -570,14 +586,16 @@ def force_logout_user(request, user_id: int):
     except User.DoesNotExist:
         return 404, {"error": "User not found", "code": "USER_NOT_FOUND"}
     
-    # Delete all tokens for this user
-    deleted_count = AuthToken.objects.filter(user=target_user).delete()[0]
+    # Deactivate all tokens for this user (soft-delete for audit trail)
+    deactivated_count = AuthToken.objects.filter(
+        user=target_user, is_active=True
+    ).update(is_active=False)
     
     # Log the force logout in activity log
     ActivityLog.objects.create(
         user=target_user,
         action=ActivityLog.Action.FORCE_LOGOUT,
-        details=f'Force logged out by admin {request.user.email} ({deleted_count} session(s) terminated)',
+        details=f'Force logged out by admin {request.user.email} ({deactivated_count} session(s) terminated)',
         ip_address=request.META.get('REMOTE_ADDR', ''),
     )
     
@@ -608,8 +626,10 @@ def force_logout_session(request, user_id: int, session_id: int):
     except User.DoesNotExist:
         return 404, {"error": "User not found", "code": "USER_NOT_FOUND"}
     
-    deleted_count, _ = AuthToken.objects.filter(id=session_id, user=target_user).delete()
-    if deleted_count == 0:
+    deactivated_count = AuthToken.objects.filter(
+        id=session_id, user=target_user, is_active=True
+    ).update(is_active=False)
+    if deactivated_count == 0:
         return 404, {"error": "Session not found", "code": "SESSION_NOT_FOUND"}
     
     ActivityLog.objects.create(

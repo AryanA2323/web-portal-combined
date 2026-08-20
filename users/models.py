@@ -394,6 +394,10 @@ class AuthToken(models.Model):
         max_length=512, blank=True, default='',
         help_text='User-Agent / device description',
     )
+    device_name = models.CharField(
+        max_length=128, blank=True, default='',
+        help_text='Human-readable device name, e.g. "Chrome on Windows 10"',
+    )
     is_active = models.BooleanField(
         default=True,
         help_text='Whether this token session is still active',

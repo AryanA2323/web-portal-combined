@@ -69,6 +69,78 @@ def _get_device_info(request):
     return ua[:512] if ua else 'Unknown Device'
 
 
+def _parse_device_name(user_agent: str) -> str:
+    """
+    Parse a raw User-Agent string into a human-readable device name.
+
+    Examples:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ... Chrome/126.0"  -> "Chrome on Windows 10"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 ...) ... Safari/604" -> "Safari on iPhone"
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) ... Chrome/126.0"  -> "Chrome on Android"
+    """
+    if not user_agent:
+        return 'Unknown Device'
+
+    ua = user_agent.lower()
+
+    # ── Detect Browser ──
+    import re
+    browser = 'Unknown Browser'
+    # Order matters: Edge contains "chrome", Opera contains "chrome"
+    if 'edg/' in ua or 'edga/' in ua or 'edgios/' in ua:
+        browser = 'Edge'
+    elif 'opr/' in ua or 'opera' in ua:
+        browser = 'Opera'
+    elif 'brave' in ua:
+        browser = 'Brave'
+    elif 'vivaldi' in ua:
+        browser = 'Vivaldi'
+    elif 'firefox' in ua or 'fxios/' in ua:
+        browser = 'Firefox'
+    elif 'crios/' in ua:  # Chrome on iOS
+        browser = 'Chrome'
+    elif 'chrome/' in ua and 'chromium' not in ua:
+        browser = 'Chrome'
+    elif 'chromium' in ua:
+        browser = 'Chromium'
+    elif 'safari/' in ua and 'chrome' not in ua:
+        browser = 'Safari'
+    elif 'postman' in ua:
+        browser = 'Postman'
+    elif 'python-requests' in ua or 'httpx' in ua:
+        browser = 'API Client'
+
+    # ── Detect OS / Device ──
+    os_name = 'Unknown OS'
+    if 'windows nt 10.0' in ua:
+        # Windows 10 and 11 share the same NT version; best-effort distinction
+        chrome_match = re.search(r'chrome/(\d+)', ua)
+        chrome_ver = int(chrome_match.group(1)) if chrome_match else 0
+        os_name = 'Windows' if chrome_ver == 0 else ('Windows 11' if chrome_ver >= 108 else 'Windows 10')
+    elif 'windows nt 6.3' in ua:
+        os_name = 'Windows 8.1'
+    elif 'windows nt 6.1' in ua:
+        os_name = 'Windows 7'
+    elif 'windows' in ua:
+        os_name = 'Windows'
+    elif 'iphone' in ua:
+        os_name = 'iPhone'
+    elif 'ipad' in ua:
+        os_name = 'iPad'
+    elif 'macintosh' in ua or 'mac os x' in ua:
+        os_name = 'macOS'
+    elif 'android' in ua:
+        os_name = 'Android'
+    elif 'cros' in ua:
+        os_name = 'Chrome OS'
+    elif 'linux' in ua:
+        os_name = 'Linux'
+    elif 'ubuntu' in ua:
+        os_name = 'Ubuntu'
+
+    return f"{browser} on {os_name}"
+
+
 def _resolve_login_user(identifier: str):
     """
     Resolve a login identifier to a user by username or email.
@@ -205,11 +277,13 @@ def login_view(request, payload: LoginWith2FASchema):
         }
 
     # Generate API token with session tracking
+    device_name = _parse_device_name(device)
 
     token_obj = AuthToken.objects.create(
         user=user,
         ip_address=client_ip,
         device_info=device,
+        device_name=device_name,
     )
     
     # Store user data in role-specific table
@@ -421,18 +495,35 @@ def logout_view(request):
     """
     Logout the current user.
     
+    - Deactivates the current API token (sets is_active=False)
     - Clears the session
-    - Invalidates the current API token (if provided)
+    - Logs the logout activity for audit trail
     """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
     
-    # Invalidate token if provided in header
+    user = request.user
+    client_ip = _get_client_ip(request)
+    device_name = ''
+
+    # Deactivate token if provided in header (soft-delete for audit trail)
     auth_header = request.headers.get('Authorization', '')
     if auth_header.startswith('Bearer '):
-        token = auth_header[7:]
-        AuthToken.objects.filter(token=token, user=request.user).delete()
+        token_str = auth_header[7:]
+        token_qs = AuthToken.objects.filter(token=token_str, user=user, is_active=True)
+        token_obj = token_qs.first()
+        if token_obj:
+            device_name = token_obj.device_name or _parse_device_name(token_obj.device_info)
+        token_qs.update(is_active=False)
     
+    # Log the logout activity
+    ActivityLog.objects.create(
+        user=user,
+        action=ActivityLog.Action.LOGOUT,
+        details=f'Logged out from {client_ip}' + (f' ({device_name})' if device_name else ''),
+        ip_address=client_ip,
+    )
+
     # Clear session
     logout(request)
     
@@ -454,13 +545,88 @@ def logout_all_view(request):
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
     
-    # Delete all tokens for this user
-    AuthToken.objects.filter(user=request.user).delete()
+    user = request.user
+    client_ip = _get_client_ip(request)
+
+    # Deactivate all tokens for this user (soft-delete for audit trail)
+    deactivated = AuthToken.objects.filter(user=user, is_active=True).update(is_active=False)
     
+    # Log the logout activity
+    ActivityLog.objects.create(
+        user=user,
+        action=ActivityLog.Action.LOGOUT,
+        details=f'Logged out from all devices ({deactivated} session(s) deactivated)',
+        ip_address=client_ip,
+    )
+
     # Clear current session
     logout(request)
     
     return 200, {"message": "Logged out from all sessions"}
+
+
+@router.post(
+    "/beacon-logout",
+    response={200: MessageSchema},
+    summary="Beacon Logout",
+    description="Logout via navigator.sendBeacon when browser tab/window closes. Accepts token in POST body.",
+)
+def beacon_logout(request):
+    """
+    Lightweight logout endpoint designed for navigator.sendBeacon().
+
+    sendBeacon cannot set custom headers, so the token is passed in the
+    POST body instead of the Authorization header.  The endpoint is
+    intentionally unauthenticated — the token itself proves ownership.
+    """
+    import json
+    try:
+        body = json.loads(request.body)
+        token_str = body.get('token', '')
+    except (json.JSONDecodeError, AttributeError):
+        return 200, {"message": "OK"}
+
+    if not token_str:
+        return 200, {"message": "OK"}
+
+    try:
+        token_obj = AuthToken.objects.select_related('user').get(
+            token=token_str, is_active=True
+        )
+        token_obj.is_active = False
+        token_obj.save(update_fields=['is_active'])
+
+        # Log activity
+        client_ip = _get_client_ip(request)
+        device_name = token_obj.device_name or ''
+        ActivityLog.objects.create(
+            user=token_obj.user,
+            action=ActivityLog.Action.LOGOUT,
+            details=f'Browser closed – auto logout from {client_ip}' + (f' ({device_name})' if device_name else ''),
+            ip_address=client_ip,
+        )
+        logger.info(f"Beacon logout for user: {token_obj.user.username}")
+    except AuthToken.DoesNotExist:
+        pass  # Token already deactivated or doesn't exist — no-op
+
+    return 200, {"message": "OK"}
+
+
+@router.post(
+    "/heartbeat",
+    auth=SessionOrTokenAuth(),
+    response={200: MessageSchema, 401: ErrorSchema},
+    summary="Session Heartbeat",
+    description="Keep session alive. Frontend sends this periodically so the backend knows the session is still active.",
+)
+def heartbeat(request):
+    """
+    Session heartbeat — the auth middleware already updates `last_used_at`
+    on the token, so this endpoint just needs to return 200.
+    """
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
+    return 200, {"message": "OK"}
 
 
 # =============================================================================
@@ -755,8 +921,8 @@ def reset_password(request, payload: PasswordResetConfirmSchema):
             update_fields.append('plain_password')
         user.save(update_fields=update_fields)
         
-        # Invalidate all tokens
-        AuthToken.objects.filter(user=user).delete()
+        # Invalidate all tokens (soft-delete for audit trail)
+        AuthToken.objects.filter(user=user, is_active=True).update(is_active=False)
         
         # Invalidate all unused reset codes
         EmailVerificationCode.objects.filter(
@@ -811,8 +977,8 @@ def reset_password_with_token(request, payload: PasswordResetTokenConfirmSchema)
             update_fields.append('plain_password')
         user.save(update_fields=update_fields)
         
-        # Invalidate all tokens
-        AuthToken.objects.filter(user=user).delete()
+        # Invalidate all tokens (soft-delete for audit trail)
+        AuthToken.objects.filter(user=user, is_active=True).update(is_active=False)
     
     # Send confirmation email
     email_service.send_password_changed_notification(user)

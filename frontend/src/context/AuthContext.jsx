@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import authService from '../services/authService';
 import api from '../services/api';
+import { authStorage } from '../utils/authStorage';
 
 // Create context
 const AuthContext = createContext(null);
@@ -41,6 +42,35 @@ export const AuthProvider = ({ children }) => {
     };
 
     initAuth();
+  }, []);
+
+  // ── Session Lifecycle: Heartbeat ──
+  // The frontend pings the backend every 30s to keep `last_used_at` fresh.
+  // When the browser/tab is closed, the heartbeat stops. The backend
+  // auto-deactivates sessions with no heartbeat for 3+ minutes.
+  // This is the same pattern used by Netflix, Spotify, etc.
+  useEffect(() => {
+    let heartbeatInterval = null;
+
+    const startHeartbeat = () => {
+      // Send an initial heartbeat immediately on mount
+      const token = authStorage.getItem('accessToken');
+      if (token) {
+        api.post('/auth/heartbeat').catch(() => {});
+      }
+
+      heartbeatInterval = setInterval(() => {
+        const t = authStorage.getItem('accessToken');
+        if (!t) return;
+        api.post('/auth/heartbeat').catch(() => {});
+      }, 5_000); // every 5 seconds
+    };
+
+    startHeartbeat();
+
+    return () => {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+    };
   }, []);
 
   // Refresh user data function

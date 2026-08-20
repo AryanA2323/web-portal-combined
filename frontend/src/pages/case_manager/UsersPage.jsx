@@ -56,6 +56,7 @@ import {
   Computer as ComputerIcon,
   Shield as ShieldIcon,
   HelpOutline as HelpOutlineIcon,
+  DevicesOther as DevicesOtherIcon,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
@@ -1359,9 +1360,15 @@ const UsersPage = () => {
                                   <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
                                     IP Address: <span style={{ fontFamily: 'monospace', color: '#4338ca', fontWeight: 700 }}>{session.ip_address || 'N/A'}</span>
                                   </Typography>
-                                  <Typography variant="body2" sx={{ color: '#475569', display: 'block', mt: 0.5, maxWidth: 450, fontSize: '13px' }}>
-                                    {session.device_info || 'Unknown Device'}
-                                  </Typography>
+                                  {session.device_name && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.75 }}>
+                                      <DevicesOtherIcon sx={{ fontSize: 16, color: '#6366f1' }} />
+                                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b', fontSize: '13.5px' }}>
+                                        {session.device_name}
+                                      </Typography>
+                                    </Box>
+                                  )}
+
                                 </Box>
                               </Box>
 
@@ -2041,9 +2048,15 @@ const UsersPage = () => {
                                 <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
                                   IP Address: <span style={{ fontFamily: 'monospace', color: '#4338ca', fontWeight: 700 }}>{session.ip_address || 'N/A'}</span>
                                 </Typography>
-                                <Typography variant="body2" sx={{ color: '#475569', display: 'block', mt: 0.5, maxWidth: 450, fontSize: '13px' }}>
-                                  {session.device_info || 'Unknown Device'}
-                                </Typography>
+                                {session.device_name && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.75 }}>
+                                    <DevicesOtherIcon sx={{ fontSize: 16, color: '#6366f1' }} />
+                                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b', fontSize: '13.5px' }}>
+                                      {session.device_name}
+                                    </Typography>
+                                  </Box>
+                                )}
+
                               </Box>
                             </Box>
 

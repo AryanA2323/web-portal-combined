@@ -172,6 +172,7 @@ class SessionInfoSchema(BaseModel):
     last_used_at: Optional[datetime] = None
     ip_address: str = ''
     device_info: str = ''
+    device_name: str = ''
     is_active: bool = False
 
 

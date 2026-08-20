@@ -29,9 +29,14 @@ class BearerTokenAuth(HttpBearer):
         except AuthToken.DoesNotExist:
             return None
         
+        # Check if token is deactivated (logged out)
+        if not token_obj.is_active:
+            return None
+
         # Check if token is expired
         if token_obj.is_expired:
-            token_obj.delete()
+            token_obj.is_active = False
+            token_obj.save(update_fields=['is_active'])
             return None
         
         # Check if user is active
@@ -72,9 +77,15 @@ class SessionOrTokenAuth:
             try:
                 token_obj = AuthToken.objects.select_related('user').get(token=token)
 
+                # Check if token is deactivated (logged out)
+                if not token_obj.is_active:
+                    logger.warning(f"Token deactivated for user: {token_obj.user.username}")
+                    return None
+
                 if token_obj.is_expired:
                     logger.warning(f"Token expired for user: {token_obj.user.username}")
-                    token_obj.delete()
+                    token_obj.is_active = False
+                    token_obj.save(update_fields=['is_active'])
                     return None
 
                 if not token_obj.user.is_active:
