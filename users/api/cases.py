@@ -2868,6 +2868,14 @@ def get_audit_logs(
     activities: List[dict] = []
     ninety_day_cutoff = timezone.now() - timedelta(days=90)
 
+    # Determine if user is super admin — super admins see everything,
+    # regular case managers only see logs related to their own cases.
+    user_is_super = (
+        request.user.role == 'SUPER_ADMIN'
+        or (getattr(request.user, 'sub_role', '') or '').upper() == 'SUPER_ADMIN'
+    )
+    cm_user_id = None if user_is_super else request.user.id
+
     def _normalize_event_time(event_time_value):
         """Normalize timestamp values to timezone-aware datetimes for safe sorting."""
         if not event_time_value:
@@ -2909,20 +2917,37 @@ def get_audit_logs(
     try:
         with connections['default'].cursor() as cursor:
             # Case creation events
-            cursor.execute(
-                """
-                SELECT
-                    ic.case_number,
-                    ic.created_at,
-                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
-                FROM insurance_case ic
-                LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
-                WHERE ic.created_at IS NOT NULL
-                ORDER BY ic.created_at DESC
-                LIMIT %s
-                """,
-                [safe_limit],
-            )
+            if cm_user_id:
+                cursor.execute(
+                    """
+                    SELECT
+                        ic.case_number,
+                        ic.created_at,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
+                    FROM insurance_case ic
+                    LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
+                    WHERE ic.created_at IS NOT NULL
+                      AND ic.created_by_id = %s
+                    ORDER BY ic.created_at DESC
+                    LIMIT %s
+                    """,
+                    [cm_user_id, safe_limit],
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT
+                        ic.case_number,
+                        ic.created_at,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
+                    FROM insurance_case ic
+                    LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
+                    WHERE ic.created_at IS NOT NULL
+                    ORDER BY ic.created_at DESC
+                    LIMIT %s
+                    """,
+                    [safe_limit],
+                )
             for case_number, created_at, actor_name in cursor.fetchall():
                 _add_event(
                     created_at,
@@ -2933,49 +2958,69 @@ def get_audit_logs(
                     "Cases",
                 )
 
-            # User creation events
-            cursor.execute(
-                """
-                SELECT
-                    username,
-                    email,
-                    role,
-                    sub_role,
-                    date_joined
-                FROM users_customuser
-                WHERE date_joined IS NOT NULL
-                ORDER BY date_joined DESC
-                LIMIT %s
-                """,
-                [safe_limit],
-            )
-            for username, email, role, sub_role, date_joined in cursor.fetchall():
-                role_label = sub_role or role or "USER"
-                _add_event(
-                    date_joined,
-                    "USER_CREATED",
-                    "Super Admin/System",
-                    f"User '{username or email}' created with role {role_label}",
-                    "",
-                    "User Management",
+            # User creation events — only for super admins
+            if not cm_user_id:
+                cursor.execute(
+                    """
+                    SELECT
+                        username,
+                        email,
+                        role,
+                        sub_role,
+                        date_joined
+                    FROM users_customuser
+                    WHERE date_joined IS NOT NULL
+                    ORDER BY date_joined DESC
+                    LIMIT %s
+                    """,
+                    [safe_limit],
                 )
+                for username, email, role, sub_role, date_joined in cursor.fetchall():
+                    role_label = sub_role or role or "USER"
+                    _add_event(
+                        date_joined,
+                        "USER_CREATED",
+                        "Super Admin/System",
+                        f"User '{username or email}' created with role {role_label}",
+                        "",
+                        "User Management",
+                    )
 
             # Activity Log events (e.g. deletions)
-            cursor.execute(
-                """
-                SELECT
-                    al.created_at,
-                    al.action,
-                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
-                    al.details
-                FROM users_activitylog al
-                LEFT JOIN users_customuser cu ON cu.id = al.user_id
-                WHERE al.created_at IS NOT NULL
-                ORDER BY al.created_at DESC
-                LIMIT %s
-                """,
-                [safe_limit],
-            )
+            if cm_user_id:
+                cursor.execute(
+                    """
+                    SELECT
+                        al.created_at,
+                        al.action,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
+                        al.details
+                    FROM users_activitylog al
+                    LEFT JOIN users_customuser cu ON cu.id = al.user_id
+                    WHERE al.created_at IS NOT NULL
+                      AND al.user_id = %s
+                      AND al.action NOT IN ('LOGIN', 'LOGOUT', 'FORCE_LOGOUT')
+                    ORDER BY al.created_at DESC
+                    LIMIT %s
+                    """,
+                    [cm_user_id, safe_limit],
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT
+                        al.created_at,
+                        al.action,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
+                        al.details
+                    FROM users_activitylog al
+                    LEFT JOIN users_customuser cu ON cu.id = al.user_id
+                    WHERE al.created_at IS NOT NULL
+                    ORDER BY al.created_at DESC
+                    LIMIT %s
+                    """,
+                    [safe_limit],
+                )
             for created_at, action, actor_name, details in cursor.fetchall():
                 _add_event(
                     created_at,
@@ -3009,25 +3054,47 @@ def get_audit_logs(
                     continue
 
                 try:
-                    cursor.execute(
-                        f"""
-                        SELECT
-                            c.case_number,
-                            t.{event_time_column} AS event_time,
-                            uv.company_name,
-                            COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
-                        FROM {table_name} t
-                        JOIN cases c ON c.id = t.case_id
-                        JOIN users_vendor uv ON uv.id = t.assigned_vendor_id
-                        LEFT JOIN insurance_case ic ON ic.case_number = c.case_number
-                        LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
-                        WHERE t.assigned_vendor_id IS NOT NULL
-                          AND t.{event_time_column} IS NOT NULL
-                        ORDER BY t.{event_time_column} DESC
-                        LIMIT %s
-                        """,
-                        [safe_limit],
-                    )
+                    if cm_user_id:
+                        cursor.execute(
+                            f"""
+                            SELECT
+                                c.case_number,
+                                t.{event_time_column} AS event_time,
+                                uv.company_name,
+                                COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
+                            FROM {table_name} t
+                            JOIN cases c ON c.id = t.case_id
+                            JOIN users_vendor uv ON uv.id = t.assigned_vendor_id
+                            LEFT JOIN insurance_case ic ON ic.case_number = c.case_number
+                            LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
+                            WHERE t.assigned_vendor_id IS NOT NULL
+                              AND t.{event_time_column} IS NOT NULL
+                              AND ic.created_by_id = %s
+                            ORDER BY t.{event_time_column} DESC
+                            LIMIT %s
+                            """,
+                            [cm_user_id, safe_limit],
+                        )
+                    else:
+                        cursor.execute(
+                            f"""
+                            SELECT
+                                c.case_number,
+                                t.{event_time_column} AS event_time,
+                                uv.company_name,
+                                COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
+                            FROM {table_name} t
+                            JOIN cases c ON c.id = t.case_id
+                            JOIN users_vendor uv ON uv.id = t.assigned_vendor_id
+                            LEFT JOIN insurance_case ic ON ic.case_number = c.case_number
+                            LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
+                            WHERE t.assigned_vendor_id IS NOT NULL
+                              AND t.{event_time_column} IS NOT NULL
+                            ORDER BY t.{event_time_column} DESC
+                            LIMIT %s
+                            """,
+                            [safe_limit],
+                        )
 
                     for case_number, event_time, vendor_name, cm_name in cursor.fetchall():
                         _add_event(
@@ -3042,23 +3109,43 @@ def get_audit_logs(
                     logger.warning(f"Skipping vendor assignment logs for table {table_name}: {table_exc}")
 
             # QC assignment events
-            cursor.execute(
-                """
-                SELECT
-                    ic.case_number,
-                    r.assigned_at,
-                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name,
-                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
-                FROM reports r
-                JOIN insurance_case ic ON ic.id = r.case_id
-                LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
-                LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
-                WHERE r.assigned_at IS NOT NULL
-                ORDER BY r.assigned_at DESC
-                LIMIT %s
-                """,
-                [safe_limit],
-            )
+            if cm_user_id:
+                cursor.execute(
+                    """
+                    SELECT
+                        ic.case_number,
+                        r.assigned_at,
+                        COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
+                    FROM reports r
+                    JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
+                    LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
+                    WHERE r.assigned_at IS NOT NULL
+                      AND ic.created_by_id = %s
+                    ORDER BY r.assigned_at DESC
+                    LIMIT %s
+                    """,
+                    [cm_user_id, safe_limit],
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT
+                        ic.case_number,
+                        r.assigned_at,
+                        COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
+                    FROM reports r
+                    JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
+                    LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
+                    WHERE r.assigned_at IS NOT NULL
+                    ORDER BY r.assigned_at DESC
+                    LIMIT %s
+                    """,
+                    [safe_limit],
+                )
             for case_number, assigned_at, qc_name, cm_name in cursor.fetchall():
                 _add_event(
                     assigned_at,
@@ -3070,21 +3157,39 @@ def get_audit_logs(
                 )
 
             # AI report generation events
-            cursor.execute(
-                """
-                SELECT
-                    ic.case_number,
-                    r.created_at,
-                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
-                FROM reports r
-                JOIN insurance_case ic ON ic.id = r.case_id
-                LEFT JOIN users_customuser cu ON cu.id = r.created_by_id
-                WHERE r.created_at IS NOT NULL
-                ORDER BY r.created_at DESC
-                LIMIT %s
-                """,
-                [safe_limit],
-            )
+            if cm_user_id:
+                cursor.execute(
+                    """
+                    SELECT
+                        ic.case_number,
+                        r.created_at,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
+                    FROM reports r
+                    JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN users_customuser cu ON cu.id = r.created_by_id
+                    WHERE r.created_at IS NOT NULL
+                      AND ic.created_by_id = %s
+                    ORDER BY r.created_at DESC
+                    LIMIT %s
+                    """,
+                    [cm_user_id, safe_limit],
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT
+                        ic.case_number,
+                        r.created_at,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
+                    FROM reports r
+                    JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN users_customuser cu ON cu.id = r.created_by_id
+                    WHERE r.created_at IS NOT NULL
+                    ORDER BY r.created_at DESC
+                    LIMIT %s
+                    """,
+                    [safe_limit],
+                )
             for case_number, created_at, actor_name in cursor.fetchall():
                 _add_event(
                     created_at,
@@ -3096,23 +3201,43 @@ def get_audit_logs(
                 )
 
             # QC review decision events (accept/reject)
-            cursor.execute(
-                """
-                SELECT
-                    ic.case_number,
-                    r.reviewed_at,
-                    r.status,
-                    COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name
-                FROM reports r
-                JOIN insurance_case ic ON ic.id = r.case_id
-                LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
-                WHERE r.reviewed_at IS NOT NULL
-                  AND r.status IN ('ACCEPTED', 'REJECTED')
-                ORDER BY r.reviewed_at DESC
-                LIMIT %s
-                """,
-                [safe_limit],
-            )
+            if cm_user_id:
+                cursor.execute(
+                    """
+                    SELECT
+                        ic.case_number,
+                        r.reviewed_at,
+                        r.status,
+                        COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name
+                    FROM reports r
+                    JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
+                    WHERE r.reviewed_at IS NOT NULL
+                      AND r.status IN ('ACCEPTED', 'REJECTED')
+                      AND ic.created_by_id = %s
+                    ORDER BY r.reviewed_at DESC
+                    LIMIT %s
+                    """,
+                    [cm_user_id, safe_limit],
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT
+                        ic.case_number,
+                        r.reviewed_at,
+                        r.status,
+                        COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name
+                    FROM reports r
+                    JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
+                    WHERE r.reviewed_at IS NOT NULL
+                      AND r.status IN ('ACCEPTED', 'REJECTED')
+                    ORDER BY r.reviewed_at DESC
+                    LIMIT %s
+                    """,
+                    [safe_limit],
+                )
             for case_number, reviewed_at, review_status, qc_name in cursor.fetchall():
                 status_upper = str(review_status or "").upper()
                 is_accepted = status_upper == "ACCEPTED"
