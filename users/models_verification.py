@@ -24,7 +24,7 @@ class CaseVerification(models.Model):
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('IN_PROGRESS', 'In Progress'),
-        ('COMPLETED', 'Completed'),
+        ('CLOSED', 'Closed'),
         ('VERIFIED', 'Verified'),
         ('REJECTED', 'Rejected'),
         ('REQUIRES_REVISION', 'Requires Revision'),

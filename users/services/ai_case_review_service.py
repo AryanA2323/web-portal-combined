@@ -1,4 +1,4 @@
-"""Services for generating AI brief reports from vendor statements and optional PDFs."""
+"""Services for generating AI case review reports from vendor statements and optional PDFs."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from typing import Any, Dict
 import requests
 
 
-class AIBriefGenerationError(Exception):
-    """Raised when AI brief generation fails."""
+class AICaseReviewGenerationError(Exception):
+    """Raised when AI case review generation fails."""
 
 
 def _load_pymupdf():
@@ -18,14 +18,14 @@ def _load_pymupdf():
     try:
         import fitz  # PyMuPDF
     except ImportError as exc:
-        raise AIBriefGenerationError(
-            "PyMuPDF is not installed on the backend. Install the requirements to use AI brief generation."
+        raise AICaseReviewGenerationError(
+            "PyMuPDF is not installed on the backend. Install the requirements to use AI case review generation."
         ) from exc
     return fitz
 
 
-class AIBriefService:
-    """Generate concise AI brief reports using Groq and statement context."""
+class AICaseReviewService:
+    """Generate concise AI case review reports using Groq and statement context."""
 
     text_model = "llama-3.3-70b-versatile"
     vision_model = "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -60,7 +60,7 @@ class AIBriefService:
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         except Exception as exc:
-            raise AIBriefGenerationError(f"Invalid PDF file: {exc}") from exc
+            raise AICaseReviewGenerationError(f"Invalid PDF file: {exc}") from exc
 
         images: list[str] = []
         for i, page in enumerate(doc):
@@ -71,7 +71,7 @@ class AIBriefService:
             images.append(base64.b64encode(img_bytes).decode())
 
         if not images:
-            raise AIBriefGenerationError("Could not render any pages from the PDF.")
+            raise AICaseReviewGenerationError("Could not render any pages from the PDF.")
 
         return images
 
@@ -92,7 +92,7 @@ class AIBriefService:
         case_info = [
             f"Case Number: {case_context.get('case_number') or 'N/A'}",
             f"Claim Number: {case_context.get('claim_number') or 'N/A'}",
-            f"Case Type: {case_context.get('case_type') or 'N/A'}",
+            f"Investigation Type: {case_context.get('investigation_type') or 'N/A'}",
             f"Category: {case_context.get('category') or 'N/A'}",
             f"Case Receive Date: {case_context.get('case_receive_date') or 'N/A'}",
         ]
@@ -176,7 +176,7 @@ class AIBriefService:
         "- Claim Number: [from context]\n"
         "- Insured Name: [from context]\n"
         "- Claimant Name: [from context]\n"
-        "- Case Type: [from context]\n"
+        "- Investigation Type: [from context]\n"
         "- Category: [from context]\n"
         "- Case Receive Date: [from context]\n\n"
         "CLAIMANT STATEMENT\n"
@@ -215,13 +215,13 @@ class AIBriefService:
         case_context: Dict[str, Any],
         statement_text: str,
     ) -> Dict[str, str]:
-        """Generate a structured AI brief report from stored vendor statements."""
+        """Generate a structured AI case review report from stored vendor statements."""
         if not self.api_key:
-            raise AIBriefGenerationError("GROQ_API_KEY is not configured on the backend.")
+            raise AICaseReviewGenerationError("GROQ_API_KEY is not configured on the backend.")
 
         normalized_text = (statement_text or "").strip()
         if not normalized_text:
-            raise AIBriefGenerationError("No vendor statements were provided for report generation.")
+            raise AICaseReviewGenerationError("No vendor statements were provided for report generation.")
 
         prompt = self.build_prompt(case_context, normalized_text)
         report_text = self._call_text_model(prompt)
@@ -290,25 +290,25 @@ class AIBriefService:
     def _parse_response(self, response: requests.Response) -> str:
         """Parse the Groq API response and return the report text."""
         if response.status_code >= 400:
-            raise AIBriefGenerationError(
+            raise AICaseReviewGenerationError(
                 f"Groq request failed with status {response.status_code}: {response.text[:500]}"
             )
 
         payload = response.json()
         choices = payload.get("choices") or []
         if not choices:
-            raise AIBriefGenerationError("Groq returned no choices.")
+            raise AICaseReviewGenerationError("Groq returned no choices.")
 
         report_text = choices[0].get("message", {}).get("content", "").strip()
         if not report_text:
-            raise AIBriefGenerationError("Groq returned an empty report.")
+            raise AICaseReviewGenerationError("Groq returned an empty report.")
 
         return report_text
 
     def generate_report(self, case_context: Dict[str, Any], pdf_bytes: bytes) -> Dict[str, str]:
-        """Generate a structured AI brief report from case context and PDF."""
+        """Generate a structured AI case review report from case context and PDF."""
         if not self.api_key:
-            raise AIBriefGenerationError("GROQ_API_KEY is not configured on the backend.")
+            raise AICaseReviewGenerationError("GROQ_API_KEY is not configured on the backend.")
 
         # Try text extraction first (fast path)
         statement_text = self.extract_pdf_text(pdf_bytes)

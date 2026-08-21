@@ -18,7 +18,7 @@ from django.http import HttpRequest
 from django.conf import settings
 from django.utils import timezone
 
-from users.services.ai_brief_service import AIBriefGenerationError, AIBriefService
+from users.services.ai_case_review_service import AICaseReviewGenerationError, AICaseReviewService
 
 logger = logging.getLogger(__name__)
 
@@ -313,7 +313,7 @@ def _column_exists(table_name: str, column_name: str) -> bool:
 
 
 def _collect_vendor_statements(case_id: int) -> List[dict]:
-    """Collect all vendor statements (including multi-entry statements) for AI brief generation."""
+    """Collect all vendor statements (including multi-entry statements) for AI case review generation."""
     vendor_statements: List[dict] = []
     statement_tables = (
         ("claimant_checks", "statement", "Claimant Check"),
@@ -485,13 +485,13 @@ class CaseSchema(Schema):
     # Date and timing fields
     case_receive_date: Optional[str] = None
     receive_month: Optional[str] = None
-    completion_date: Optional[str] = None
-    completion_month: Optional[str] = None
+    closure_date: Optional[str] = None
+    closure_month: Optional[str] = None
     case_due_date: Optional[str] = None
     tat_days: Optional[int] = None
     sla_status: Optional[str] = None
     # Case classification
-    case_type: Optional[str] = None
+    investigation_type: Optional[str] = None
     investigation_report_status: Optional[str] = None
     full_case_status: Optional[str] = None
     special_instructions: Optional[str] = None
@@ -547,12 +547,14 @@ class CaseStatsSchema(Schema):
     """Case statistics schema."""
     total_cases: int
     active_investigations: int
-    completed_cases: int
+    closed_cases: int
     overdue_cases: int
     pending_cases: int = 0
+    not_initiated_cases: int = 0
+    wip_cases: int = 0
     total_change: int = 0
     active_change: int = 0
-    completed_change: int = 0
+    closed_change: int = 0
     overdue_change: int = 0
 
 
@@ -560,7 +562,7 @@ class CaseVolumeSchema(Schema):
     """Case volume data for charts."""
     month: str
     total: int
-    completed: int
+    closed: int
 
 
 class CaseStatusCountSchema(Schema):
@@ -586,8 +588,8 @@ class AuditLogEntrySchema(Schema):
     source: str
 
 
-class AIBriefReportResponse(Schema):
-    """AI brief generation response."""
+class AICaseReviewReportResponse(Schema):
+    """AI case review generation response."""
     case_id: int
     case_number: str
     report_text: str
@@ -606,12 +608,12 @@ class CreateCaseSchema(Schema):
     category: str = 'MACT'
     case_receive_date: Optional[str] = None  # ISO date string YYYY-MM-DD
     receive_month: str = ''
-    completion_date: Optional[str] = None
-    completion_month: str = ''
+    closure_date: Optional[str] = None
+    closure_month: str = ''
     case_due_date: Optional[str] = None
     tat_days: Optional[int] = None
     sla_status: str = ''  # AT or WT
-    case_type: str = ''   # Full Case / Partial Case / Reassessment / Connected Case
+    investigation_type: str = ''   # Full Case / Partial Case / Reassessment / Connected Case
     investigation_report_status: str = 'Open'
     full_case_status: str = 'WIP'
     special_instructions: str = ''
@@ -811,7 +813,7 @@ def get_cases_incident_db(
     page_size: int = 10,
     search: Optional[str] = None,
     full_case_status: Optional[str] = None,
-    case_type: Optional[str] = None,
+    investigation_type: Optional[str] = None,
     investigation_report_status: Optional[str] = None,
     assigned_vendor_name: Optional[str] = None,
 ):
@@ -831,9 +833,9 @@ def get_cases_incident_db(
                 conditions.append("c.full_case_status = %s")
                 params.append(full_case_status)
 
-            if case_type:
-                conditions.append("c.case_type = %s")
-                params.append(case_type)
+            if investigation_type:
+                conditions.append("c.investigation_type = %s")
+                params.append(investigation_type)
 
             if investigation_report_status:
                 conditions.append("c.investigation_report_status = %s")
@@ -1191,7 +1193,7 @@ def get_cases_incident_db(
         return {"cases": [], "total": 0}
 
 
-def _fetch_ai_brief_case_context(case_id: int) -> dict:
+def _fetch_ai_case_review_case_context(case_id: int) -> dict:
     """Fetch comprehensive case context for AI report generation.
 
     Includes all key fields needed for a complete investigation report:
@@ -1211,7 +1213,7 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
                 c.case_number,
                 c.claim_number,
                 c.client_name,
-                c.case_type,
+                c.investigation_type,
                 c.investigation_report_status,
                 c.full_case_status,
                 c.special_instructions,
@@ -1386,7 +1388,7 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
         "case_number": row[1],
         "claim_number": row[2],
         "client_name": row[3],
-        "case_type": row[4],
+        "investigation_type": row[4],
         "investigation_report_status": row[5],
         "full_case_status": row[6],
         "special_instructions": row[7],
@@ -1418,12 +1420,12 @@ def _fetch_ai_brief_case_context(case_id: int) -> dict:
 
 
 @router.post(
-    "/cases/incident-db/{case_id}/ai-brief-report",
-    response={200: AIBriefReportResponse},
-    summary="Generate AI brief report",
-    description="Generate an AI brief report from vendor statements stored in check tables for an incident-db case.",
+    "/cases/incident-db/{case_id}/ai-case-review-report",
+    response={200: AICaseReviewReportResponse},
+    summary="Generate AI case review report",
+    description="Generate an AI case review report from vendor statements stored in check tables for an incident-db case.",
 )
-def generate_ai_brief_report(
+def generate_ai_case_review_report(
     request: HttpRequest,
     case_id: int,
 ):
@@ -1432,7 +1434,7 @@ def generate_ai_brief_report(
         raise HttpError(403, "Admin access required")
 
     try:
-        case_context = _fetch_ai_brief_case_context(case_id)
+        case_context = _fetch_ai_case_review_case_context(case_id)
         statement_text = str(case_context.get("vendor_statement_text") or "").strip()
         if not statement_text:
             raise HttpError(
@@ -1440,7 +1442,7 @@ def generate_ai_brief_report(
                 "No vendor statements are stored for this case. Please record statements in the vendor portal first.",
             )
 
-        service = AIBriefService()
+        service = AICaseReviewService()
         result = service.generate_report_from_statement_text(case_context, statement_text)
         
         fallback_location_name = (
@@ -1510,14 +1512,14 @@ def generate_ai_brief_report(
             "case_documents": enriched_case_docs if enriched_case_docs else None,
             "vendor_statements": case_context.get("vendor_statements") or [],
         }
-    except AIBriefGenerationError as exc:
-        logger.error(f"AI brief generation failed for case {case_id}: {exc}")
+    except AICaseReviewGenerationError as exc:
+        logger.error(f"AI case review generation failed for case {case_id}: {exc}")
         raise HttpError(400, str(exc))
     except HttpError:
         raise
     except Exception as exc:
-        logger.error(f"Unexpected AI brief generation error for case {case_id}: {exc}")
-        raise HttpError(500, "Failed to generate AI brief report")
+        logger.error(f"Unexpected AI case review generation error for case {case_id}: {exc}")
+        raise HttpError(500, "Failed to generate AI case review report")
 
 
 @router.delete(
@@ -1573,7 +1575,7 @@ def update_case_status(request: HttpRequest, case_id: int, payload: UpdateCaseSt
         from users.models import InsuranceCase
         
         status = payload.status
-        valid_statuses = ['OPEN', 'WIP', 'Completed']
+        valid_statuses = ['OPEN', 'WIP', 'Closed']
         if status not in valid_statuses:
             raise HttpError(400, f"Invalid status. Must be one of {valid_statuses}")
 
@@ -2025,9 +2027,9 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
     CASE_FIELDS = {
         'claim_number', 'client_name', 'category',
         'case_receive_date', 'receive_month',
-        'completion_date', 'completion_month',
+        'closure_date', 'closure_month',
         'case_due_date', 'tat_days', 'sla',
-        'case_type', 'investigation_report_status',
+        'investigation_type', 'investigation_report_status',
         'full_case_status', 'special_instructions',
     }
 
@@ -2468,9 +2470,9 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
         if payload.case_receive_date:
             case_receive_date = dt.strptime(payload.case_receive_date, '%Y-%m-%d').date()
         
-        completion_date_val = None
-        if payload.completion_date:
-            completion_date_val = dt.strptime(payload.completion_date, '%Y-%m-%d').date()
+        closure_date_val = None
+        if payload.closure_date:
+            closure_date_val = dt.strptime(payload.closure_date, '%Y-%m-%d').date()
         
         case_due_date_val = None
         if payload.case_due_date:
@@ -2481,15 +2483,15 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
         if not receive_month and case_receive_date:
             receive_month = case_receive_date.strftime('%B %Y')
         
-        # Auto-compute completion_month from completion_date
-        completion_month = payload.completion_month
-        if not completion_month and completion_date_val:
-            completion_month = completion_date_val.strftime('%B %Y')
+        # Auto-compute closure_month from closure_date
+        closure_month = payload.closure_month
+        if not closure_month and closure_date_val:
+            closure_month = closure_date_val.strftime('%B %Y')
         
         # Auto-compute TAT if dates available and not manually set
         tat_days = payload.tat_days
-        if tat_days is None and case_receive_date and completion_date_val:
-            tat_days = (completion_date_val - case_receive_date).days
+        if tat_days is None and case_receive_date and closure_date_val:
+            tat_days = (closure_date_val - case_receive_date).days
 
         # Auto-compute case_due_date = receive_date + 30 days
         if not case_due_date_val and case_receive_date:
@@ -2511,12 +2513,12 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
             category=payload.category,
             case_receive_date=case_receive_date,
             receive_month=receive_month or '',
-            completion_date=completion_date_val,
-            completion_month=completion_month or '',
+            closure_date=closure_date_val,
+            closure_month=closure_month or '',
             case_due_date=case_due_date_val,
             tat_days=tat_days,
             sla=sla_status,           # maps to `sla` column
-            case_type=payload.case_type,
+            investigation_type=payload.investigation_type,
             investigation_report_status=payload.investigation_report_status,
             full_case_status=payload.full_case_status,
             special_instructions=payload.special_instructions,
@@ -2543,12 +2545,12 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
                 client_code=payload.client_code,
                 case_receive_date=case_receive_date,
                 receive_month=receive_month,
-                completion_date=completion_date_val,
-                completion_month=completion_month,
+                closure_date=closure_date_val,
+                closure_month=closure_month,
                 case_due_date=case_due_date_val,
                 tat_days=tat_days,
                 sla_status=sla_status,
-                case_type=payload.case_type,
+                investigation_type=payload.investigation_type,
                 investigation_report_status=payload.investigation_report_status,
                 full_case_status=payload.full_case_status,
                 special_instructions=payload.special_instructions,
@@ -2622,7 +2624,7 @@ def get_dashboard_stats(request: HttpRequest):
         return {
             "total_cases": 0,
             "active_investigations": 0,
-            "completed_cases": 0,
+            "closed_cases": 0,
             "overdue_cases": 0,
         }
     
@@ -2632,11 +2634,16 @@ def get_dashboard_stats(request: HttpRequest):
             cursor.execute("SELECT COUNT(*) FROM cases")
             total_cases = cursor.fetchone()[0]
             
-            # Active investigations: WIP status
+            # Not Initiated cases
+            cursor.execute("SELECT COUNT(*) FROM cases WHERE full_case_status IN ('Not Initiated', 'NI') OR full_case_status IS NULL OR full_case_status = ''")
+            not_initiated_cases = cursor.fetchone()[0]
+
+            # WIP cases / Active investigations
             cursor.execute("SELECT COUNT(*) FROM cases WHERE full_case_status = 'WIP'")
-            active_investigations = cursor.fetchone()[0]
+            wip_cases = cursor.fetchone()[0]
+            active_investigations = wip_cases
             
-            # Completed cases card should mirror the final approved reports page:
+            # Closed cases card should mirror the final approved reports page:
             # latest report per case with ACCEPTED status.
             cursor.execute(
                 """
@@ -2652,13 +2659,13 @@ def get_dashboard_stats(request: HttpRequest):
                 WHERE r.status = 'ACCEPTED'
                 """
             )
-            completed_cases = cursor.fetchone()[0]
+            closed_cases = cursor.fetchone()[0]
             
-            # Overdue: past due date and not completed/withdrawn
+            # Overdue: past due date and not closed/withdrawn
             cursor.execute(
                 "SELECT COUNT(*) FROM cases "
                 "WHERE case_due_date < CURRENT_DATE "
-                "AND full_case_status NOT IN ('Completed', 'Withdraw', 'Portal Upload')"
+                "AND full_case_status NOT IN ('Closed', 'Withdraw', 'Portal Upload')"
             )
             overdue_cases = cursor.fetchone()[0]
             
@@ -2671,8 +2678,10 @@ def get_dashboard_stats(request: HttpRequest):
             
             return {
                 "total_cases": total_cases,
+                "not_initiated_cases": not_initiated_cases,
+                "wip_cases": wip_cases,
                 "active_investigations": active_investigations,
-                "completed_cases": completed_cases,
+                "closed_cases": closed_cases,
                 "overdue_cases": overdue_cases,
                 "pending_cases": pending_cases,
             }
@@ -2682,7 +2691,7 @@ def get_dashboard_stats(request: HttpRequest):
         return {
             "total_cases": 0,
             "active_investigations": 0,
-            "completed_cases": 0,
+            "closed_cases": 0,
             "overdue_cases": 0,
             "pending_cases": 0,
         }
@@ -2706,7 +2715,7 @@ def get_case_volume(request: HttpRequest):
                 SELECT 
                     TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') as month,
                     COUNT(*) as total,
-                    COUNT(CASE WHEN status IN ('RESOLVED', 'CLOSED') THEN 1 END) as completed
+                    COUNT(CASE WHEN status IN ('RESOLVED', 'CLOSED') THEN 1 END) as closed
                 FROM insurance_case
                 WHERE created_at >= NOW() - INTERVAL '6 months'
                 GROUP BY DATE_TRUNC('month', created_at)
@@ -2731,7 +2740,7 @@ def get_case_volume(request: HttpRequest):
                     months.append({
                         "month": month_name,
                         "total": 0,
-                        "completed": 0
+                        "closed": 0
                     })
                 return months
             
@@ -2761,7 +2770,7 @@ def get_case_status_distribution(request: HttpRequest):
                         WHEN 'OPEN' THEN 'New'
                         WHEN 'IN_PROGRESS' THEN 'In Progress'
                         WHEN 'PENDING' THEN 'Under Review'
-                        WHEN 'RESOLVED' THEN 'Completed'
+                        WHEN 'RESOLVED' THEN 'Closed'
                         WHEN 'CLOSED' THEN 'Closed'
                         ELSE status
                     END as label,
@@ -3195,7 +3204,7 @@ def get_audit_logs(
                     created_at,
                     "AI_REPORT_GENERATED",
                     actor_name,
-                    f"AI brief report generated for case {case_number}",
+                    f"AI case review report generated for case {case_number}",
                     case_number,
                     "Reports",
                 )
@@ -4594,160 +4603,11 @@ def generate_rto_rti_form(request, case_id: int, data: GenerateRTORTIRequest):
 
 
 # =========================================================================
-# TAT Change Requests
+# Shared Schemas
 # =========================================================================
 
-class TatChangeRequestCreateSchema(Schema):
-    updated_tat_days: int
-    reason: str
-
-class TatChangeRequestReviewSchema(Schema):
+class ChangeRequestReviewSchema(Schema):
     action: str  # 'APPROVE' or 'REJECT'
-
-@router.post('/cases/{case_id}/approval/', tags=["TAT Change"], summary="Request TAT Change")
-def create_tat_change_request(request, case_id: str, data: TatChangeRequestCreateSchema):
-    from users.models import TatChangeRequest, CustomUser
-    from ninja.errors import HttpError
-    from django.utils import timezone
-    
-    if request.user.role not in [CustomUser.Role.CASE_MANAGER, CustomUser.Role.SUPER_ADMIN]:
-        raise HttpError(403, "Unauthorized")
-
-    # Fetch current TAT days from the raw DB
-    cursor = connection.cursor()
-    cursor.execute("SELECT tat_days FROM cases WHERE id = %s", [case_id])
-    row = cursor.fetchone()
-    if not row:
-        raise HttpError(404, "Case not found")
-    
-    current_tat_days = row[0]
-
-    # Check if a pending request already exists
-    if TatChangeRequest.objects.filter(case_id=case_id, status=TatChangeRequest.Status.PENDING).exists():
-        raise HttpError(400, "A pending TAT change request already exists for this case.")
-
-    # Create new request
-    tat_req = TatChangeRequest.objects.create(
-        case_id=case_id,
-        requested_by=request.user,
-        current_tat_days=current_tat_days,
-        updated_tat_days=data.updated_tat_days,
-        reason=data.reason,
-        status=TatChangeRequest.Status.PENDING
-    )
-
-    return {"success": True, "message": "TAT change request submitted successfully", "request_id": tat_req.id}
-
-@router.get('/cases/{case_id}/approval/', tags=["TAT Change"], summary="Get Latest TAT Change Request")
-def get_latest_tat_change_request(request, case_id: str):
-    from users.models import TatChangeRequest
-    
-    # Get the most recent request
-    tat_req = TatChangeRequest.objects.filter(case_id=case_id).order_by('-requested_at').first()
-    
-    if not tat_req:
-        return {"has_request": False}
-        
-    return {
-        "has_request": True,
-        "request": {
-            "id": tat_req.id,
-            "status": tat_req.status,
-            "updated_tat_days": tat_req.updated_tat_days,
-            "reason": tat_req.reason,
-            "requested_at": tat_req.requested_at.isoformat() if tat_req.requested_at else None,
-        }
-    }
-
-
-@router.get('/super-admin/approvals/', tags=["TAT Change"], summary="Get All TAT Change Requests (Super Admin)")
-def get_all_tat_change_requests(request, status: Optional[str] = None):
-    from users.models import TatChangeRequest, CustomUser
-    from ninja.errors import HttpError
-    
-    if request.user.role != CustomUser.Role.SUPER_ADMIN:
-        raise HttpError(403, "Unauthorized")
-
-    queryset = TatChangeRequest.objects.select_related('requested_by', 'reviewed_by').all()
-    if status:
-        queryset = queryset.filter(status=status.upper())
-        
-    return [
-        {
-            "id": req.id,
-            "case_id": req.case_id,
-            "requested_by_name": f"{req.requested_by.first_name} {req.requested_by.last_name}",
-            "requested_by_email": req.requested_by.email,
-            "requested_at": req.requested_at.isoformat() if req.requested_at else None,
-            "current_tat_days": req.current_tat_days,
-            "updated_tat_days": req.updated_tat_days,
-            "reason": req.reason,
-            "status": req.status,
-            "reviewed_by_name": f"{req.reviewed_by.first_name} {req.reviewed_by.last_name}" if req.reviewed_by else None,
-            "reviewed_at": req.reviewed_at.isoformat() if req.reviewed_at else None,
-        }
-        for req in queryset
-    ]
-
-@router.post('/super-admin/tat-change-requests/{request_id}/review', tags=["TAT Change"], summary="Approve/Reject TAT Change Request")
-def review_tat_change_request(request, request_id: int, data: TatChangeRequestReviewSchema):
-    from users.models import TatChangeRequest, CustomUser
-    from ninja.errors import HttpError
-    from django.utils import timezone
-    
-    if request.user.role != CustomUser.Role.SUPER_ADMIN:
-        raise HttpError(403, "Unauthorized")
-
-    try:
-        tat_req = TatChangeRequest.objects.get(id=request_id)
-    except TatChangeRequest.DoesNotExist:
-        raise HttpError(404, "Request not found")
-
-    if tat_req.status != TatChangeRequest.Status.PENDING:
-        raise HttpError(400, f"Request is already {tat_req.status}")
-
-    action = data.action.upper()
-    if action not in ['APPROVE', 'REJECT']:
-        raise HttpError(400, "Invalid action")
-
-    tat_req.status = TatChangeRequest.Status.APPROVED if action == 'APPROVE' else TatChangeRequest.Status.REJECTED
-    tat_req.reviewed_by = request.user
-    tat_req.reviewed_at = timezone.now()
-    tat_req.save()
-
-    if action == 'APPROVE':
-        # Update the actual case
-        cursor = connection.cursor()
-        cursor.execute("UPDATE cases SET tat_days = %s WHERE id = %s", [tat_req.updated_tat_days, tat_req.case_id])
-        
-        # We also need to update the case_due_date = case_receive_date + updated_tat_days if possible
-        # We will let the DB trigger or existing logic handle it, but wait, there is logic in python usually.
-        # For safety, let's update case_due_date here:
-        cursor.execute("SELECT case_receive_date FROM cases WHERE id = %s", [tat_req.case_id])
-        row = cursor.fetchone()
-        if row and row[0]:
-            from datetime import timedelta
-            case_receive_date = row[0]
-            if isinstance(case_receive_date, str):
-                from datetime import datetime
-                case_receive_date = datetime.strptime(case_receive_date, '%Y-%m-%d').date()
-            new_due_date = case_receive_date + timedelta(days=tat_req.updated_tat_days)
-            cursor.execute("UPDATE cases SET case_due_date = %s WHERE id = %s", [new_due_date, tat_req.case_id])
-
-    action_past = "APPROVED" if action == "APPROVE" else "REJECTED"
-
-    try:
-        from users.models import ActivityLog
-        ActivityLog.objects.create(
-            user=request.user,
-            action=f"TAT_{action_past}",
-            details=f"TAT change request for case #{tat_req.case_id} was {action_past.lower()} by {request.user.email}",
-            ip_address=request.META.get('REMOTE_ADDR', ''),
-        )
-    except Exception as log_err:
-        logger.warning(f"Failed to log TAT request review: {log_err}")
-
-    return {"success": True, "message": f"TAT change request {action_past.lower()} successfully"}
 
 
 # =========================================================================
@@ -4826,7 +4686,7 @@ def get_all_deletion_requests(request, status: Optional[str] = None):
     ]
 
 @router.post('/super-admin/deletion-requests/{request_id}/review', tags=["Case Deletion"], summary="Approve/Reject Case Deletion Request")
-def review_deletion_request(request, request_id: int, data: TatChangeRequestReviewSchema):
+def review_deletion_request(request, request_id: int, data: ChangeRequestReviewSchema):
     from users.models import CaseDeletionRequest, CustomUser
     from ninja.errors import HttpError
     from django.utils import timezone

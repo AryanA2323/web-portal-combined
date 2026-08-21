@@ -60,7 +60,6 @@ class SuperAdminDashboardSchema(Schema):
     recent_users: List[Dict[str, Any]]
     case_managers: List[Dict[str, Any]] = []
     activity_logs: List[Dict[str, Any]] = []
-    tat_logs: List[Dict[str, Any]] = []
     deletion_logs: List[Dict[str, Any]] = []
 
 
@@ -78,7 +77,7 @@ def is_super_admin(user) -> bool:
 
 def get_dashboard_logs_data() -> Dict[str, Any]:
     """Fetch real case manager activity logs, TAT logs, deletion logs, and case managers."""
-    from users.models import ActivityLog, TatChangeRequest, CaseDeletionRequest, Report
+    from users.models import ActivityLog, CaseDeletionRequest, Report
     from django.db import connection
     
     # 1. Fetch Case Managers list
@@ -194,27 +193,7 @@ def get_dashboard_logs_data() -> Dict[str, Any]:
 
     activity_logs.sort(key=lambda x: _parse_time(x['created_at']), reverse=True)
 
-    # 3. TAT Change Logs
-    tat_logs = []
-    try:
-        tat_qs = TatChangeRequest.objects.select_related('requested_by', 'reviewed_by').order_by('-requested_at')[:10]
-        for tr in tat_qs:
-            req_name = f"{tr.requested_by.first_name or ''} {tr.requested_by.last_name or ''}".strip() if tr.requested_by else "Case Manager"
-            rev_name = f"{tr.reviewed_by.first_name or ''} {tr.reviewed_by.last_name or ''}".strip() if tr.reviewed_by else None
-            tat_logs.append({
-                "id": tr.id,
-                "case_id": tr.case_id,
-                "requested_by": req_name,
-                "current_tat_days": getattr(tr, 'current_tat_days', None),
-                "updated_tat_days": getattr(tr, 'updated_tat_days', None),
-                "reason": tr.reason or "N/A",
-                "status": tr.status,
-                "reviewed_by": rev_name,
-                "requested_at": tr.requested_at.isoformat() if tr.requested_at else None,
-                "reviewed_at": tr.reviewed_at.isoformat() if tr.reviewed_at else None,
-            })
-    except Exception as e:
-        logger.warning(f"Failed to load TAT logs: {e}")
+    # TAT Change Logs removed
 
     # 4. Case Deletion Change Logs
     deletion_logs = []
@@ -240,7 +219,6 @@ def get_dashboard_logs_data() -> Dict[str, Any]:
     return {
         "case_managers": case_managers,
         "activity_logs": activity_logs,
-        "tat_logs": tat_logs,
         "deletion_logs": deletion_logs,
     }
 
@@ -398,7 +376,6 @@ def get_super_admin_dashboard(request):
             'recent_users': get_recent_users(),
             'case_managers': logs_data['case_managers'],
             'activity_logs': logs_data['activity_logs'],
-            'tat_logs': logs_data['tat_logs'],
             'deletion_logs': logs_data['deletion_logs'],
         }
         
@@ -464,7 +441,7 @@ def get_super_admin_notifications_endpoint(request, limit: int = 50):
             "code": "SUPER_ADMIN_REQUIRED"
         }
 
-    from users.models import ActivityLog, TatChangeRequest, Client
+    from users.models import ActivityLog, Client
 
     logs = []
     
@@ -545,7 +522,7 @@ def get_super_admin_notifications_endpoint(request, limit: int = 50):
             if ". (No fields changed)" in desc:
                 desc = desc.replace(". (No fields changed)", "\n(No fields changed)")
 
-        if act.action in ['TAT_APPROVED', 'TAT_REJECTED', 'TAT_REQUESTED', 'CASE_DELETION_APPROVED', 'CASE_DELETION_REJECTED', 'CASE_DELETION_REQUESTED']:
+        if act.action in ['CASE_DELETION_APPROVED', 'CASE_DELETION_REJECTED', 'CASE_DELETION_REQUESTED']:
             case_match = re.search(r"case #(\d+)", desc)
             if case_match:
                 case_id = case_match.group(1)
@@ -596,58 +573,7 @@ def get_super_admin_notifications_endpoint(request, limit: int = 50):
             "target_user_id": u.id,
         })
 
-    # 3. Fetch TAT Change Requests / Approvals
-    try:
-        tat_reqs = TatChangeRequest.objects.select_related('requested_by', 'reviewed_by').order_by('-requested_at')[:limit]
-        
-        # Pre-fetch case numbers from the raw 'cases' table (case_id references 'cases' table, not 'insurance_case')
-        case_ids = [str(tr.case_id) for tr in tat_reqs if tr.case_id]
-        case_numbers = {}
-        if case_ids:
-            try:
-                from django.db import connection as db_conn
-                cursor = db_conn.cursor()
-                placeholders = ','.join(['%s'] * len(case_ids))
-                cursor.execute(f"SELECT id, case_number FROM cases WHERE id IN ({placeholders})", case_ids)
-                for row in cursor.fetchall():
-                    case_numbers[str(row[0])] = row[1]
-            except Exception:
-                pass
-
-        for tr in tat_reqs:
-            if tr.requested_by:
-                req_name = f"{tr.requested_by.first_name} {tr.requested_by.last_name}".strip() or tr.requested_by.username or tr.requested_by.email
-            else:
-                req_name = "System"
-                
-            old_tat = tr.current_tat_days if tr.current_tat_days is not None else 'N/A'
-            new_tat = tr.updated_tat_days if tr.updated_tat_days is not None else 'N/A'
-            c_num = case_numbers.get(str(tr.case_id))
-            case_display = c_num if c_num else f"{tr.case_id}"
-            
-            logs.append({
-                "id": f"tat-req-{tr.id}",
-                "description": f"TAT change requested for case {case_display}\nReason: {tr.reason or 'N/A'}\nChanges: from {old_tat} to {new_tat} days",
-                "actor": req_name,
-                "event_time": tr.requested_at.isoformat() if tr.requested_at else None,
-                "event_type": "TAT_REQUESTED",
-                "case_id": tr.case_id,
-            })
-            if tr.reviewed_at and tr.status in ['APPROVED', 'REJECTED']:
-                if tr.reviewed_by:
-                    rev_name = f"{tr.reviewed_by.first_name} {tr.reviewed_by.last_name}".strip() or tr.reviewed_by.username or tr.reviewed_by.email
-                else:
-                    rev_name = "Super Admin"
-                logs.append({
-                    "id": f"tat-rev-{tr.id}",
-                    "description": f"TAT change request for case {case_display} was {tr.status.lower()} by {rev_name}\nChanges: from {old_tat} to {new_tat} days",
-                    "actor": rev_name,
-                    "event_time": tr.reviewed_at.isoformat() if tr.reviewed_at else None,
-                    "event_type": f"TAT_{tr.status}",
-                    "case_id": tr.case_id,
-                })
-    except Exception as e:
-        logger.warning(f"Error loading TAT request notifications: {e}")
+    # Fetch TAT Change Requests removed
 
     # 4. Client creation/update events are captured via ActivityLog (CLIENT_CREATED, CLIENT_UPDATED)
     # No need to add static Client model records here — they lack real event timestamps.

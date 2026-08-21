@@ -181,8 +181,8 @@ const EmailIntakePage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [vendorFilter, setVendorFilter] = useState('all');
-  const [caseTypeFilter, setCaseTypeFilter] = useState('all');
-  const [caseTypeFilter2, setCaseTypeFilter2] = useState('all');
+  const [investigationTypeFilter, setInvestigationTypeFilter] = useState('all');
+  const [investigationTypeFilter2, setInvestigationTypeFilter2] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState([]);
@@ -229,8 +229,8 @@ const EmailIntakePage = () => {
     setSearchTerm('');
     setStatusFilter('all');
     setVendorFilter('all');
-    setCaseTypeFilter('all');
-    setCaseTypeFilter2('all');
+    setInvestigationTypeFilter('all');
+    setInvestigationTypeFilter2('all');
   };
 
   const isSelected = (id) => selected.indexOf(id) !== -1;
@@ -339,18 +339,18 @@ const EmailIntakePage = () => {
               </Select>
             </FormControl>
 
-            {/* Case Type Filter */}
+            {/* Investigation Type Filter */}
             <FormControl size="small" sx={{ minWidth: 140 }}>
               <Select
-                value={caseTypeFilter}
-                onChange={(e) => setCaseTypeFilter(e.target.value)}
+                value={investigationTypeFilter}
+                onChange={(e) => setInvestigationTypeFilter(e.target.value)}
                 displayEmpty
                 sx={{
                   borderRadius: '8px',
                   '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
                 }}
               >
-                <MenuItem value="all">All Case Types</MenuItem>
+                <MenuItem value="all">All Investigation Types</MenuItem>
                 <MenuItem value="forensic">Forensic</MenuItem>
                 <MenuItem value="fraud">Fraud</MenuItem>
                 <MenuItem value="theft">Theft</MenuItem>
@@ -375,18 +375,18 @@ const EmailIntakePage = () => {
               </Select>
             </FormControl>
 
-            {/* Case Type Filter 2 */}
+            {/* Investigation Type Filter 2 */}
             <FormControl size="small" sx={{ minWidth: 140 }}>
               <Select
-                value={caseTypeFilter2}
-                onChange={(e) => setCaseTypeFilter2(e.target.value)}
+                value={investigationTypeFilter2}
+                onChange={(e) => setInvestigationTypeFilter2(e.target.value)}
                 displayEmpty
                 sx={{
                   borderRadius: '8px',
                   '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
                 }}
               >
-                <MenuItem value="all">All Case Types</MenuItem>
+                <MenuItem value="all">All Investigation Types</MenuItem>
                 <MenuItem value="forensic">Forensic</MenuItem>
                 <MenuItem value="fraud">Fraud</MenuItem>
               </Select>
@@ -440,7 +440,7 @@ const EmailIntakePage = () => {
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>From</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Subject</TableCell>
-                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Case Type</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Investigation Type</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Business Partner</TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '13px', color: '#666' }}>Received</TableCell>

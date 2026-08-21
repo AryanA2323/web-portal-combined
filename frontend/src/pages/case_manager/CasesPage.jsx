@@ -78,7 +78,7 @@ const resolveMediaUrl = (url) => {
 const fullCaseStatusColors = {
   'WIP': '#f6ad55',
   'Pending CS': '#ed8936',
-  'Completed': '#48bb78',
+  'Closed': '#48bb78',
   'IR-Writing': '#4299e1',
   'NI': '#a0aec0',
   'Withdraw': '#f56565',
@@ -102,12 +102,12 @@ const irStatusColors = {
 const checkStatusColors = {
   'Not Initiated': '#a0aec0',
   'WIP': '#f6ad55',
-  'Completed': '#48bb78',
+  'Closed': '#48bb78',
   'Stop': '#f56565',
 };
 
-// Case type chip colors
-const caseTypeColors = {
+// Investigation type chip colors
+const investigationTypeColors = {
   'Full Case': '#667eea',
   'Partial Case': '#9f7aea',
   'Reassessment': '#4299e1',
@@ -198,14 +198,14 @@ const parseQuestionnaire = (rawVal) => {
   return null;
 };
 
-const CasesPage = ({ isCompletedView = false }) => {
+const CasesPage = ({ isClosedView = false }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [cases, setCases] = useState([]);
   const [stats, setStats] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [fullCaseStatusFilter, setFullCaseStatusFilter] = useState(isCompletedView ? 'Completed' : 'all');
-  const [caseTypeFilter, setCaseTypeFilter] = useState('all');
+  const [fullCaseStatusFilter, setFullCaseStatusFilter] = useState(isClosedView ? 'Closed' : 'all');
+  const [investigationTypeFilter, setInvestigationTypeFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalCases, setTotalCases] = useState(0);
@@ -292,7 +292,7 @@ const CasesPage = ({ isCompletedView = false }) => {
         fields: fieldsToExport,
         search: searchTerm,
         full_case_status: fullCaseStatusFilter !== 'all' ? fullCaseStatusFilter : null,
-        case_type: caseTypeFilter !== 'all' ? caseTypeFilter : null,
+        investigation_type: investigationTypeFilter !== 'all' ? investigationTypeFilter : null,
         investigation_report_status: null, // Can map if needed
         assigned_vendor_name: null // Can map if needed
       };
@@ -567,7 +567,7 @@ const CasesPage = ({ isCompletedView = false }) => {
   useEffect(() => {
     fetchData(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, fullCaseStatusFilter, caseTypeFilter]);
+  }, [page, rowsPerPage, fullCaseStatusFilter, investigationTypeFilter]);
 
   const fetchData = async (isAutoRefresh = false) => {
     try {
@@ -580,7 +580,7 @@ const CasesPage = ({ isCompletedView = false }) => {
             page: page + 1,
             page_size: rowsPerPage,
             full_case_status: fullCaseStatusFilter !== 'all' ? fullCaseStatusFilter : undefined,
-            case_type: caseTypeFilter !== 'all' ? caseTypeFilter : undefined,
+            investigation_type: investigationTypeFilter !== 'all' ? investigationTypeFilter : undefined,
             search: searchTerm || undefined,
           },
         }),
@@ -628,12 +628,12 @@ const CasesPage = ({ isCompletedView = false }) => {
       iconBgColor: '#fff3e0',
     },
     {
-      title: 'Completed Cases',
-      value: stats.completed_cases || 0,
-      change: stats.completed_change || 0,
+      title: 'Closed Cases',
+      value: stats.closed_cases || 0,
+      change: stats.closed_change || 0,
       icon: CheckCircle,
       iconBgColor: '#e8f5e9',
-      onClick: () => navigate('/case_manager/completed-cases'),
+      onClick: () => navigate('/case_manager/closed-cases'),
     },
     {
       title: 'Overdue Cases',
@@ -985,14 +985,14 @@ const CasesPage = ({ isCompletedView = false }) => {
               width: 44,
               height: 44,
               borderRadius: '12px',
-              background: isCompletedView ? 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)' : 'linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%)',
+              background: isClosedView ? 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)' : 'linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: isCompletedView ? '0 4px 12px rgba(72,187,120,0.15)' : '0 4px 12px rgba(99,102,241,0.15)',
+              boxShadow: isClosedView ? '0 4px 12px rgba(72,187,120,0.15)' : '0 4px 12px rgba(99,102,241,0.15)',
             }}
           >
-            {isCompletedView ? (
+            {isClosedView ? (
               <CheckCircle sx={{ fontSize: 26, color: '#27ae60' }} />
             ) : (
               <FolderOpen sx={{ fontSize: 26, color: '#4f46e5' }} />
@@ -1010,14 +1010,14 @@ const CasesPage = ({ isCompletedView = false }) => {
               whiteSpace: 'nowrap',
             }}
           >
-            {isCompletedView ? 'Completed Cases' : 'Cases'}
+            {isClosedView ? 'Closed Cases' : 'Cases'}
           </Typography>
         </Box>
 
         {/* Right Side: 4 Stat Cards in Single Row + Notification Bell */}
         <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 2, flex: 1, justifyContent: 'flex-end' }}>
           {/* Single Row of 4 Stat Cards (Only for Active Cases View) */}
-          {!isCompletedView && (
+          {!isClosedView && (
             <Box
               sx={{
                 display: 'grid',
@@ -1096,7 +1096,7 @@ const CasesPage = ({ isCompletedView = false }) => {
               />
 
               {/* Full Case Status Filter */}
-              {!isCompletedView && (
+              {!isClosedView && (
                 <FormControl size="small" sx={{ minWidth: 150 }}>
                   <Select
                     value={fullCaseStatusFilter}
@@ -1107,7 +1107,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                     <MenuItem value="all">All Statuses</MenuItem>
                     <MenuItem value="WIP">WIP</MenuItem>
                     <MenuItem value="Pending CS">Pending CS</MenuItem>
-                    <MenuItem value="Completed">Completed</MenuItem>
+                    <MenuItem value="Closed">Closed</MenuItem>
                     <MenuItem value="IR-Writing">IR-Writing</MenuItem>
                     <MenuItem value="NI">NI</MenuItem>
                     <MenuItem value="Withdraw">Withdraw</MenuItem>
@@ -1118,15 +1118,15 @@ const CasesPage = ({ isCompletedView = false }) => {
                 </FormControl>
               )}
 
-              {/* Case Type Filter */}
+              {/* Investigation Type Filter */}
               <FormControl size="small" sx={{ minWidth: 150 }}>
                 <Select
-                  value={caseTypeFilter}
-                  onChange={(e) => { setCaseTypeFilter(e.target.value); setPage(0); }}
+                  value={investigationTypeFilter}
+                  onChange={(e) => { setInvestigationTypeFilter(e.target.value); setPage(0); }}
                   displayEmpty
                   sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' } }}
                 >
-                  <MenuItem value="all">All Case Types</MenuItem>
+                  <MenuItem value="all">All Investigation Types</MenuItem>
                   <MenuItem value="Full Case">Full Case</MenuItem>
                   <MenuItem value="Partial Case">Partial Case</MenuItem>
                   <MenuItem value="Reassessment">Reassessment</MenuItem>
@@ -1140,8 +1140,8 @@ const CasesPage = ({ isCompletedView = false }) => {
                 size="small"
                 onClick={() => {
                   setSearchTerm('');
-                  setFullCaseStatusFilter(isCompletedView ? 'Completed' : 'all');
-                  setCaseTypeFilter('all');
+                  setFullCaseStatusFilter(isClosedView ? 'Closed' : 'all');
+                  setInvestigationTypeFilter('all');
                   setPage(0);
                 }}
                 sx={{
@@ -1212,7 +1212,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Case Number</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Claim Number</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Client Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Case Type</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Investigation Type</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Category</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Case Status</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>TAT Days</TableCell>
@@ -1226,7 +1226,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                   const isExpanded = expandedCases[row.id];
                   const fcColor = fullCaseStatusColors[row.full_case_status] || '#a0aec0';
                   const irColor = irStatusColors[row.investigation_report_status] || '#a0aec0';
-                  const ctColor = caseTypeColors[row.case_type] || '#667eea';
+                  const ctColor = investigationTypeColors[row.investigation_type] || '#667eea';
 
                   return (
                     <React.Fragment key={row.id}>
@@ -1284,10 +1284,10 @@ const CasesPage = ({ isCompletedView = false }) => {
                           <Typography sx={{ fontSize: '15px' }}>{displayClientName(row.client_name)}</Typography>
                         </TableCell>
 
-                        {/* Case Type */}
+                        {/* Investigation Type */}
                         <TableCell>
                           <Chip
-                            label={row.case_type || '—'}
+                            label={row.investigation_type || '—'}
                             size="small"
                             sx={{
                               backgroundColor: `${ctColor}18`,
@@ -1781,7 +1781,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                   label={reviewData.check.check_status}
                   size="small"
                   sx={{
-                    bgcolor: reviewData.check.check_status === 'Completed' ? '#48bb78' : '#f6ad55',
+                    bgcolor: reviewData.check.check_status === 'Closed' ? '#48bb78' : '#f6ad55',
                     color: 'white',
                     fontWeight: 700,
                     fontSize: '11px',
@@ -2165,15 +2165,38 @@ const CasesPage = ({ isCompletedView = false }) => {
           onClose={() => setFullCaseModalOpen(false)}
           maxWidth="lg"
           fullWidth
-          PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden' } }}
+          PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' } }}
         >
-          <DialogTitle sx={{ bgcolor: '#1e293b', color: '#fff', px: 3, py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <DialogTitle
+            sx={{
+              background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
+              color: '#fff',
+              px: 3,
+              py: 2,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
               <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff', fontSize: '18px' }}>
-                📁 Case Full Details &amp; Evidence — {fullCaseData?.case?.claim_number || 'Case'}
+                📁 Case Details — {fullCaseData?.case?.claim_number || 'Case'}
               </Typography>
+              {fullCaseData?.case?.full_case_status && (
+                <Chip
+                  label={fullCaseData.case.full_case_status}
+                  size="small"
+                  sx={{
+                    bgcolor: 'rgba(255, 255, 255, 0.2)',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    fontSize: '11px',
+                    backdropFilter: 'blur(4px)',
+                  }}
+                />
+              )}
             </Box>
-            <IconButton onClick={() => setFullCaseModalOpen(false)} sx={{ color: '#94a3b8', '&:hover': { color: '#fff' } }}>
+            <IconButton onClick={() => setFullCaseModalOpen(false)} sx={{ color: 'rgba(255, 255, 255, 0.8)', '&:hover': { color: '#fff', bgcolor: 'rgba(255, 255, 255, 0.1)' } }}>
               <Close />
             </IconButton>
           </DialogTitle>
@@ -2181,7 +2204,7 @@ const CasesPage = ({ isCompletedView = false }) => {
           <DialogContent sx={{ p: 3, bgcolor: '#f8fafc' }}>
             {fullCaseLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress size={40} sx={{ color: '#4f46e5' }} />
+                <CircularProgress size={40} sx={{ color: '#2563eb' }} />
               </Box>
             ) : !fullCaseData ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -2191,15 +2214,25 @@ const CasesPage = ({ isCompletedView = false }) => {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
 
                 {/* Navigation Tabs */}
-                <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                <Box sx={{ borderBottom: 1, borderColor: '#e2e8f0' }}>
                   <Tabs
                     value={fullCaseTab}
                     onChange={(e, val) => setFullCaseTab(val)}
-                    sx={{ '& .MuiTab-root': { textTransform: 'none', fontWeight: 700, fontSize: '14px' } }}
+                    sx={{
+                      '& .MuiTab-root': {
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        fontSize: '14px',
+                        minHeight: '44px',
+                        color: '#64748b',
+                        '&.Mui-selected': { color: '#2563eb' },
+                      },
+                      '& .MuiTabs-indicator': { bgcolor: '#2563eb', height: 3, borderRadius: '3px 3px 0 0' },
+                    }}
                   >
-                    <Tab label="General Case Information" />
-                    <Tab label={`Verification Checks (${fullCaseData.checks?.length || 0})`} />
-                    <Tab label="Media &amp; Evidence Gallery" />
+                    <Tab label="1. General Case Information" />
+                    <Tab label={`2. Verification Checks (${fullCaseData.checks?.length || 0})`} />
+                    <Tab label="3. Evidence Gallery" />
                   </Tabs>
                 </Box>
 
@@ -2207,226 +2240,304 @@ const CasesPage = ({ isCompletedView = false }) => {
                 {fullCaseTab === 0 && (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
 
-                    {/* 4 Rows Format for General Info (Divider separated, no subheadings) */}
-                    <Paper elevation={0} sx={{ p: 3, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                      <Stack spacing={2.5} divider={<Divider flexItem sx={{ borderColor: '#f1f5f9' }} />}>
+                    {/* Section 1: General Information & Parties */}
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 8px -2px rgba(0,0,0,0.05)' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                          <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2563eb' }} />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                            1. General Information &amp; Parties
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                          <Chip
+                            label={`Full Case: ${fullCaseData.case?.full_case_status || '—'}`}
+                            size="small"
+                            sx={{ fontWeight: 700, bgcolor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}
+                          />
+                          <Chip
+                            label={`IR: ${fullCaseData.case?.investigation_report_status || '—'}`}
+                            size="small"
+                            sx={{ fontWeight: 700, bgcolor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}
+                          />
+                          <Chip
+                            label={`SLA: ${fullCaseData.case?.sla || '—'}`}
+                            size="small"
+                            sx={{ fontWeight: 700, bgcolor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
+                          />
+                        </Box>
+                      </Box>
 
-                        {/* Row 1: Case Number | Claim Number | Client Name | Client Code */}
-                        <Grid container spacing={3}>
-                          <Grid item xs={12} sm={3}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Case Number
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: {
+                            xs: '1fr',
+                            sm: 'repeat(2, 1fr)',
+                            md: 'repeat(4, 1fr)',
+                          },
+                          gap: 2,
+                        }}
+                      >
+                        {[
+                          { label: 'Case Number', value: fullCaseData.case?.case_number || '—' },
+                          { label: 'Claim Number', value: fullCaseData.case?.claim_number || '—' },
+                          { label: 'Client Name', value: fullCaseData.case?.client_name || '—' },
+                          { label: 'Client Code', value: fullCaseData.case?.client_code || '—' },
+                          { label: 'Claimant Name', value: fullCaseData.case?.claimant_name || '—' },
+                          { label: 'Insured Name', value: fullCaseData.case?.insured_name || '—' },
+                          { label: 'Driver Name', value: fullCaseData.case?.driver_name || '—' },
+                          { label: 'Investigation Type / Category', value: `${fullCaseData.case?.investigation_type || '—'} • ${fullCaseData.case?.category || '—'}` },
+                        ].map((item, i) => (
+                          <Box
+                            key={i}
+                            sx={{
+                              p: 1.75,
+                              borderRadius: '10px',
+                              bgcolor: '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                              transition: 'all 0.2s ease-in-out',
+                              '&:hover': {
+                                borderColor: '#cbd5e1',
+                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.06)',
+                              },
+                            }}
+                          >
+                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.7rem', display: 'block', letterSpacing: '0.3px' }}>
+                              {item.label}
                             </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.case_number || '—'}
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.5, wordBreak: 'break-word' }}>
+                              {item.value}
                             </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={3}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Claim Number
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.claim_number || '—'}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={3}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Client Name
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.client_name || '—'}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={3}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Client Code
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.client_code || '—'}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-
-                        {/* Row 2: Claimant Name | Insured Name | Driver Name */}
-                        <Grid container spacing={3}>
-                          <Grid item xs={12} sm={4}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Claimant Name
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.claimant_name || '—'}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Insured Name
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.insured_name || '—'}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Driver Name
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.driver_name || '—'}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-
-                        {/* Row 3: Category | Case Type | Full Case Status | IR Status | SLA Status */}
-                        <Grid container spacing={3}>
-                          <Grid item xs={12} sm={2.4}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Category
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.category || '—'}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={2.4}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Case Type
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.case_type || '—'}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={2.4}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Full Case Status
-                            </Typography>
-                            <Box sx={{ mt: 0.5 }}>
-                              <Chip label={fullCaseData.case?.full_case_status || '—'} size="small" sx={{ fontWeight: 700, bgcolor: '#eff6ff', color: '#1d4ed8' }} />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12} sm={2.4}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              IR Status
-                            </Typography>
-                            <Box sx={{ mt: 0.5 }}>
-                              <Chip label={fullCaseData.case?.investigation_report_status || '—'} size="small" sx={{ fontWeight: 700, bgcolor: '#fef3c7', color: '#b45309' }} />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12} sm={2.4}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              SLA Status
-                            </Typography>
-                            <Box sx={{ mt: 0.5 }}>
-                              <Chip label={fullCaseData.case?.sla || '—'} size="small" sx={{ fontWeight: 700, bgcolor: '#f0fdf4', color: '#15803d' }} />
-                            </Box>
-                          </Grid>
-                        </Grid>
-
-                        {/* Row 4: Case Receive Date | Case Due Date | Case Completion Date | TAT Days */}
-                        <Grid container spacing={3}>
-                          <Grid item xs={12} sm={3}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Case Receive Date
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {formatDate(fullCaseData.case?.case_receive_date)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={3}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Case Due Date
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {formatDate(fullCaseData.case?.case_due_date)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={3}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              Case Completion Date
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {formatDate(fullCaseData.case?.completion_date)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={3}>
-                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              TAT Days
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                              {fullCaseData.case?.tat_days ?? '—'}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-
-                      </Stack>
-                    </Paper>
-
-                    {/* Special Instructions */}
-                    <Paper elevation={0} sx={{ p: 3, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#1e293b', mb: 1.5 }}>
-                        🎯 Special Instructions
-                      </Typography>
-                      <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <Typography variant="body2" sx={{ color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
-                          {fullCaseData.case?.special_instructions || 'No special instructions details specified.'}
-                        </Typography>
+                          </Box>
+                        ))}
                       </Box>
                     </Paper>
 
-                    {/* Case Documents */}
-                    <Paper elevation={0} sx={{ p: 3, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>
-                        📁 Uploaded Case Documents
-                      </Typography>
-                      <Grid container spacing={2}>
+                    {/* Section 2: Timeline & Turnaround Schedule */}
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 8px -2px rgba(0,0,0,0.05)' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2.5 }}>
+                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0284c7' }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                          2. Timeline &amp; Turnaround (TAT) Schedule
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: {
+                            xs: '1fr',
+                            md: 'repeat(3, 1fr)',
+                          },
+                          gap: 2.5,
+                        }}
+                      >
+                        {/* Intake Column */}
+                        <Box
+                          sx={{
+                            p: 2,
+                            borderRadius: '12px',
+                            bgcolor: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                            transition: 'all 0.2s',
+                            '&:hover': { borderColor: '#cbd5e1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.06)' },
+                          }}
+                        >
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
+                            Case Intake
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <Box sx={{ p: 1.5, bgcolor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontSize: '0.7rem', fontWeight: 600 }}>Receive Date</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.25 }}>{formatDate(fullCaseData.case?.case_receive_date)}</Typography>
+                            </Box>
+                            <Box sx={{ p: 1.5, bgcolor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontSize: '0.7rem', fontWeight: 600 }}>Receive Month (Auto)</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155', mt: 0.25 }}>
+                                {fullCaseData.case?.case_receive_date ? new Date(fullCaseData.case.case_receive_date).toLocaleString('default', { month: 'long', year: 'numeric' }) : '—'}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+
+                        {/* Completion Column */}
+                        <Box
+                          sx={{
+                            p: 2,
+                            borderRadius: '12px',
+                            bgcolor: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                            transition: 'all 0.2s',
+                            '&:hover': { borderColor: '#cbd5e1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.06)' },
+                          }}
+                        >
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
+                            Case Completion
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <Box sx={{ p: 1.5, bgcolor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontSize: '0.7rem', fontWeight: 600 }}>Closure Date</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.25 }}>{formatDate(fullCaseData.case?.closure_date)}</Typography>
+                            </Box>
+                            <Box sx={{ p: 1.5, bgcolor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontSize: '0.7rem', fontWeight: 600 }}>Closure Month (Auto)</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155', mt: 0.25 }}>
+                                {fullCaseData.case?.closure_date ? new Date(fullCaseData.case.closure_date).toLocaleString('default', { month: 'long', year: 'numeric' }) : '—'}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+
+                        {/* SLA & TAT Column */}
+                        <Box
+                          sx={{
+                            p: 2,
+                            borderRadius: '12px',
+                            bgcolor: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                            transition: 'all 0.2s',
+                            '&:hover': { borderColor: '#cbd5e1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.06)' },
+                          }}
+                        >
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
+                            SLA &amp; Turnaround (TAT)
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <Box sx={{ p: 1.5, bgcolor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontSize: '0.7rem', fontWeight: 600 }}>Case Due Date (Auto)</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.25 }}>{formatDate(fullCaseData.case?.case_due_date)}</Typography>
+                            </Box>
+                            <Box sx={{ p: 1.5, bgcolor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontSize: '0.7rem', fontWeight: 600 }}>TAT Days (Auto)</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.25 }}>{fullCaseData.case?.tat_days ?? '—'} days</Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      </Box>
+                    </Paper>
+
+                    {/* Section 3: Uploaded Case Documents */}
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 8px -2px rgba(0,0,0,0.05)' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2.5 }}>
+                        <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#d97706' }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                          3. Uploaded Case Documents
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: {
+                            xs: '1fr',
+                            sm: 'repeat(3, 1fr)',
+                          },
+                          gap: 2.5,
+                        }}
+                      >
                         {[
-                          { title: 'Policy Document', url: fullCaseData.case?.policy_document_url, filename: fullCaseData.case?.policy_document },
-                          { title: 'Petition Document', url: fullCaseData.case?.petition_document_url, filename: fullCaseData.case?.petition_document },
-                          { title: 'Other Case Document', url: fullCaseData.case?.other_document_url, filename: fullCaseData.case?.other_document },
+                          { title: 'Policy Document', url: fullCaseData.case?.policy_document_url, filename: fullCaseData.case?.policy_document, helper: 'Insurance policy copy' },
+                          { title: 'Petition Document', url: fullCaseData.case?.petition_document_url, filename: fullCaseData.case?.petition_document, helper: 'Claim petition or legal copy' },
+                          { title: 'Other Case Document', url: fullCaseData.case?.other_document_url, filename: fullCaseData.case?.other_document, helper: 'Supporting case files' },
                         ].map((doc, idx) => (
-                          <Grid item xs={12} sm={4} key={idx}>
-                            <Box sx={{ p: 2, borderRadius: '8px', border: doc.url ? '1.5px solid #3b82f6' : '1px solid #e2e8f0', bgcolor: doc.url ? '#eff6ff' : '#f8fafc', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                              <Typography variant="caption" sx={{ fontWeight: 700, color: doc.url ? '#1d4ed8' : '#64748b' }}>
+                          <Box
+                            key={idx}
+                            sx={{
+                              p: 2.25,
+                              borderRadius: '12px',
+                              border: doc.url ? '1.5px solid #22c55e' : '1px dashed #cbd5e1',
+                              bgcolor: doc.url ? '#f0fdf4' : '#ffffff',
+                              boxShadow: doc.url ? '0 2px 6px rgba(34, 197, 94, 0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 1.25,
+                              minHeight: '140px',
+                              boxSizing: 'border-box',
+                              transition: 'all 0.2s',
+                              '&:hover': {
+                                boxShadow: '0 4px 8px rgba(0,0,0,0.08)',
+                              },
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: doc.url ? '#15803d' : '#1e293b' }}>
                                 {doc.title}
                               </Typography>
-                              {doc.url ? (
-                                Array.isArray(doc.url) ? (
-                                  doc.url.map((u, i) => (
+                              {doc.url && (
+                                <Chip
+                                  label="Uploaded"
+                                  size="small"
+                                  sx={{ height: 20, fontSize: '0.7rem', bgcolor: '#dcfce7', color: '#166534', fontWeight: 700, border: '1px solid #86efac' }}
+                                />
+                              )}
+                            </Box>
+
+                            <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.75rem' }}>
+                              {doc.helper}
+                            </Typography>
+
+                            {doc.url ? (
+                              Array.isArray(doc.url) ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 'auto' }}>
+                                  {doc.url.map((u, i) => (
                                     <Button
                                       key={i}
                                       size="small"
-                                      variant="contained"
+                                      variant="outlined"
                                       component="a"
                                       href={u}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      startIcon={<InsertDriveFile />}
-                                      sx={{ textTransform: 'none', bgcolor: '#2563eb', '&:hover': { bgcolor: '#1d4ed8' }, borderRadius: '6px' }}
+                                      startIcon={<InsertDriveFile sx={{ fontSize: '1rem' }} />}
+                                      sx={{ textTransform: 'none', borderColor: '#16a34a', color: '#15803d', '&:hover': { bgcolor: '#dcfce7', borderColor: '#15803d' }, borderRadius: '6px', fontWeight: 600, fontSize: '0.8rem' }}
                                     >
                                       View Document {i + 1}
                                     </Button>
-                                  ))
-                                ) : (
-                                  <Button
-                                    size="small"
-                                    variant="contained"
-                                    component="a"
-                                    href={doc.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    startIcon={<InsertDriveFile />}
-                                    sx={{ textTransform: 'none', bgcolor: '#2563eb', '&:hover': { bgcolor: '#1d4ed8' }, borderRadius: '6px' }}
-                                  >
-                                    View / Download Document
-                                  </Button>
-                                )
+                                  ))}
+                                </Box>
                               ) : (
-                                <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
-                                  Not uploaded
-                                </Typography>
-                              )}
-                            </Box>
-                          </Grid>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  component="a"
+                                  href={doc.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  startIcon={<InsertDriveFile sx={{ fontSize: '1rem' }} />}
+                                  sx={{ mt: 'auto', textTransform: 'none', borderColor: '#16a34a', color: '#15803d', '&:hover': { bgcolor: '#dcfce7', borderColor: '#15803d' }, borderRadius: '6px', fontWeight: 600, fontSize: '0.8rem' }}
+                                >
+                                  View / Download Document
+                                </Button>
+                              )
+                            ) : (
+                              <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic', mt: 'auto', py: 0.5 }}>
+                                No file uploaded
+                              </Typography>
+                            )}
+                          </Box>
                         ))}
-                      </Grid>
+                      </Box>
                     </Paper>
+
+                    {/* Section 4: Special Instructions */}
+                    {fullCaseData.case?.special_instructions && (
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 8px -2px rgba(0,0,0,0.05)' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', mb: 1.5, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.75rem' }}>
+                          🎯 Special Instructions
+                        </Typography>
+                        <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)' }}>
+                          <Typography variant="body2" sx={{ color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
+                            {fullCaseData.case.special_instructions}
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    )}
+
                   </Box>
                 )}
 
@@ -2450,13 +2561,22 @@ const CasesPage = ({ isCompletedView = false }) => {
                       {dedupedChecks.length > 0 ? (
                         <>
                           {/* Check Sub Tabs */}
-                          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                          <Box sx={{ borderBottom: 1, borderColor: '#e2e8f0', mb: 2 }}>
                             <Tabs
                               value={selectedCheckTab}
                               onChange={(e, v) => setSelectedCheckTab(v)}
                               variant="scrollable"
                               scrollButtons="auto"
-                              sx={{ '& .MuiTab-root': { textTransform: 'none', fontWeight: 600 } }}
+                              sx={{
+                                '& .MuiTab-root': {
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  fontSize: '13px',
+                                  minHeight: '40px',
+                                  '&.Mui-selected': { color: '#2563eb' },
+                                },
+                                '& .MuiTabs-indicator': { bgcolor: '#2563eb' },
+                              }}
                             >
                               {dedupedChecks.map((item, cIdx) => (
                                 <Tab
@@ -2470,8 +2590,8 @@ const CasesPage = ({ isCompletedView = false }) => {
                                         sx={{
                                           height: '20px',
                                           fontSize: '10px',
-                                          bgcolor: item.check?.check_status === 'Verified' || item.check?.check_status === 'Completed' ? '#dcfce7' : '#fef3c7',
-                                          color: item.check?.check_status === 'Verified' || item.check?.check_status === 'Completed' ? '#166534' : '#92400e',
+                                          bgcolor: item.check?.check_status === 'Verified' || item.check?.check_status === 'Closed' ? '#dcfce7' : '#fef3c7',
+                                          color: item.check?.check_status === 'Verified' || item.check?.check_status === 'Closed' ? '#166534' : '#92400e',
                                           fontWeight: 700
                                         }}
                                       />
@@ -2490,30 +2610,30 @@ const CasesPage = ({ isCompletedView = false }) => {
                             return (
                               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                 {/* Check Status & Vendor Header */}
-                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
                                   <Box>
-                                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '1.1rem' }}>
                                       {currentCheckObj.check_type_label}
                                     </Typography>
-                                    <Typography variant="caption" sx={{ color: '#64748b' }}>
-                                      Assigned Business Partner: <strong>{checkData.assigned_vendor_name || 'Unassigned'}</strong>
+                                    <Typography variant="body2" sx={{ color: '#64748b', mt: 0.25 }}>
+                                      Assigned Business Partner: <strong style={{ color: '#1e293b' }}>{checkData.assigned_vendor_name || 'Unassigned'}</strong>
                                     </Typography>
                                   </Box>
                                   <Chip
                                     label={`Status: ${checkData.check_status || 'Not Initiated'}`}
                                     sx={{
-                                      bgcolor: checkData.check_status === 'Verified' || checkData.check_status === 'Completed' ? '#48bb78' : '#f6ad55',
+                                      bgcolor: checkData.check_status === 'Verified' || checkData.check_status === 'Closed' ? '#16a34a' : '#ea580c',
                                       color: '#fff',
                                       fontWeight: 700,
-                                      px: 1
+                                      px: 1.5,
+                                      height: 28,
                                     }}
                                   />
                                 </Paper>
 
-
                                 {/* Vendor Feedback (if any) */}
                                 {(checkData.negative_status || checkData.vendor_feedback) && (
-                                  <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #fee2e2', bgcolor: '#fff5f5' }}>
+                                  <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #fca5a5', bgcolor: '#fff5f5', boxShadow: '0 2px 6px -1px rgba(239, 68, 68, 0.08)' }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
                                       <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         ⚠️ Vendor Feedback
@@ -2535,11 +2655,11 @@ const CasesPage = ({ isCompletedView = false }) => {
                                 )}
 
                                 {/* Verification Data Table */}
-                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#4f46e5', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)' }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#2563eb', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.75rem' }}>
                                     📌 Check Fields &amp; Verification Details
                                   </Typography>
-                                  <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                  <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
                                     <Table size="small">
                                       <TableBody>
                                         {Object.entries(checkData)
@@ -2577,9 +2697,9 @@ const CasesPage = ({ isCompletedView = false }) => {
                                     : Object.keys(QUESTIONNAIRE_LABELS).reduce((acc, k) => ({ ...acc, [k]: '—' }), {});
 
                                   return (
-                                    <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                                    <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)' }}>
                                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.75rem' }}>
                                           📋 Questionnaire Form Details
                                         </Typography>
                                         <Chip
@@ -2589,11 +2709,12 @@ const CasesPage = ({ isCompletedView = false }) => {
                                             bgcolor: hasData ? '#e0f2fe' : '#f1f5f9',
                                             color: hasData ? '#0369a1' : '#64748b',
                                             fontWeight: 700,
-                                            fontSize: '11px'
+                                            fontSize: '11px',
+                                            border: hasData ? '1px solid #bae6fd' : '1px solid #e2e8f0'
                                           }}
                                         />
                                       </Box>
-                                      <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                      <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
                                         <Table size="small">
                                           <TableBody>
                                             {Object.entries(displayObj).map(([qKey, qVal], qIdx) => {
@@ -2618,14 +2739,14 @@ const CasesPage = ({ isCompletedView = false }) => {
                                 })()}
 
                                 {/* Statements & Audio Recordings */}
-                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#4f46e5', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)' }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#2563eb', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.75rem' }}>
                                     🎙️ Statements &amp; Audio Recordings
                                   </Typography>
                                   {checkData.statement_entries && checkData.statement_entries.length > 0 ? (
                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                       {checkData.statement_entries.map((st, sIdx) => (
-                                        <Paper key={sIdx} elevation={0} sx={{ p: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                                        <Paper key={sIdx} elevation={0} sx={{ p: 2, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>
                                             Statement {st.index || sIdx + 1}
                                           </Typography>
@@ -2651,7 +2772,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                                       <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>
                                         Additional Statement Details:
                                       </Typography>
-                                      <Paper elevation={0} sx={{ p: 2, mt: 0.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                                      <Paper elevation={0} sx={{ p: 2, mt: 0.5, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                                         <Typography variant="body2" sx={{ color: '#1e293b', whiteSpace: 'pre-line' }}>
                                           {checkData.statement_en}
                                         </Typography>
@@ -2661,51 +2782,61 @@ const CasesPage = ({ isCompletedView = false }) => {
                                 </Paper>
 
                                 {/* Visit Photos */}
-                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#4f46e5', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)' }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#2563eb', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.75rem' }}>
                                     📷 Visit Photos ({checkData.evidence_photos?.length || 0})
                                   </Typography>
                                   {checkData.evidence_photos && checkData.evidence_photos.length > 0 ? (
-                                    <Grid container spacing={2}>
+                                    <Box
+                                      sx={{
+                                        display: 'grid',
+                                        gridTemplateColumns: {
+                                          xs: 'repeat(2, 1fr)',
+                                          sm: 'repeat(3, 1fr)',
+                                          md: 'repeat(4, 1fr)',
+                                        },
+                                        gap: 2,
+                                      }}
+                                    >
                                       {checkData.evidence_photos.map((photo, pIdx) => (
-                                        <Grid item xs={6} sm={4} md={3} key={pIdx}>
-                                          <Paper
-                                            elevation={0}
-                                            onClick={() => setActivePhotoPreview(photo.url)}
-                                            sx={{
-                                              border: '1px solid #e2e8f0',
-                                              borderRadius: '8px',
-                                              overflow: 'hidden',
-                                              cursor: 'pointer',
-                                              transition: 'all 0.2s',
-                                              '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }
-                                            }}
-                                          >
-                                            <Box
-                                              component="img"
-                                              src={photo.url}
-                                              alt={photo.filename || `Visit Photo ${pIdx + 1}`}
-                                              sx={{ width: '100%', height: 160, objectFit: 'cover', display: 'block', bgcolor: '#f8fafc' }}
-                                            />
-                                            <Box sx={{ p: 1, bgcolor: '#fafafa', borderTop: '1px solid #e2e8f0' }}>
-                                              <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#334155' }}>
-                                                {photo.filename || `Photo ${pIdx + 1}`}
+                                        <Paper
+                                          key={pIdx}
+                                          elevation={0}
+                                          onClick={() => setActivePhotoPreview(photo.url)}
+                                          sx={{
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '10px',
+                                            overflow: 'hidden',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                                            transition: 'all 0.2s',
+                                            '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 6px 14px rgba(0,0,0,0.1)' }
+                                          }}
+                                        >
+                                          <Box
+                                            component="img"
+                                            src={photo.url}
+                                            alt={photo.filename || `Visit Photo ${pIdx + 1}`}
+                                            sx={{ width: '100%', height: 160, objectFit: 'cover', display: 'block', bgcolor: '#f8fafc' }}
+                                          />
+                                          <Box sx={{ p: 1.25, bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
+                                            <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#334155' }}>
+                                              {photo.filename || `Photo ${pIdx + 1}`}
+                                            </Typography>
+                                            {(photo.timestamp || photo.created_at || photo.uploaded_at || photo.date) && (
+                                              <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5 }}>
+                                                🕒 {new Date(photo.timestamp || photo.created_at || photo.uploaded_at || photo.date).toLocaleString()}
                                               </Typography>
-                                              {(photo.timestamp || photo.created_at || photo.uploaded_at || photo.date) && (
-                                                <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5 }}>
-                                                  🕒 {new Date(photo.timestamp || photo.created_at || photo.uploaded_at || photo.date).toLocaleString()}
-                                                </Typography>
-                                              )}
-                                              {(photo.location_name || photo.location || (photo.latitude != null && photo.longitude != null && photo.latitude !== '' && photo.longitude !== '')) && (
-                                                <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5, wordBreak: 'break-word', lineHeight: 1.2 }}>
-                                                  📍 {photo.location_name || photo.location || `${Number(photo.latitude).toFixed(4)}, ${Number(photo.longitude).toFixed(4)}`}
-                                                </Typography>
-                                              )}
-                                            </Box>
-                                          </Paper>
-                                        </Grid>
+                                            )}
+                                            {(photo.location_name || photo.location || (photo.latitude != null && photo.longitude != null && photo.latitude !== '' && photo.longitude !== '')) && (
+                                              <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5, wordBreak: 'break-word', lineHeight: 1.2 }}>
+                                                📍 {photo.location_name || photo.location || `${Number(photo.latitude).toFixed(4)}, ${Number(photo.longitude).toFixed(4)}`}
+                                              </Typography>
+                                            )}
+                                          </Box>
+                                        </Paper>
                                       ))}
-                                    </Grid>
+                                    </Box>
                                   ) : (
                                     <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
                                       No visit photos uploaded for this check.
@@ -2714,8 +2845,8 @@ const CasesPage = ({ isCompletedView = false }) => {
                                 </Paper>
 
                                 {/* Check Documents */}
-                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', mt: 3 }}>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#4f46e5', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)' }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#2563eb', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.75rem' }}>
                                     📄 Check Documents
                                   </Typography>
                                   {(() => {
@@ -2728,25 +2859,33 @@ const CasesPage = ({ isCompletedView = false }) => {
 
                                     if (allDocs.length > 0) {
                                       return (
-                                        <Grid container spacing={2}>
+                                        <Box
+                                          sx={{
+                                            display: 'grid',
+                                            gridTemplateColumns: {
+                                              xs: '1fr',
+                                              sm: 'repeat(2, 1fr)',
+                                              md: 'repeat(3, 1fr)',
+                                            },
+                                            gap: 2,
+                                          }}
+                                        >
                                           {allDocs.map((doc, dIdx) => (
-                                            <Grid item xs={12} sm={6} md={4} key={dIdx}>
-                                              <Box sx={{ p: 2, borderRadius: '8px', border: '1px solid #e2e8f0', bgcolor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                                <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b', wordBreak: 'break-all' }}>
-                                                  {doc.filename || `Document ${dIdx + 1}`}
-                                                </Typography>
-                                                <Button
-                                                  variant="outlined"
-                                                  size="small"
-                                                  onClick={() => window.open(doc.url || doc.preview_url || doc.file_url, '_blank')}
-                                                  sx={{ mt: 1, textTransform: 'none', borderRadius: '6px' }}
-                                                >
-                                                  View Document
-                                                </Button>
-                                              </Box>
-                                            </Grid>
+                                            <Box key={dIdx} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 1, transition: 'all 0.2s', '&:hover': { borderColor: '#cbd5e1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.07)' } }}>
+                                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b', wordBreak: 'break-all' }}>
+                                                {doc.filename || `Document ${dIdx + 1}`}
+                                              </Typography>
+                                              <Button
+                                                variant="outlined"
+                                                size="small"
+                                                onClick={() => window.open(doc.url || doc.preview_url || doc.file_url, '_blank')}
+                                                sx={{ mt: 'auto', textTransform: 'none', borderRadius: '6px' }}
+                                              >
+                                                View Document
+                                              </Button>
+                                            </Box>
                                           ))}
-                                        </Grid>
+                                        </Box>
                                       );
                                     } else {
                                       return (
@@ -2774,7 +2913,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                 {/* TAB 2: Media & Evidence Gallery */}
                 {fullCaseTab === 2 && (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <Paper elevation={0} sx={{ p: 3, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 8px -2px rgba(0,0,0,0.05)' }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>
                         📸 All Visit Photos Across Checks
                       </Typography>
@@ -2795,45 +2934,56 @@ const CasesPage = ({ isCompletedView = false }) => {
                         }
 
                         return (
-                          <Grid container spacing={2}>
+                          <Box
+                            sx={{
+                              display: 'grid',
+                              gridTemplateColumns: {
+                                xs: 'repeat(2, 1fr)',
+                                sm: 'repeat(3, 1fr)',
+                                md: 'repeat(4, 1fr)',
+                              },
+                              gap: 2,
+                            }}
+                          >
                             {allPhotos.map((photo, i) => (
-                              <Grid item xs={6} sm={4} md={3} key={i}>
-                                <Paper
-                                  elevation={0}
-                                  onClick={() => setActivePhotoPreview(photo.url)}
-                                  sx={{
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: '10px',
-                                    overflow: 'hidden',
-                                    cursor: 'pointer',
-                                    '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }
-                                  }}
-                                >
-                                  <Box
-                                    component="img"
-                                    src={photo.url}
-                                    sx={{ width: '100%', height: 160, objectFit: 'cover' }}
-                                  />
-                                  <Box sx={{ p: 1, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-                                    <Chip label={photo.checkType} size="small" sx={{ fontSize: '10px', height: '18px', mb: 0.5, bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 700 }} />
-                                    <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#334155' }}>
-                                      {photo.filename || `Photo ${i + 1}`}
+                              <Paper
+                                key={i}
+                                elevation={0}
+                                onClick={() => setActivePhotoPreview(photo.url)}
+                                sx={{
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '10px',
+                                  overflow: 'hidden',
+                                  cursor: 'pointer',
+                                  boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                                  transition: 'all 0.2s',
+                                  '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 6px 14px rgba(0,0,0,0.1)' }
+                                }}
+                              >
+                                <Box
+                                  component="img"
+                                  src={photo.url}
+                                  sx={{ width: '100%', height: 160, objectFit: 'cover', bgcolor: '#f8fafc' }}
+                                />
+                                <Box sx={{ p: 1.25, bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
+                                  <Chip label={photo.checkType} size="small" sx={{ fontSize: '10px', height: '18px', mb: 0.5, bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 700 }} />
+                                  <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#334155' }}>
+                                    {photo.filename || `Photo ${i + 1}`}
+                                  </Typography>
+                                  {(photo.timestamp || photo.created_at || photo.uploaded_at) && (
+                                    <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5 }}>
+                                      🕒 {new Date(photo.timestamp || photo.created_at || photo.uploaded_at).toLocaleString()}
                                     </Typography>
-                                    {(photo.timestamp || photo.created_at || photo.uploaded_at) && (
-                                      <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5 }}>
-                                        🕒 {new Date(photo.timestamp || photo.created_at || photo.uploaded_at).toLocaleString()}
-                                      </Typography>
-                                    )}
-                                    {(photo.location_name || (photo.latitude != null && photo.longitude != null && photo.latitude !== '' && photo.longitude !== '')) && (
-                                      <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5, wordBreak: 'break-word', lineHeight: 1.2 }}>
-                                        📍 {photo.location_name || `${Number(photo.latitude).toFixed(4)}, ${Number(photo.longitude).toFixed(4)}`}
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                </Paper>
-                              </Grid>
+                                  )}
+                                  {(photo.location_name || (photo.latitude != null && photo.longitude != null && photo.latitude !== '' && photo.longitude !== '')) && (
+                                    <Typography variant="caption" sx={{ display: 'block', color: '#718096', fontSize: '10px', mt: 0.5, wordBreak: 'break-word', lineHeight: 1.2 }}>
+                                      📍 {photo.location_name || `${Number(photo.latitude).toFixed(4)}, ${Number(photo.longitude).toFixed(4)}`}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </Paper>
                             ))}
-                          </Grid>
+                          </Box>
                         );
                       })()}
                     </Paper>
@@ -2846,7 +2996,7 @@ const CasesPage = ({ isCompletedView = false }) => {
             <Button onClick={() => setFullCaseModalOpen(false)} variant="outlined" sx={{ textTransform: 'none', borderRadius: '8px', px: 3, color: '#64748b', borderColor: '#cbd5e1' }}>
               Cancel
             </Button>
-            {fullCaseData?.case?.full_case_status === 'Completed' ? (
+            {fullCaseData?.case?.full_case_status === 'Closed' ? (
               <Button
                 onClick={() => {
                   setStatusConfirmAction('WIP');
@@ -2861,7 +3011,7 @@ const CasesPage = ({ isCompletedView = false }) => {
             ) : (
               <Button
                 onClick={() => {
-                  setStatusConfirmAction('Completed');
+                  setStatusConfirmAction('Closed');
                   setStatusConfirmOpen(true);
                 }}
                 variant="contained"
@@ -2879,7 +3029,7 @@ const CasesPage = ({ isCompletedView = false }) => {
           <DialogTitle sx={{ fontWeight: 700, color: '#1e293b' }}>Confirm Status Change</DialogTitle>
           <DialogContent>
             <Typography variant="body1" sx={{ color: '#475569' }}>
-              Are you sure you want to {statusConfirmAction === 'Completed' ? 'close' : 'open'} this case?
+              Are you sure you want to {statusConfirmAction === 'Closed' ? 'close' : 'open'} this case?
             </Typography>
           </DialogContent>
           <DialogActions sx={{ p: 2, pt: 0 }}>
@@ -2890,7 +3040,7 @@ const CasesPage = ({ isCompletedView = false }) => {
                 setStatusConfirmOpen(false);
               }}
               variant="contained"
-              color={statusConfirmAction === 'Completed' ? 'error' : 'success'}
+              color={statusConfirmAction === 'Closed' ? 'error' : 'success'}
             >
               Confirm
             </Button>

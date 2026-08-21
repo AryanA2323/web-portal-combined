@@ -131,9 +131,9 @@ class EmailToCaseMapper:
         else:
             data['category'] = 'OTHER'
         
-        # Extract case type from subject
+        # Extract investigation type from subject
         if 'intimation' in email.subject.lower():
-            data['case_type'] = 'Full Case'
+            data['investigation_type'] = 'Full Case'
         
         # Extract scope of work
         data['special_instructions'] = self.extract_special_instructions(search_text)
@@ -274,7 +274,7 @@ class EmailToCaseMapper:
             case_due_date=due_date,
             
             # Case details
-            case_type=data.get('case_type', ''),
+            investigation_type=data.get('investigation_type', ''),
             investigation_report_status=data['investigation_report_status'],
             full_case_status=data['full_case_status'],
             special_instructions=data.get('special_instructions', ''),

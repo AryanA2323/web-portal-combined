@@ -372,8 +372,8 @@ def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> d
     vendor_documents = []
     case_documents = []
     try:
-        from users.api.cases import _fetch_ai_brief_case_context
-        ctx = _fetch_ai_brief_case_context(incident_case_id)
+        from users.api.cases import _fetch_ai_case_review_case_context
+        ctx = _fetch_ai_case_review_case_context(incident_case_id)
         if ctx:
             for doc in ctx.get('vendor_documents', []):
                 doc_url = doc.get('url') or doc.get('file_url') or doc.get('document_url') or doc.get('path')
@@ -479,7 +479,7 @@ def _active_incident_case_numbers() -> List[str]:
 def _verified_incident_case_numbers() -> List[str]:
     """Case numbers where ALL vendor checks have status 'Verified'.
 
-    This mirrors the AI Brief page filter so that the Legal Review page
+    This mirrors the AI Case Review page filter so that the Legal Review page
     only displays cases whose AI reports are genuinely generated.
     """
     check_tables = [

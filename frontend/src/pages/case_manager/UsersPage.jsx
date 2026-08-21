@@ -71,7 +71,8 @@ import { useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 const ADMIN_PAGES = [
   { path: '/case_manager/dashboard', label: 'Dashboard' },
   { path: '/case_manager/cases', label: 'Cases' },
-  { path: '/case_manager/ai-brief', label: 'AI Brief Review' },
+  { path: '/case_manager/closed-cases', label: 'Closed Cases' },
+  { path: '/case_manager/ai-case-review', label: 'AI Case Review' },
   { path: '/case_manager/legal-review', label: 'Legal Review' },
   { path: '/case_manager/reports', label: 'Reports' },
   { path: '/case_manager/audit-logs', label: 'Audit Logs' },
@@ -908,11 +909,14 @@ const UsersPage = () => {
                     )}
                   </TableCell>
                   <TableCell align="center">
-                    {user.permissions && user.permissions.length > 0 ? (
-                      <Chip label={`${user.permissions.length} pages`} size="small" color="primary" variant="outlined" sx={{ fontSize: '13px', height: '26px' }} />
-                    ) : (
-                      <Typography variant="caption" sx={{ color: '#64748b', fontSize: '15px' }}>Default</Typography>
-                    )}
+                    {(() => {
+                      const validPermsCount = user.permissions ? user.permissions.filter(p => ADMIN_PAGES.some(ap => ap.path === p)).length : 0;
+                      return validPermsCount > 0 ? (
+                        <Chip label={`${validPermsCount} pages`} size="small" color="primary" variant="outlined" sx={{ fontSize: '13px', height: '26px' }} />
+                      ) : (
+                        <Typography variant="caption" sx={{ color: '#64748b', fontSize: '15px' }}>Default</Typography>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.5 }}>

@@ -12,14 +12,14 @@ import {
   CasesPage,
   NewCasePage, 
   UsersPage, 
-  AIBriefPage, 
+  AICaseReviewPage, 
   LegalReviewPage, 
   ReportsPage as CaseManagerReportsPage, 
   AuditLogsPage, 
   SettingsPage,
   CheckDetailPage,
   ClientsPage,
-  CompletedCasesPage,
+  ClosedCasesPage,
   ApprovalsPage,
   SuperAdminLogsPage,
 } from './pages/case_manager';
@@ -184,10 +184,10 @@ function App() {
               }
             />
             <Route
-              path="/case_manager/completed-cases"
+              path="/case_manager/closed-cases"
               element={
                 <ProtectedRoute allowedRoles={['case_manager']}>
-                  <CompletedCasesPage />
+                  <ClosedCasesPage />
                 </ProtectedRoute>
               }
             />
@@ -208,10 +208,10 @@ function App() {
               }
             />
             <Route
-              path="/case_manager/ai-brief"
+              path="/case_manager/ai-case-review"
               element={
                 <ProtectedRoute allowedRoles={['case_manager']}>
-                  <AIBriefPage />
+                  <AICaseReviewPage />
                 </ProtectedRoute>
               }
             />

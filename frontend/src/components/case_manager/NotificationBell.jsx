@@ -208,26 +208,23 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
       return;
     }
 
-    // 3. Approvals / Rejections (TAT / Cases / Change Management)
+    // 3. Approvals / Rejections (Cases / Change Management)
     if (
-      evType.startsWith('TAT_') ||
       evType.startsWith('CASE_DELETION') ||
       evType.includes('APPROVAL') ||
       evType.includes('REJECT') ||
-      desc.toLowerCase().includes('tat') ||
       item.case_id
     ) {
-      if (isSuperAdmin && (evType.startsWith('TAT_') || evType.startsWith('CASE_DELETION') || desc.toLowerCase().includes('tat'))) {
-        const isDel = evType.startsWith('CASE_DELETION');
+      if (isSuperAdmin && evType.startsWith('CASE_DELETION')) {
         const match = item.id ? item.id.toString().match(/-(\d+)$/) : null;
         const reqId = match ? match[1] : null;
 
         navigate('/super-admin/approvals', {
           state: {
-            tab: isDel ? 1 : 0,
             requestId: reqId
           }
         });
+        setAnchorEl(null);
         return;
       }
       

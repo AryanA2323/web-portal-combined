@@ -42,7 +42,7 @@ const NewCasePage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const getCaseTypeTatDays = (caseType) => {
+  const getInvestigationTypeTatDays = (caseType) => {
     if (caseType === 'Full Case') return 30;
     if (caseType === 'Partial Case') return 15;
     if (caseType === 'Reassessment') return 15;
@@ -56,12 +56,12 @@ const NewCasePage = () => {
     category: 'MACT',
     case_receive_date: '',
     receive_month: '',
-    completion_date: '',
-    completion_month: '',
+    closure_date: '',
+    closure_month: '',
     case_due_date: '',
     tat_days: '',
     sla_status: '',
-    case_type: 'Full Case',
+    investigation_type: 'Full Case',
     investigation_report_status: 'Open',
     full_case_status: 'WIP',
     special_instructions: '',
@@ -79,22 +79,22 @@ const NewCasePage = () => {
   // Auto-compute case_due_date = receive_date + TAT days
   useEffect(() => {
     if (commonFields.case_receive_date) {
-      const tatDays = getCaseTypeTatDays(commonFields.case_type) || 30;
+      const tatDays = getInvestigationTypeTatDays(commonFields.investigation_type) || 30;
       const d = new Date(commonFields.case_receive_date);
       d.setDate(d.getDate() + tatDays);
       const due = d.toISOString().split('T')[0];
       setCommonFields(prev => ({ ...prev, case_due_date: due }));
     }
-  }, [commonFields.case_receive_date, commonFields.case_type]);
+  }, [commonFields.case_receive_date, commonFields.investigation_type]);
 
-  // Auto-populate TAT days based on case type when no completion date
+  // Auto-populate TAT days based on investigation type when no closure date
   useEffect(() => {
-    const tatDays = getCaseTypeTatDays(commonFields.case_type);
-    if (!tatDays || commonFields.completion_date) {
+    const tatDays = getInvestigationTypeTatDays(commonFields.investigation_type);
+    if (!tatDays || commonFields.closure_date) {
       return;
     }
     setCommonFields(prev => ({ ...prev, tat_days: tatDays.toString() }));
-  }, [commonFields.case_type, commonFields.completion_date]);
+  }, [commonFields.investigation_type, commonFields.closure_date]);
 
   // Auto-compute SLA: AT (Above TAT) if past due date, else WT (Within TAT)
   useEffect(() => {
@@ -107,24 +107,24 @@ const NewCasePage = () => {
     }
   }, [commonFields.case_due_date]);
 
-  // Auto-compute completion_month when completion_date changes
+  // Auto-compute closure_month when closure_date changes
   useEffect(() => {
-    if (commonFields.completion_date) {
-      const d = new Date(commonFields.completion_date);
+    if (commonFields.closure_date) {
+      const d = new Date(commonFields.closure_date);
       const month = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-      setCommonFields(prev => ({ ...prev, completion_month: month }));
+      setCommonFields(prev => ({ ...prev, closure_month: month }));
     }
-  }, [commonFields.completion_date]);
+  }, [commonFields.closure_date]);
 
-  // Auto-compute TAT when both receipt and completion dates exist
+  // Auto-compute TAT when both receipt and closure dates exist
   useEffect(() => {
-    if (commonFields.case_receive_date && commonFields.completion_date) {
+    if (commonFields.case_receive_date && commonFields.closure_date) {
       const start = new Date(commonFields.case_receive_date);
-      const end = new Date(commonFields.completion_date);
+      const end = new Date(commonFields.closure_date);
       const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
       setCommonFields(prev => ({ ...prev, tat_days: diff >= 0 ? diff.toString() : '' }));
     }
-  }, [commonFields.case_receive_date, commonFields.completion_date]);
+  }, [commonFields.case_receive_date, commonFields.closure_date]);
 
   const handleCommonFieldChange = (e) => {
     const { name, value } = e.target;
@@ -397,8 +397,8 @@ const NewCasePage = () => {
         setLoading(false);
         return;
       }
-      if (isBlank(commonFields.case_type)) {
-        setError('Case Type is required');
+      if (isBlank(commonFields.investigation_type)) {
+        setError('Investigation Type is required');
         setLoading(false);
         return;
       }
@@ -505,12 +505,12 @@ const NewCasePage = () => {
         category: commonFields.category,
         case_receive_date: commonFields.case_receive_date || null,
         receive_month: commonFields.receive_month,
-        completion_date: commonFields.completion_date || null,
-        completion_month: commonFields.completion_month,
+        closure_date: commonFields.closure_date || null,
+        closure_month: commonFields.closure_month,
         case_due_date: commonFields.case_due_date || null,
         tat_days: commonFields.tat_days ? parseInt(commonFields.tat_days) : null,
         sla_status: commonFields.sla_status,
-        case_type: commonFields.case_type,
+        investigation_type: commonFields.investigation_type,
         investigation_report_status: commonFields.investigation_report_status,
         full_case_status: commonFields.full_case_status,
         special_instructions: commonFields.special_instructions,
@@ -766,331 +766,372 @@ const NewCasePage = () => {
 
         {/* Form */}
         <Paper sx={{
-          p: 3,
-          '& .MuiInputLabel-root.Mui-required': { color: '#d32f2f' },
-          '& .MuiInputLabel-root.Mui-focused.Mui-required': { color: '#d32f2f' },
-          '& .MuiInputLabel-asterisk': { color: '#d32f2f' },
-          '& .MuiInputBase-input::placeholder, & .MuiInputBase-inputMultiline::placeholder, & textarea::placeholder': { color: '#d32f2f', opacity: 1 },
-          '& .required-placeholder': { color: '#d32f2f' },
+          p: { xs: 2, sm: 3 },
+          borderRadius: '16px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+          border: '1px solid #e2e8f0',
+          '& .MuiInputLabel-asterisk': { color: '#ef4444' },
+          '& .required-placeholder': { color: '#ef4444' },
         }}>
           <form onSubmit={handleSubmit}>
             {/* ========== COMMON CASE FIELDS (TOP SECTION) ========== */}
-            <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
-              <Box sx={{ bgcolor: '#1565c0', color: 'white', p: 2 }}>
-                <Typography variant="h6" fontWeight="600">
-                  Case Information
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.85 }}>
-                  Fill in the common details for this case
-                </Typography>
+            <Card
+              elevation={0}
+              sx={{
+                mb: 4,
+                overflow: 'hidden',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                bgcolor: '#ffffff',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}
+            >
+              {/* Header Banner */}
+              <Box
+                sx={{
+                  background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
+                  color: 'white',
+                  px: 3,
+                  py: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Box>
+                  <Typography variant="h6" fontWeight="700" sx={{ letterSpacing: '0.2px' }}>
+                    Case Information
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.85, fontSize: '0.825rem' }}>
+                    Primary case identification, timeline parameters, and document attachments
+                  </Typography>
+                </Box>
               </Box>
-              <Box sx={{ p: 3 }}>
 
-                {/* ── Group 1: Case Identification ─────────────────────── */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                  <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#1565c0' }} />
-                  <Typography variant="overline" sx={{ fontWeight: 700, color: '#1565c0', letterSpacing: '1px', lineHeight: 1 }}>
-                    Case Identification
+              <Box sx={{ p: { xs: 2.5, sm: 3 } }}>
+
+                {/* ── Section 1: General Information ─────────────────── */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+                  <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#2563eb' }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                    1. General Information
                   </Typography>
                 </Box>
-                <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Claim Number *"
-                      name="claim_number"
-                      value={commonFields.claim_number}
+                
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      sm: 'repeat(2, 1fr)',
+                      md: '1.2fr 2.4fr 1.2fr 1fr',
+                    },
+                    gap: 2.5,
+                    mb: 3.5,
+                    width: '100%',
+                  }}
+                >
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Claim Number"
+                    name="claim_number"
+                    value={commonFields.claim_number}
+                    onChange={handleCommonFieldChange}
+                    required
+                    placeholder="e.g. CLM-2024-001"
+                    sx={{
+                      '& .MuiOutlinedInput-root': { borderRadius: '8px' },
+                    }}
+                  />
+
+                  <FormControl fullWidth size="small" required>
+                    <InputLabel id="client-name-label">Client Name</InputLabel>
+                    <Select
+                      labelId="client-name-label"
+                      label="Client Name"
+                      name="client_name"
+                      value={commonFields.client_name}
                       onChange={handleCommonFieldChange}
-                      required
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth size="small" required>
-                      {commonFields.client_name && (
-                        <InputLabel id="client-name-label">Client Name</InputLabel>
-                      )}
-                      <Select
-                        name="client_name"
-                        value={commonFields.client_name}
-                        onChange={handleCommonFieldChange}
-                        displayEmpty
-                        renderValue={(selected) => selected || <span className="required-placeholder">Client Name</span>}
-                        labelId={commonFields.client_name ? 'client-name-label' : undefined}
-                        label={commonFields.client_name ? 'Client Name' : undefined}
-                        inputProps={{ 'aria-label': 'Client Name' }}
-                        sx={{ borderRadius: '8px' }}
-                      >
-                        {clientsList.map((client) => (
-                          <MenuItem key={client.id} value={`${client.client_name} – ${client.client_code}`}>
-                            {client.client_name} – {client.client_code}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} sm={2}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Category</InputLabel>
-                      <Select
-                        name="category"
-                        value={commonFields.category}
-                        onChange={handleCommonFieldChange}
-                        label="Category"
-                        sx={{ borderRadius: '8px' }}
-                      >
-                        <MenuItem value="MACT">MACT</MenuItem>
-                        <MenuItem value="Health">Health</MenuItem>
-                        <MenuItem value="Theft">Theft</MenuItem>
-                        <MenuItem value="OD">OD</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                </Grid>
+                      sx={{ borderRadius: '8px' }}
+                    >
+                      <MenuItem value=""><em>Select Client</em></MenuItem>
+                      {clientsList.map((client) => (
+                        <MenuItem key={client.id} value={`${client.client_name} – ${client.client_code}`}>
+                          {client.client_name} – {client.client_code}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
-                <Divider sx={{ mb: 2.5 }} />
+                  <FormControl fullWidth size="small" required>
+                    <InputLabel id="investigation-type-label">Investigation Type</InputLabel>
+                    <Select
+                      labelId="investigation-type-label"
+                      label="Investigation Type"
+                      name="investigation_type"
+                      value={commonFields.investigation_type}
+                      onChange={handleCommonFieldChange}
+                      sx={{ borderRadius: '8px' }}
+                    >
+                      <MenuItem value="Full Case">Full Case</MenuItem>
+                      <MenuItem value="Partial Case">Partial Case</MenuItem>
+                      <MenuItem value="Reassessment">Reassessment</MenuItem>
+                      <MenuItem value="Connected Case">Connected Case</MenuItem>
+                    </Select>
+                  </FormControl>
 
-                {/* ── Group 2: Timeline ────────────────────────────────── */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                  <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0288d1' }} />
-                  <Typography variant="overline" sx={{ fontWeight: 700, color: '#0288d1', letterSpacing: '1px', lineHeight: 1 }}>
-                    Timeline &amp; TAT
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="category-label">Category</InputLabel>
+                    <Select
+                      labelId="category-label"
+                      label="Category"
+                      name="category"
+                      value={commonFields.category}
+                      onChange={handleCommonFieldChange}
+                      sx={{ borderRadius: '8px' }}
+                    >
+                      <MenuItem value="MACT">MACT</MenuItem>
+                      <MenuItem value="Health">Health</MenuItem>
+                      <MenuItem value="Theft">Theft</MenuItem>
+                      <MenuItem value="OD">OD</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+
+                <Divider sx={{ mb: 3, borderColor: '#e2e8f0' }} />
+
+                {/* ── Section 2: Timeline & Turnaround Schedule ─────────────────── */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+                  <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#0284c7' }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                    2. Timeline &amp; Turnaround (TAT) Schedule
                   </Typography>
                 </Box>
-                <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                  <Grid item xs={12} sm={4} md={2}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Receive Date"
-                      name="case_receive_date"
-                      type="date"
-                      value={commonFields.case_receive_date}
-                      onChange={handleCommonFieldChange}
-                      required
-                      InputLabelProps={{ shrink: true }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4} md={2}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Receive Month"
-                      name="receive_month"
-                      value={commonFields.receive_month}
-                      onChange={handleCommonFieldChange}
-                      helperText="Auto-filled from receive date"
-                      InputProps={{ readOnly: !!commonFields.case_receive_date }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: commonFields.case_receive_date ? '#f5f5f5' : undefined } }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4} md={2}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Completion Date"
-                      name="completion_date"
-                      type="date"
-                      value={commonFields.completion_date}
-                      onChange={handleCommonFieldChange}
-                      InputLabelProps={{ shrink: true }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4} md={2}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Completion Month"
-                      name="completion_month"
-                      value={commonFields.completion_month}
-                      onChange={handleCommonFieldChange}
-                      helperText="Auto-filled from completion date"
-                      InputProps={{ readOnly: !!commonFields.completion_date }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: commonFields.completion_date ? '#f5f5f5' : undefined } }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4} md={2}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Case Due Date"
-                      name="case_due_date"
-                      type="date"
-                      value={commonFields.case_due_date}
-                      onChange={handleCommonFieldChange}
-                      helperText="Auto: receive date + TAT days"
-                      InputLabelProps={{ shrink: true }}
-                      InputProps={{ readOnly: !!commonFields.case_receive_date }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: commonFields.case_receive_date ? '#f5f5f5' : undefined } }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4} md={2}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="TAT (Days)"
-                      name="tat_days"
-                      type="number"
-                      value={commonFields.tat_days}
-                      onChange={handleCommonFieldChange}
-                      helperText="Auto-calculated from dates"
-                      InputProps={{ readOnly: true }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f5f5f5' } }}
-                    />
-                  </Grid>
-                </Grid>
 
-                <Divider sx={{ mb: 2.5 }} />
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      md: 'repeat(3, 1fr)',
+                    },
+                    gap: 2.5,
+                    mb: 3.5,
+                    width: '100%',
+                  }}
+                >
+                  {/* Intake Column */}
+                  <Box sx={{ p: 2, borderRadius: '10px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
+                      Case Intake
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Receive Date"
+                        name="case_receive_date"
+                        type="date"
+                        value={commonFields.case_receive_date}
+                        onChange={handleCommonFieldChange}
+                        required
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#ffffff' } }}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Receive Month (Auto)"
+                        name="receive_month"
+                        value={commonFields.receive_month}
+                        InputProps={{ readOnly: true }}
+                        placeholder="Auto-filled from receive date"
+                        sx={{
+                          '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f1f5f9' },
+                          '& .MuiInputBase-input': { color: '#334155', fontWeight: 500 }
+                        }}
+                      />
+                    </Box>
+                  </Box>
 
-                {/* ── Group 3: Classification & Status ─────────────────── */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                  <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#6a1b9a' }} />
-                  <Typography variant="overline" sx={{ fontWeight: 700, color: '#6a1b9a', letterSpacing: '1px', lineHeight: 1 }}>
-                    Classification &amp; Status
+                  {/* Completion Column */}
+                  <Box sx={{ p: 2, borderRadius: '10px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
+                      Case Completion
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Closure Date"
+                        name="closure_date"
+                        type="date"
+                        value={commonFields.closure_date}
+                        onChange={handleCommonFieldChange}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#ffffff' } }}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Closure Month (Auto)"
+                        name="closure_month"
+                        value={commonFields.closure_month}
+                        InputProps={{ readOnly: true }}
+                        placeholder="Auto-filled from closure date"
+                        sx={{
+                          '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f1f5f9' },
+                          '& .MuiInputBase-input': { color: '#334155', fontWeight: 500 }
+                        }}
+                      />
+                    </Box>
+                  </Box>
+
+                  {/* SLA & TAT Column */}
+                  <Box sx={{ p: 2, borderRadius: '10px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
+                      SLA &amp; Turnaround (TAT)
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Case Due Date (Auto)"
+                        name="case_due_date"
+                        type="date"
+                        value={commonFields.case_due_date}
+                        InputLabelProps={{ shrink: true }}
+                        InputProps={{ readOnly: true }}
+                        sx={{
+                          '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f1f5f9' },
+                          '& .MuiInputBase-input': { color: '#334155', fontWeight: 500 }
+                        }}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="TAT Days (Auto)"
+                        name="tat_days"
+                        type="number"
+                        value={commonFields.tat_days}
+                        InputProps={{ readOnly: true }}
+                        placeholder="Calculated turnaround days"
+                        sx={{
+                          '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f1f5f9' },
+                          '& .MuiInputBase-input': { color: '#334155', fontWeight: 500 }
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                </Box>
+
+                <Divider sx={{ mb: 3, borderColor: '#e2e8f0' }} />
+
+                {/* ── Section 3: Reference Document Uploads ─────────────────── */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+                  <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#d97706' }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                    3. Case Documents (Optional)
                   </Typography>
                 </Box>
-                <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                  <Grid item xs={6} sm={3}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="SLA Status"
-                      value={commonFields.sla_status ? (commonFields.sla_status === 'AT' ? 'AT — Above TAT' : 'WT — Within TAT') : ''}
-                      helperText="Auto: based on due date"
-                      InputProps={{ readOnly: true }}
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f5f5f5' } }}
-                    />
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <FormControl fullWidth size="small" required>
-                      <InputLabel>Case Type</InputLabel>
-                      <Select
-                        name="case_type"
-                        value={commonFields.case_type}
-                        onChange={handleCommonFieldChange}
-                        label="Case Type"
-                        sx={{ borderRadius: '8px' }}
-                      >
-                        <MenuItem value=""><em>Select</em></MenuItem>
-                        <MenuItem value="Full Case">Full Case</MenuItem>
-                        <MenuItem value="Partial Case">Partial Case</MenuItem>
-                        <MenuItem value="Reassessment">Reassessment</MenuItem>
-                        <MenuItem value="Connected Case">Connected Case</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Investigation Report</InputLabel>
-                      <Select
-                        name="investigation_report_status"
-                        value={commonFields.investigation_report_status}
-                        onChange={handleCommonFieldChange}
-                        label="Investigation Report"
-                        sx={{ borderRadius: '8px' }}
-                      >
-                        <MenuItem value="Open">Open</MenuItem>
-                        <MenuItem value="Approval">Approval</MenuItem>
-                        <MenuItem value="Stop">Stop</MenuItem>
-                        <MenuItem value="QC">QC</MenuItem>
-                        <MenuItem value="Dispatch">Dispatch</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Full Case Status</InputLabel>
-                      <Select
-                        name="full_case_status"
-                        value={commonFields.full_case_status}
-                        onChange={handleCommonFieldChange}
-                        label="Full Case Status"
-                        sx={{ borderRadius: '8px' }}
-                      >
-                        <MenuItem value="Not Initiated">Not Initiated</MenuItem>
-                        <MenuItem value="WIP">WIP</MenuItem>
-                        <MenuItem value="Pending CS">Pending CS</MenuItem>
-                        <MenuItem value="STOP">STOP</MenuItem>
-                        <MenuItem value="Closed Without CS">Closed Without CS</MenuItem>
-                        <MenuItem value="Closed">Closed</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                </Grid>
 
-                <Divider sx={{ mb: 2.5 }} />
-
-                {/* ── Document Upload ────────────────────────────── */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                  <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#ed6c02' }} />
-                  <Typography variant="overline" sx={{ fontWeight: 700, color: '#ed6c02', letterSpacing: '1px', lineHeight: 1 }}>
-                    Document Upload
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 3, width: '100%' }}>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      sm: 'repeat(3, 1fr)',
+                    },
+                    gap: 2.5,
+                    width: '100%',
+                  }}
+                >
                   {[
-                    { key: 'policy', label: 'Upload Policy' },
-                    { key: 'petition', label: 'Upload Petition' },
-                    { key: 'other', label: 'Upload Other' },
-                  ].map(({ key, label }) => (
-                    <Box sx={{ flex: 1, minWidth: 0 }} key={key}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%', gap: 1 }}>
-                        <Button
-                          variant="outlined"
-                          component="label"
-                          startIcon={<AttachFileIcon sx={{ fontSize: '1.1rem' }} />}
-                          fullWidth
-                          sx={{
-                            width: '100%',
-                            height: '44px',
-                            borderRadius: '8px',
-                            border: caseFiles[key].length > 0 ? '1.5px solid #2e7d32' : '1.5px solid #1976d2',
-                            bgcolor: caseFiles[key].length > 0 ? '#f0fdf4' : '#ffffff',
-                            color: caseFiles[key].length > 0 ? '#166534' : '#1976d2',
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                            '&:hover': {
-                              borderColor: caseFiles[key].length > 0 ? '#1e40af' : '#1565c0',
-                              bgcolor: caseFiles[key].length > 0 ? '#dcfce7' : '#eff6ff',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
-                            },
-                          }}
-                        >
-                          <Typography sx={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                            {label}
-                          </Typography>
-                          <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleCaseFileSelect(e, key)} />
-                        </Button>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'center' }}>
-                          {caseFiles[key].length > 0 ? (
-                            caseFiles[key].map((file, idx) => (
-                              <Chip
-                                key={idx}
-                                label={file.name}
-                                size="small"
-                                onDelete={() => handleRemoveCaseFile(key, idx)}
-                                deleteIcon={<CloseIcon sx={{ fontSize: '14px !important' }} />}
-                                sx={{
-                                  maxWidth: '200px',
-                                  bgcolor: '#e8f5e9',
-                                  color: '#1b5e20',
-                                  fontWeight: 600,
-                                  fontSize: '0.75rem',
-                                  '& .MuiChip-deleteIcon': { color: '#c62828', '&:hover': { color: '#b71c1c' } },
-                                }}
-                              />
-                            ))
-                          ) : (
-                            <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
-                              No files selected
-                            </Typography>
-                          )}
-                        </Box>
+                    { key: 'policy', label: 'Policy Document', helper: 'Upload insurance policy copy' },
+                    { key: 'petition', label: 'Petition Document', helper: 'Upload claim petition or legal copy' },
+                    { key: 'other', label: 'Other Documents', helper: 'Any supporting case files' },
+                  ].map(({ key, label, helper }) => (
+                    <Box
+                      key={key}
+                      sx={{
+                        p: 2,
+                        borderRadius: '10px',
+                        border: caseFiles[key].length > 0 ? '1.5px solid #16a34a' : '1px dashed #cbd5e1',
+                        bgcolor: caseFiles[key].length > 0 ? '#f0fdf4' : '#f8fafc',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1.25,
+                        minHeight: '130px',
+                        boxSizing: 'border-box',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: caseFiles[key].length > 0 ? '#15803d' : '#1e293b' }}>
+                          {label}
+                        </Typography>
+                        {caseFiles[key].length > 0 && (
+                          <Chip
+                            label={`${caseFiles[key].length} file${caseFiles[key].length > 1 ? 's' : ''}`}
+                            size="small"
+                            sx={{ height: 20, fontSize: '0.7rem', bgcolor: '#dcfce7', color: '#166534', fontWeight: 700 }}
+                          />
+                        )}
                       </Box>
+
+                      <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.75rem' }}>
+                        {helper}
+                      </Typography>
+
+                      <Button
+                        variant="outlined"
+                        component="label"
+                        size="small"
+                        startIcon={<AttachFileIcon sx={{ fontSize: '1rem' }} />}
+                        fullWidth
+                        sx={{
+                          mt: 'auto',
+                          height: '36px',
+                          borderRadius: '6px',
+                          border: caseFiles[key].length > 0 ? '1px solid #16a34a' : '1px solid #cbd5e1',
+                          bgcolor: '#ffffff',
+                          color: caseFiles[key].length > 0 ? '#15803d' : '#334155',
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.8rem',
+                          '&:hover': {
+                            borderColor: '#2563eb',
+                            bgcolor: '#eff6ff',
+                          },
+                        }}
+                      >
+                        Browse Files
+                        <input type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => handleCaseFileSelect(e, key)} />
+                      </Button>
+
+                      {caseFiles[key].length > 0 && (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 0.5 }}>
+                          {caseFiles[key].map((file, idx) => (
+                            <Chip
+                              key={idx}
+                              label={file.name}
+                              size="small"
+                              onDelete={() => handleRemoveCaseFile(key, idx)}
+                              deleteIcon={<CloseIcon sx={{ fontSize: '14px !important' }} />}
+                              sx={{
+                                maxWidth: '100%',
+                                bgcolor: '#ffffff',
+                                border: '1px solid #bbf7d0',
+                                color: '#166534',
+                                fontWeight: 600,
+                                fontSize: '0.725rem',
+                                '& .MuiChip-deleteIcon': { color: '#dc2626', '&:hover': { color: '#b91c1c' } },
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      )}
                     </Box>
                   ))}
                 </Box>
@@ -1105,200 +1146,252 @@ const NewCasePage = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Select the verification checks required for this case. Fields for selected verifications will appear below.
             </Typography>
-            <Grid container spacing={2} sx={{ mb: 4 }}>
-              <Grid item xs={12} sm={6} md={4}>
-                <Card
-                  elevation={selectedVerifications.claimant ? 4 : 1}
-                  sx={{
-                    p: 2,
-                    cursor: 'pointer',
-                    border: selectedVerifications.claimant ? '2px solid #1976d2' : '2px solid transparent',
-                    transition: 'all 0.3s',
-                    '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
-                  }}
-                  onClick={() => handleVerificationSelect({ target: { name: 'claimant' } })}
-                >
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        name="claimant"
-                        checked={selectedVerifications.claimant}
-                        onChange={handleVerificationSelect}
-                        color="primary"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body1" fontWeight="bold">Claimant Check</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Claimant details, income, legal info
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Card
-                  elevation={selectedVerifications.insured ? 4 : 1}
-                  sx={{
-                    p: 2,
-                    cursor: 'pointer',
-                    border: selectedVerifications.insured ? '2px solid #2e7d32' : '2px solid transparent',
-                    transition: 'all 0.3s',
-                    '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
-                  }}
-                  onClick={() => handleVerificationSelect({ target: { name: 'insured' } })}
-                >
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        name="insured"
-                        checked={selectedVerifications.insured}
-                        onChange={handleVerificationSelect}
-                        color="success"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body1" fontWeight="bold">Insured Check</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Policy, RC, vehicle details
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Card
-                  elevation={selectedVerifications.driver ? 4 : 1}
-                  sx={{
-                    p: 2,
-                    cursor: 'pointer',
-                    border: selectedVerifications.driver ? '2px solid #ed6c02' : '2px solid transparent',
-                    transition: 'all 0.3s',
-                    '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
-                  }}
-                  onClick={() => handleVerificationSelect({ target: { name: 'driver' } })}
-                >
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        name="driver"
-                        checked={selectedVerifications.driver}
-                        onChange={handleVerificationSelect}
-                        color="warning"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body1" fontWeight="bold">Driver Check</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          License, permit, occupation
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Card
-                  elevation={selectedVerifications.spot ? 4 : 1}
-                  sx={{
-                    p: 2,
-                    cursor: 'pointer',
-                    border: selectedVerifications.spot ? '2px solid #9c27b0' : '2px solid transparent',
-                    transition: 'all 0.3s',
-                    '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
-                  }}
-                  onClick={() => handleVerificationSelect({ target: { name: 'spot' } })}
-                >
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        name="spot"
-                        checked={selectedVerifications.spot}
-                        onChange={handleVerificationSelect}
-                        color="secondary"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body1" fontWeight="bold">Spot Check</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Accident location and details
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Card
-                  elevation={selectedVerifications.chargesheet ? 4 : 1}
-                  sx={{
-                    p: 2,
-                    cursor: 'pointer',
-                    border: selectedVerifications.chargesheet ? '2px solid #d32f2f' : '2px solid transparent',
-                    transition: 'all 0.3s',
-                    '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
-                  }}
-                  onClick={() => handleVerificationSelect({ target: { name: 'chargesheet' } })}
-                >
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        name="chargesheet"
-                        checked={selectedVerifications.chargesheet}
-                        onChange={handleVerificationSelect}
-                        color="error"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body1" fontWeight="bold">Chargesheet</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          FIR delay, legal sections
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Card
-                  elevation={selectedVerifications.rto ? 4 : 1}
-                  sx={{
-                    p: 2,
-                    cursor: 'pointer',
-                    border: selectedVerifications.rto ? '2px solid #4527a0' : '2px solid transparent',
-                    transition: 'all 0.3s',
-                    '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
-                  }}
-                  onClick={() => handleVerificationSelect({ target: { name: 'rto' } })}
-                >
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        name="rto"
-                        checked={selectedVerifications.rto}
-                        onChange={handleVerificationSelect}
-                        sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' } }}
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body1" fontWeight="bold">RTO Check</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Regional Transport Office verification
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                </Card>
-              </Grid>
-            </Grid>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: 'repeat(2, 1fr)',
+                  sm: 'repeat(3, 1fr)',
+                  md: 'repeat(6, 1fr)',
+                },
+                gap: 1.5,
+                width: '100%',
+                mb: 4,
+              }}
+            >
+              {/* Claimant */}
+              <Card
+                elevation={selectedVerifications.claimant ? 3 : 1}
+                sx={{
+                  p: 1.25,
+                  cursor: 'pointer',
+                  border: selectedVerifications.claimant ? '2px solid #1976d2' : '2px solid #e2e8f0',
+                  borderRadius: '10px',
+                  bgcolor: selectedVerifications.claimant ? '#f0f7ff' : '#ffffff',
+                  transition: 'all 0.25s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
+                }}
+                onClick={() => setSelectedVerifications(prev => ({ ...prev, claimant: !prev.claimant }))}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="claimant"
+                      checked={selectedVerifications.claimant}
+                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, claimant: e.target.checked }))}
+                      color="primary"
+                      size="small"
+                      sx={{ p: 0.5 }}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.claimant ? '#1565c0' : '#334155' }}>
+                      Claimant
+                    </Typography>
+                  }
+                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
+                />
+              </Card>
+
+              {/* Insured */}
+              <Card
+                elevation={selectedVerifications.insured ? 3 : 1}
+                sx={{
+                  p: 1.25,
+                  cursor: 'pointer',
+                  border: selectedVerifications.insured ? '2px solid #2e7d32' : '2px solid #e2e8f0',
+                  borderRadius: '10px',
+                  bgcolor: selectedVerifications.insured ? '#f0fdf4' : '#ffffff',
+                  transition: 'all 0.25s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
+                }}
+                onClick={() => setSelectedVerifications(prev => ({ ...prev, insured: !prev.insured }))}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="insured"
+                      checked={selectedVerifications.insured}
+                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, insured: e.target.checked }))}
+                      color="success"
+                      size="small"
+                      sx={{ p: 0.5 }}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.insured ? '#166534' : '#334155' }}>
+                      Insured
+                    </Typography>
+                  }
+                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
+                />
+              </Card>
+
+              {/* Driver */}
+              <Card
+                elevation={selectedVerifications.driver ? 3 : 1}
+                sx={{
+                  p: 1.25,
+                  cursor: 'pointer',
+                  border: selectedVerifications.driver ? '2px solid #ed6c02' : '2px solid #e2e8f0',
+                  borderRadius: '10px',
+                  bgcolor: selectedVerifications.driver ? '#fffbeb' : '#ffffff',
+                  transition: 'all 0.25s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
+                }}
+                onClick={() => setSelectedVerifications(prev => ({ ...prev, driver: !prev.driver }))}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="driver"
+                      checked={selectedVerifications.driver}
+                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, driver: e.target.checked }))}
+                      color="warning"
+                      size="small"
+                      sx={{ p: 0.5 }}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.driver ? '#b45309' : '#334155' }}>
+                      Driver
+                    </Typography>
+                  }
+                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
+                />
+              </Card>
+
+              {/* Spot */}
+              <Card
+                elevation={selectedVerifications.spot ? 3 : 1}
+                sx={{
+                  p: 1.25,
+                  cursor: 'pointer',
+                  border: selectedVerifications.spot ? '2px solid #9c27b0' : '2px solid #e2e8f0',
+                  borderRadius: '10px',
+                  bgcolor: selectedVerifications.spot ? '#faf5ff' : '#ffffff',
+                  transition: 'all 0.25s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
+                }}
+                onClick={() => setSelectedVerifications(prev => ({ ...prev, spot: !prev.spot }))}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="spot"
+                      checked={selectedVerifications.spot}
+                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, spot: e.target.checked }))}
+                      color="secondary"
+                      size="small"
+                      sx={{ p: 0.5 }}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.spot ? '#7e22ce' : '#334155' }}>
+                      Spot
+                    </Typography>
+                  }
+                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
+                />
+              </Card>
+
+              {/* Chargesheet */}
+              <Card
+                elevation={selectedVerifications.chargesheet ? 3 : 1}
+                sx={{
+                  p: 1.25,
+                  cursor: 'pointer',
+                  border: selectedVerifications.chargesheet ? '2px solid #d32f2f' : '2px solid #e2e8f0',
+                  borderRadius: '10px',
+                  bgcolor: selectedVerifications.chargesheet ? '#fef2f2' : '#ffffff',
+                  transition: 'all 0.25s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
+                }}
+                onClick={() => setSelectedVerifications(prev => ({ ...prev, chargesheet: !prev.chargesheet }))}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="chargesheet"
+                      checked={selectedVerifications.chargesheet}
+                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, chargesheet: e.target.checked }))}
+                      color="error"
+                      size="small"
+                      sx={{ p: 0.5 }}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.chargesheet ? '#b91c1c' : '#334155' }}>
+                      Chargesheet
+                    </Typography>
+                  }
+                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
+                />
+              </Card>
+
+              {/* RTO */}
+              <Card
+                elevation={selectedVerifications.rto ? 3 : 1}
+                sx={{
+                  p: 1.25,
+                  cursor: 'pointer',
+                  border: selectedVerifications.rto ? '2px solid #4527a0' : '2px solid #e2e8f0',
+                  borderRadius: '10px',
+                  bgcolor: selectedVerifications.rto ? '#f5f3ff' : '#ffffff',
+                  transition: 'all 0.25s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
+                }}
+                onClick={() => setSelectedVerifications(prev => ({ ...prev, rto: !prev.rto }))}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="rto"
+                      checked={selectedVerifications.rto}
+                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, rto: e.target.checked }))}
+                      sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' }, p: 0.5 }}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.rto ? '#4527a0' : '#334155' }}>
+                      RTO
+                    </Typography>
+                  }
+                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
+                />
+              </Card>
+            </Box>
 
             {/* Show verification fields only if at least one verification is selected */}
             {(selectedVerifications.claimant || selectedVerifications.insured ||
@@ -1308,11 +1401,11 @@ const NewCasePage = () => {
                 <>
                   <Divider sx={{ my: 4 }} />
 
-                  {/* Claimant Check Fields */}
+                  {/* Claimant Details Fields */}
                   {selectedVerifications.claimant && (
                     <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
                       <Box sx={{ bgcolor: '#1976d2', color: 'white', p: 2 }}>
-                        <Typography variant="h6" fontWeight="600">Claimant Check</Typography>
+                        <Typography variant="h6" fontWeight="600">Claimant Details</Typography>
                         <Typography variant="caption" sx={{ opacity: 0.85 }}>Personal details, dependents &amp; findings</Typography>
                       </Box>
                       <Box sx={{ p: 3 }}>
@@ -1415,11 +1508,11 @@ const NewCasePage = () => {
                     </Card>
                   )}
 
-                  {/* Insured Check Fields */}
+                  {/* Insured Details Fields */}
                   {selectedVerifications.insured && (
                     <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
                       <Box sx={{ bgcolor: '#2e7d32', color: 'white', p: 2 }}>
-                        <Typography variant="h6" fontWeight="600">Insured Check</Typography>
+                        <Typography variant="h6" fontWeight="600">Insured Details</Typography>
                         <Typography variant="caption" sx={{ opacity: 0.85 }}>Personal details, policy &amp; vehicle information</Typography>
                       </Box>
                       <Box sx={{ p: 3 }}>
@@ -1521,11 +1614,11 @@ const NewCasePage = () => {
                     </Card>
                   )}
 
-                  {/* Driver Check Fields */}
+                  {/* Driver Details Fields */}
                   {selectedVerifications.driver && (
                     <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
                       <Box sx={{ bgcolor: '#ed6c02', color: 'white', p: 2 }}>
-                        <Typography variant="h6" fontWeight="600">Driver Check</Typography>
+                        <Typography variant="h6" fontWeight="600">Driver Details</Typography>
                         <Typography variant="caption" sx={{ opacity: 0.85 }}>Personal details, license &amp; vehicle permit</Typography>
                       </Box>
                       <Box sx={{ p: 3 }}>
@@ -1618,11 +1711,11 @@ const NewCasePage = () => {
                     </Card>
                   )}
 
-                  {/* Spot Check Fields */}
+                  {/* Spot Details Fields */}
                   {selectedVerifications.spot && (
                     <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
                       <Box sx={{ bgcolor: '#9c27b0', color: 'white', p: 2 }}>
-                        <Typography variant="h6" fontWeight="600">Spot Check</Typography>
+                        <Typography variant="h6" fontWeight="600">Spot Details</Typography>
                         <Typography variant="caption" sx={{ opacity: 0.85 }}>Accident location, FIR details &amp; findings</Typography>
                       </Box>
                       <Box sx={{ p: 3 }}>
@@ -1731,11 +1824,11 @@ const NewCasePage = () => {
                     </Card>
                   )}
 
-                  {/* Chargesheet Fields */}
+                  {/* Chargesheet Details Fields */}
                   {selectedVerifications.chargesheet && (
                     <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
                       <Box sx={{ bgcolor: '#d32f2f', color: 'white', p: 2 }}>
-                        <Typography variant="h6" fontWeight="600">Chargesheet Check</Typography>
+                        <Typography variant="h6" fontWeight="600">Chargesheet Details</Typography>
                         <Typography variant="caption" sx={{ opacity: 0.85 }}>Legal references, sections &amp; findings</Typography>
                       </Box>
                       <Box sx={{ p: 3 }}>
@@ -1858,11 +1951,11 @@ const NewCasePage = () => {
                   )}
 
 
-                  {/* RTO Check Fields */}
+                  {/* RTO Details Fields */}
                   {selectedVerifications.rto && (
                     <Card elevation={3} sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
                       <Box sx={{ bgcolor: '#4527a0', color: 'white', p: 2 }}>
-                        <Typography variant="h6" fontWeight="600">RTO Check</Typography>
+                        <Typography variant="h6" fontWeight="600">RTO Details</Typography>
                         <Typography variant="caption" sx={{ opacity: 0.85 }}>Regional Transport Office — verify documents at RTO</Typography>
                       </Box>
                       <Box sx={{ p: 3 }}>

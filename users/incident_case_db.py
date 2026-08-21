@@ -10,7 +10,7 @@ The incident_case_db has these tables with specific column names:
   - chargesheets
 
 CHECK CONSTRAINTS (must use exact values):
-  cases.case_type       : 'Full Case' | 'Partial Case' | 'Reassessment' | 'Connected Case'  (NOT NULL)
+  cases.investigation_type       : 'Full Case' | 'Partial Case' | 'Reassessment' | 'Connected Case'  (NOT NULL)
   cases.sla             : 'AT' | 'WT'  (nullable)
   cases.full_case_status: 'WIP' | 'Pending CS' | 'Completed' | 'IR-Writing' | 'NI' | 'Withdraw' | 'QC-1' | 'Pending Additional Docs' | 'Connected Pending' | 'RCU Pending' | 'Portal Upload'  (NOT NULL)
   cases.investigation_report_status: 'Open' | 'Approval' | 'Stop' | 'QC' | 'Dispatch'  (NOT NULL)
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 DB_ALIAS = 'default'
 
 # Valid values per CHECK constraints
-VALID_CASE_TYPES = {'Full Case', 'Partial Case', 'Reassessment', 'Connected Case'}
+VALID_INVESTIGATION_TYPES = {'Full Case', 'Partial Case', 'Reassessment', 'Connected Case'}
 VALID_SLA = {'AT', 'WT'}
 VALID_FULL_CASE_STATUS = {
     'WIP', 'Pending CS', 'Completed', 'IR-Writing', 'NI', 'Withdraw',
@@ -198,9 +198,9 @@ def _geocode_and_update(table: str, row_id: int, lat_col: str, lng_col: str, add
 
 def insert_case(claim_number, client_name, category,
                 case_receive_date=None, receive_month='',
-                completion_date=None, completion_month='',
+                closure_date=None, closure_month='',
                 case_due_date=None, tat_days=None,
-                sla='', case_type='',
+                sla='', investigation_type='',
                 investigation_report_status='Open',
                 full_case_status='WIP',
                 special_instructions='',
@@ -213,8 +213,8 @@ def insert_case(claim_number, client_name, category,
     Returns the generated case id so verifications can reference it.
     """
     # Enforce NOT NULL + CHECK constraints with sensible defaults
-    if case_type not in VALID_CASE_TYPES:
-        case_type = 'Full Case'
+    if investigation_type not in VALID_INVESTIGATION_TYPES:
+        investigation_type = 'Full Case'
     if full_case_status not in VALID_FULL_CASE_STATUS:
         full_case_status = 'WIP'
     if investigation_report_status not in VALID_INVESTIGATION_REPORT:
@@ -228,8 +228,8 @@ def insert_case(claim_number, client_name, category,
                 INSERT INTO cases
                     (claim_number, client_name, category,
                      case_receive_date, receive_month,
-                     completion_date, completion_month,
-                     case_due_date, tat_days, sla, case_type,
+                     closure_date, closure_month,
+                     case_due_date, tat_days, sla, investigation_type,
                      investigation_report_status, full_case_status,
                      special_instructions, case_number, policy_document, petition_document, created_at, updated_at)
                 VALUES
@@ -243,8 +243,8 @@ def insert_case(claim_number, client_name, category,
             """, [
                 claim_number, client_name or '', category or '',
                 case_receive_date, receive_month or '',
-                completion_date, completion_month or '',
-                case_due_date, tat_days, sla_val, case_type,
+                closure_date, closure_month or '',
+                case_due_date, tat_days, sla_val, investigation_type,
                 investigation_report_status, full_case_status,
                 special_instructions or '', case_number or '',
                 policy_document or '', petition_document or '',

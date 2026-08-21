@@ -52,7 +52,7 @@ import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownlo
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 import AlertMessage from '../../components/common/AlertMessage';
 
-const REPORT_STORAGE_KEY = 'aiBriefReports';
+const REPORT_STORAGE_KEY = 'aiCaseReviewReports';
 
 const irStatusColors = {
   Open: '#4299e1',
@@ -192,7 +192,7 @@ const extractSummary = (row) => {
   return 'No incident summary available yet.';
 };
 
-const AIBriefPage = () => {
+const AICaseReviewPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -200,7 +200,7 @@ const AIBriefPage = () => {
   const [totalCases, setTotalCases] = useState(0);
   const [vendors, setVendors] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [caseTypeFilter, setCaseTypeFilter] = useState('all');
+  const [investigationTypeFilter, setInvestigationTypeFilter] = useState('all');
   const [vendorFilter, setVendorFilter] = useState('all');
   const [reportFilter, setReportFilter] = useState('all');
   const [page, setPage] = useState(0);
@@ -229,7 +229,7 @@ const AIBriefPage = () => {
   useEffect(() => {
     fetchCases(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, statusFilter, caseTypeFilter, vendorFilter, vendors]);
+  }, [page, rowsPerPage, statusFilter, investigationTypeFilter, vendorFilter, vendors]);
 
   const fetchQCs = async (isAutoRefresh = false) => {
     try {
@@ -259,7 +259,7 @@ const AIBriefPage = () => {
             page: page + 1,
             page_size: rowsPerPage,
             investigation_report_status: statusFilter !== 'all' ? statusFilter : undefined,
-            case_type: caseTypeFilter !== 'all' ? caseTypeFilter : undefined,
+            investigation_type: investigationTypeFilter !== 'all' ? investigationTypeFilter : undefined,
             assigned_vendor_name:
               vendorFilter !== 'all'
                 ? vendors.find((vendor) => String(vendor.id) === String(vendorFilter))?.company_name || undefined
@@ -294,8 +294,8 @@ const AIBriefPage = () => {
       setTotalCases(response.data.total || 0);
       setSelected([]);
     } catch (err) {
-      console.error('Failed to fetch AI brief cases:', err);
-      setError('Failed to load AI brief review data.');
+      console.error('Failed to fetch AI case review cases:', err);
+      setError('Failed to load AI case review review data.');
       setCases([]);
       setTotalCases(0);
     } finally {
@@ -425,7 +425,7 @@ const AIBriefPage = () => {
 
   const handleClearFilters = () => {
     setStatusFilter('all');
-    setCaseTypeFilter('all');
+    setInvestigationTypeFilter('all');
     setVendorFilter('all');
     setReportFilter('all');
     setPage(0);
@@ -455,7 +455,7 @@ const AIBriefPage = () => {
       setError('');
       setSuccess('');
 
-      const response = await api.post(`/cases/incident-db/${selectedCase.id}/ai-brief-report`);
+      const response = await api.post(`/cases/incident-db/${selectedCase.id}/ai-case-review-report`);
 
       // Save report to database for legal review
       let reportId = null;
@@ -491,10 +491,10 @@ const AIBriefPage = () => {
       setActiveReportCaseId(selectedCase.id);
       setReportDialogOpen(false);
       setViewReportDialogOpen(true);
-      setSuccess(`AI brief report generated for case ${response.data.case_number}.`);
+      setSuccess(`AI case review report generated for case ${response.data.case_number}.`);
     } catch (err) {
-      console.error('Failed to generate AI brief report:', err);
-      setError(err.response?.data?.detail || err.response?.data?.error || 'Failed to generate AI brief report.');
+      console.error('Failed to generate AI case review report:', err);
+      setError(err.response?.data?.detail || err.response?.data?.error || 'Failed to generate AI case review report.');
     } finally {
       setGenerating(false);
     }
@@ -555,8 +555,8 @@ const AIBriefPage = () => {
 
     if (format === 'word') {
       downloadWordDocument({
-        fileName: `${sanitizeFileName(caseNum, 'ai-brief-report')}_ai_brief_report.doc`,
-        title: 'AI Brief Report',
+        fileName: `${sanitizeFileName(caseNum, 'ai-case-review-report')}_ai_case_review_report.doc`,
+        title: 'AI Case Review Report',
         metadata,
         contentTitle: 'Report Content',
         content: activeReport.reportText || '',
@@ -626,7 +626,7 @@ const AIBriefPage = () => {
     };
 
     // Header
-    addText('AI Brief Report', 18, true, [102, 126, 234]);
+    addText('AI Case Review Report', 18, true, [102, 126, 234]);
     y += 4;
 
     // Meta info
@@ -740,7 +740,7 @@ const AIBriefPage = () => {
       }
     }
 
-    const fileName = `${sanitizeFileName(caseNum, 'ai-brief-report')}_ai_brief_report.pdf`;
+    const fileName = `${sanitizeFileName(caseNum, 'ai-case-review-report')}_ai_case_review_report.pdf`;
 
     if (pdfInsertions.length > 0) {
       try {
@@ -907,7 +907,7 @@ const AIBriefPage = () => {
     }
   };
 
-  // Delete AI brief report handler
+  // Delete AI case review report handler
   const handleDeleteReport = async () => {
     if (!activeReport) return;
 
@@ -930,7 +930,7 @@ const AIBriefPage = () => {
       setDeleteReportDialogOpen(false);
       setViewReportDialogOpen(false);
       setActiveReportCaseId(null);
-      setSuccess(`AI brief report for case ${activeReportCase?.case_number || activeReportCaseId} deleted successfully.`);
+      setSuccess(`AI case review report for case ${activeReportCase?.case_number || activeReportCaseId} deleted successfully.`);
       fetchCases();
     } catch (err) {
       console.error('Failed to delete report:', err);
@@ -940,7 +940,7 @@ const AIBriefPage = () => {
     }
   };
 
-  // Regenerate AI brief report handler
+  // Regenerate AI case review report handler
   const handleRegenerateReport = async () => {
     if (!activeReportCase) return;
 
@@ -962,7 +962,7 @@ const AIBriefPage = () => {
 
   return (
     <CaseManagerLayout disablePadding>
-      {/* Top Header Section - AI Brief Review Theme */}
+      {/* Top Header Section - AI Case Review Theme */}
       <Box
         sx={{
           minHeight: 110,
@@ -1026,7 +1026,7 @@ const AIBriefPage = () => {
               whiteSpace: 'nowrap',
             }}
           >
-            AI Brief Review
+            AI Case Review
           </Typography>
         </Box>
 
@@ -1095,7 +1095,7 @@ const AIBriefPage = () => {
         <Box sx={{ p: 2.5, borderBottom: '1px solid #e0e0e0' }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#333' }}>
-              AI Brief Review Queue
+              AI Case Review Queue
             </Typography>
 
             <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -1119,15 +1119,15 @@ const AIBriefPage = () => {
 
             <FormControl size="small" sx={{ minWidth: 160 }}>
               <Select
-                value={caseTypeFilter}
-                onChange={(e) => setCaseTypeFilter(e.target.value)}
+                value={investigationTypeFilter}
+                onChange={(e) => setInvestigationTypeFilter(e.target.value)}
                 displayEmpty
                 sx={{
                   borderRadius: '8px',
                   '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
                 }}
               >
-                <MenuItem value="all">All Case Types</MenuItem>
+                <MenuItem value="all">All Investigation Types</MenuItem>
                 <MenuItem value="Full Case">Full Case</MenuItem>
                 <MenuItem value="Partial Case">Partial Case</MenuItem>
                 <MenuItem value="Reassessment">Reassessment</MenuItem>
@@ -1232,7 +1232,7 @@ const AIBriefPage = () => {
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography sx={{ color: '#666' }}>No AI brief cases found for the current filters.</Typography>
+                    <Typography sx={{ color: '#666' }}>No AI case review cases found for the current filters.</Typography>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -1390,11 +1390,11 @@ const AIBriefPage = () => {
       </Paper>
 
       <Dialog open={reportDialogOpen} onClose={closeGenerateDialog} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Generate AI Brief Report</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Generate AI Case Review Report</DialogTitle>
         <DialogContent dividers>
           <Typography sx={{ fontSize: '14px', color: '#475569', mb: 2 }}>
             {selectedCase
-              ? `Generate AI brief for case ${selectedCase.case_number || selectedCase.id} using statements already stored by the business partner across checks.`
+              ? `Generate AI case review for case ${selectedCase.case_number || selectedCase.id} using statements already stored by the business partner across checks.`
               : 'Select a case first.'}
           </Typography>
           <Typography sx={{ fontSize: '13px', color: '#64748b' }}>
@@ -1429,7 +1429,7 @@ const AIBriefPage = () => {
       >
         <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
-            AI Brief Report
+            AI Case Review Report
             {activeReportCase && (
               <Typography sx={{ fontSize: '14px', color: '#666', fontWeight: 400 }}>
                 Case: {activeReportCase.case_number || activeReportCase.id}
@@ -1809,11 +1809,11 @@ const AIBriefPage = () => {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 700, fontSize: '18px', pb: 1 }}>
-          Delete AI Brief Report
+          Delete AI Case Review Report
         </DialogTitle>
         <DialogContent>
           <Typography sx={{ fontSize: '14px', color: '#666', mb: 2 }}>
-            Are you sure you want to delete the AI brief report for case <strong>{activeReportCase?.case_number}</strong>?
+            Are you sure you want to delete the AI case review report for case <strong>{activeReportCase?.case_number}</strong>?
           </Typography>
           <Typography sx={{ fontSize: '12px', color: '#999' }}>
             This action will permanently delete the report. You can always regenerate it later from stored vendor statements.
@@ -1848,7 +1848,7 @@ const AIBriefPage = () => {
   );
 };
 
-export default AIBriefPage;
+export default AICaseReviewPage;
 
 
 

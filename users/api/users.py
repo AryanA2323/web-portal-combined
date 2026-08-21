@@ -445,7 +445,7 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
                 path_labels = {
                     '/case_manager/dashboard': 'Dashboard',
                     '/case_manager/cases': 'Cases',
-                    '/case_manager/ai-brief': 'AI Brief Review',
+                    '/case_manager/ai-case-review': 'AI Case Review',
                     '/case_manager/legal-review': 'Legal Review',
                     '/case_manager/reports': 'Reports',
                     '/case_manager/audit-logs': 'Audit Logs',

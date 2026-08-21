@@ -37,13 +37,13 @@ const allMenuItems = [
   { id: 'cases', label: 'Cases', icon: FolderOpen, path: '/case_manager/cases' },
   { id: 'users', label: 'Users', icon: People, path: '/case_manager/users' },
   { id: 'clients', label: 'Clients', icon: Store, path: '/case_manager/clients' },
-  { id: 'ai-brief', label: 'AI Brief Review', icon: AutoAwesome, path: '/case_manager/ai-brief' },
+  { id: 'ai-case-review', label: 'AI Case Review', icon: AutoAwesome, path: '/case_manager/ai-case-review' },
   { id: 'legal-review', label: 'Legal Review', icon: Gavel, path: '/case_manager/legal-review' },
-  { id: 'completed-cases', label: 'Completed Cases', icon: CheckCircle, path: '/case_manager/completed-cases' },
+  { id: 'closed-cases', label: 'Closed Cases', icon: CheckCircle, path: '/case_manager/closed-cases' },
   { id: 'reports', label: 'Reports', icon: Assessment, path: '/case_manager/reports' },
   { id: 'super-admin-logs', label: 'Logs', icon: History, path: '/super-admin/logs' },
   { id: 'audit-logs', label: 'Audit Logs', icon: History, path: '/case_manager/audit-logs' },
-  { id: 'tat-changes', label: 'Approvals', icon: SwapHoriz, path: '/super-admin/approvals' },
+  { id: 'approvals', label: 'Approvals', icon: SwapHoriz, path: '/super-admin/approvals' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/case_manager/settings' },
 ];
 

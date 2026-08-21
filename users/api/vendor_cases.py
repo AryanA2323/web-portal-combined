@@ -792,7 +792,7 @@ def get_vendor_assigned_checks(request: HttpRequest):
         stats = {
             "total": len(assigned_checks),
             "wip": sum(1 for c in assigned_checks if c["check_status"] == "WIP"),
-            "completed": sum(1 for c in assigned_checks if c["check_status"] == "Completed"),
+            "closed": sum(1 for c in assigned_checks if c["check_status"] == "Closed"),
             "not_initiated": sum(1 for c in assigned_checks if c["check_status"] == "Not Initiated"),
         }
         return {"checks": assigned_checks, "statistics": stats}
@@ -834,7 +834,7 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
             cursor.execute("""
                 SELECT id, claim_number, client_name, category,
                        case_receive_date, case_due_date, tat_days, sla,
-                       case_type, full_case_status, special_instructions,
+                       investigation_type, full_case_status, special_instructions,
                        investigation_report_status
                 FROM cases WHERE id = %s
             """, [case_id])
@@ -843,7 +843,7 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                 cursor.execute("""
                     SELECT id, claim_number, NULL AS client_name, category,
                            case_receive_date, case_due_date, tat_days, sla_status AS sla,
-                           case_type, full_case_status, special_instructions,
+                           investigation_type, full_case_status, special_instructions,
                            investigation_report_status
                     FROM insurance_case WHERE id = %s
                 """, [case_id])
@@ -861,7 +861,7 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                 "case_due_date": str(case_row[5]) if case_row[5] else "",
                 "tat_days": case_row[6],
                 "sla": case_row[7] or "",
-                "case_type": case_row[8] or "",
+                "investigation_type": case_row[8] or "",
                 "full_case_status": case_row[9] or "",
                 "special_instructions": case_row[10] or "",
                 "investigation_report_status": case_row[11] or "",
@@ -1049,7 +1049,7 @@ def get_vendor_check_detail_by_id(request: HttpRequest, check_id: int, check_typ
             cursor.execute("""
                 SELECT id, claim_number, client_name, category,
                        case_receive_date, case_due_date, tat_days, sla,
-                       case_type, full_case_status, special_instructions,
+                       investigation_type, full_case_status, special_instructions,
                        investigation_report_status
                 FROM cases WHERE id = %s
             """, [case_id])
@@ -1058,7 +1058,7 @@ def get_vendor_check_detail_by_id(request: HttpRequest, check_id: int, check_typ
                 cursor.execute("""
                     SELECT id, claim_number, NULL AS client_name, category,
                            case_receive_date, case_due_date, tat_days, sla_status AS sla,
-                           case_type, full_case_status, special_instructions,
+                           investigation_type, full_case_status, special_instructions,
                            investigation_report_status
                     FROM insurance_case WHERE id = %s
                 """, [case_id])
@@ -1073,7 +1073,7 @@ def get_vendor_check_detail_by_id(request: HttpRequest, check_id: int, check_typ
                 "case_due_date": str(case_row[5]) if case_row and case_row[5] else "",
                 "tat_days": case_row[6] if case_row else None,
                 "sla": (case_row[7] if case_row else "") or "",
-                "case_type": (case_row[8] if case_row else "") or "",
+                "investigation_type": (case_row[8] if case_row else "") or "",
                 "full_case_status": (case_row[9] if case_row else "") or "",
                 "special_instructions": (case_row[10] if case_row else "") or "",
                 "investigation_report_status": (case_row[11] if case_row else "") or "",
@@ -1218,7 +1218,7 @@ def _evaluate_and_update_check_status(cursor, table: str, check_id: int, check_t
             
     new_status = 'WIP'
     if has_evidence and statement_done and not has_mismatch:
-        new_status = 'Completed'
+        new_status = 'Closed'
         
     cursor.execute(f"UPDATE {table} SET check_status = %s, updated_at = NOW() WHERE id = %s", [new_status, check_id])
 
@@ -1398,11 +1398,11 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
 @router.post(
     "/vendor-check-complete/{case_id}/{check_type}",
     response={200: dict, 400: ApiErrorSchema, 401: ApiErrorSchema, 403: ApiErrorSchema, 404: ApiErrorSchema, 500: ApiErrorSchema},
-    summary="Mark Check Completed",
-    description="Mark the vendor check as completed.",
+    summary="Mark Check Closed",
+    description="Mark the vendor check as closed.",
 )
 def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
-    """Mark a specific check as completed."""
+    """Mark a specific check as closed."""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     if request.user.role not in ('VENDOR', 'ADVOCATE'):
@@ -1463,7 +1463,7 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
 
             # Update check_status
             cursor.execute(f"""
-                UPDATE {table} SET check_status = 'Completed', updated_at = NOW()
+                UPDATE {table} SET check_status = 'Closed', updated_at = NOW()
                 WHERE id = %s
             """, [check_id])
 
@@ -1477,10 +1477,10 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
                 if icd_row and icd_row[0]:
                     paired_table = 'driver_checks' if table == 'insured_checks' else 'insured_checks'
                     cursor.execute(f"""
-                        UPDATE {paired_table} SET check_status = 'Completed', updated_at = NOW()
+                        UPDATE {paired_table} SET check_status = 'Closed', updated_at = NOW()
                         WHERE case_id = %s
                     """, [case_id])
-                    logger.info(f"Insured-cum-driver: also completed {paired_table} for case_id={case_id}")
+                    logger.info(f"Insured-cum-driver: also closed {paired_table} for case_id={case_id}")
 
     except Exception as e:
         logger.error(f"Failed to complete check: {e}", exc_info=True)
@@ -1488,7 +1488,7 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
 
     return {
         "success": True,
-        "message": "Check marked as completed"
+        "message": "Check marked as closed"
     }
 
 

@@ -59,8 +59,8 @@ class InsuranceCase(models.Model):
         ('OTHER', 'Other'),
     ]
     
-    # Case Type choices
-    CASE_TYPE_CHOICES = [
+    # Investigation Type choices
+    INVESTIGATION_TYPE_CHOICES = [
         ('Full Case', 'Full Case'),
         ('Connected Case', 'Connected Case'),
         ('Partial Investigation', 'Partial Investigation'),
@@ -70,7 +70,6 @@ class InsuranceCase(models.Model):
     STATUS_CHOICES = [
         ('Open', 'Open'),
         ('WIP', 'Work In Progress'),
-        ('Completed', 'Completed'),
         ('Dispatch', 'Dispatch'),
         ('Closed', 'Closed'),
     ]
@@ -79,7 +78,7 @@ class InsuranceCase(models.Model):
     REPORT_STATUS_CHOICES = [
         ('Pending', 'Pending'),
         ('Draft', 'Draft'),
-        ('Completed', 'Completed'),
+        ('Closed', 'Closed'),
         ('Dispatch', 'Dispatch'),
     ]
     
@@ -94,14 +93,14 @@ class InsuranceCase(models.Model):
     # Dates and Timing
     case_receive_date = models.DateField()
     receive_month = models.CharField(max_length=20, blank=True)
-    completion_date = models.DateTimeField(null=True, blank=True)
-    completion_month = models.CharField(max_length=20, blank=True)
+    closure_date = models.DateTimeField(null=True, blank=True)
+    closure_month = models.CharField(max_length=20, blank=True)
     case_due_date = models.DateField(null=True, blank=True)
     tat_days = models.IntegerField(null=True, blank=True, help_text='Turn Around Time in days')
     sla_status = models.CharField(max_length=20, blank=True, help_text='Service Level Agreement status')
     
     # Case Details
-    case_type = models.CharField(max_length=50, choices=CASE_TYPE_CHOICES, blank=True)
+    investigation_type = models.CharField(max_length=50, choices=INVESTIGATION_TYPE_CHOICES, blank=True)
     investigation_report_status = models.CharField(max_length=20, choices=REPORT_STATUS_CHOICES, default='Pending')
     full_case_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
     special_instructions = models.TextField(blank=True)
@@ -179,7 +178,7 @@ class InsuranceCase(models.Model):
             models.Index(fields=['claim_number']),
             models.Index(fields=['client', 'full_case_status']),
             models.Index(fields=['case_receive_date']),
-            models.Index(fields=['completion_date']),
+            models.Index(fields=['closure_date']),
             models.Index(fields=['full_case_status']),
             models.Index(fields=['category']),
         ]
@@ -190,8 +189,8 @@ class InsuranceCase(models.Model):
     
     def calculate_tat(self):
         """Calculate Turn Around Time."""
-        if self.completion_date and self.case_receive_date:
-            delta = self.completion_date.date() - self.case_receive_date
+        if self.closure_date and self.case_receive_date:
+            delta = self.closure_date.date() - self.case_receive_date
             self.tat_days = delta.days
             return self.tat_days
         elif self.case_receive_date:
@@ -235,7 +234,7 @@ class CaseAllocation(models.Model):
     STATUS_CHOICES = [
         ('Allocated', 'Allocated'),
         ('In Progress', 'In Progress'),
-        ('Completed', 'Completed'),
+        ('Closed', 'Closed'),
         ('Cancelled', 'Cancelled'),
     ]
     
@@ -244,7 +243,7 @@ class CaseAllocation(models.Model):
     
     allocation_type = models.CharField(max_length=100, help_text='Spot/Claimant/Police/etc')
     allocation_date = models.DateField()
-    completion_date = models.DateField(null=True, blank=True)
+    closure_date = models.DateField(null=True, blank=True)
     tat_days = models.IntegerField(null=True, blank=True)
     
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Allocated')

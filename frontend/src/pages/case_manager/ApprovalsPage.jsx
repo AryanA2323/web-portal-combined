@@ -34,8 +34,6 @@ import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 const ApprovalsPage = () => {
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState(location.state?.tab ?? 0);
-  const [requests, setRequests] = useState([]);
   const [deletionRequests, setDeletionRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -49,11 +47,7 @@ const ApprovalsPage = () => {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const [tatRes, delRes] = await Promise.all([
-        api.get('/super-admin/approvals/'),
-        api.get('/super-admin/deletion-requests/')
-      ]);
-      setRequests(tatRes.data);
+      const delRes = await api.get('/super-admin/deletion-requests/');
       setDeletionRequests(delRes.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to fetch requests');
@@ -71,15 +65,10 @@ const ApprovalsPage = () => {
 
   useEffect(() => {
     if (hasHandledNavState.current) return;
-    if (location.state?.tab !== undefined) {
-      setActiveTab(location.state.tab);
-    }
     if (location.state?.requestId) {
       const targetId = location.state.requestId;
-      const isDel = (location.state.tab === 1);
-      const reqList = isDel ? deletionRequests : requests;
-      if (reqList && reqList.length > 0) {
-        const found = reqList.find((r) => String(r.id) === String(targetId));
+      if (deletionRequests && deletionRequests.length > 0) {
+        const found = deletionRequests.find((r) => String(r.id) === String(targetId));
         if (found) {
           setSelectedReq(found);
           setReviewOpen(true);
@@ -88,17 +77,13 @@ const ApprovalsPage = () => {
         window.history.replaceState({}, '');
       }
     }
-  }, [location.state, requests, deletionRequests]);
+  }, [location.state, deletionRequests]);
 
   const handleReviewAction = async (action) => {
     if (!selectedReq) return;
     setActionLoading(true);
     try {
-      if (activeTab === 0) {
-        await api.post(`/super-admin/tat-change-requests/${selectedReq.id}/review`, { action });
-      } else {
-        await api.post(`/super-admin/deletion-requests/${selectedReq.id}/review`, { action });
-      }
+      await api.post(`/super-admin/deletion-requests/${selectedReq.id}/review`, { action });
       setSuccess(`Request ${action === 'APPROVE' ? 'approved' : 'rejected'} successfully.`);
       setReviewOpen(false);
       fetchRequests();
@@ -117,10 +102,9 @@ const ApprovalsPage = () => {
             Approvals
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)} sx={{ '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', fontSize: '15px' } }}>
-              <Tab label="TAT Changes" />
-              <Tab label="Case Deletions" />
-            </Tabs>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#64748b' }}>
+              Case Deletions
+            </Typography>
             <NotificationBell />
           </Box>
         </Box>
@@ -135,8 +119,6 @@ const ApprovalsPage = () => {
                 <TableRow sx={{ bgcolor: '#f8fafc' }}>
                   <TableCell sx={{ fontWeight: 700, color: '#475569', py: 2 }}>Case Number</TableCell>
                   <TableCell sx={{ fontWeight: 700, color: '#475569', py: 2 }}>Requested By</TableCell>
-                  {activeTab === 0 && <TableCell sx={{ fontWeight: 700, color: '#475569', py: 2 }}>Old TAT</TableCell>}
-                  {activeTab === 0 && <TableCell sx={{ fontWeight: 700, color: '#475569', py: 2 }}>New TAT</TableCell>}
                   <TableCell sx={{ fontWeight: 700, color: '#475569', py: 2 }}>Status</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700, color: '#475569', py: 2 }}>Actions</TableCell>
                 </TableRow>
@@ -144,18 +126,18 @@ const ApprovalsPage = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
                       <CircularProgress size={30} />
                     </TableCell>
                   </TableRow>
-                ) : (activeTab === 0 ? requests : deletionRequests).length === 0 ? (
+                ) : deletionRequests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#64748b' }}>
-                      No {activeTab === 0 ? 'TAT change' : 'case deletion'} requests found.
+                    <TableCell colSpan={4} align="center" sx={{ py: 4, color: '#64748b' }}>
+                      No case deletion requests found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  (activeTab === 0 ? requests : deletionRequests).map((req) => (
+                  deletionRequests.map((req) => (
                     <TableRow key={req.id} hover>
                       <TableCell sx={{ fontWeight: 600 }}>{req.case_number || req.case_id}</TableCell>
                       <TableCell>
@@ -166,8 +148,6 @@ const ApprovalsPage = () => {
                           {new Date(req.requested_at).toLocaleDateString()}
                         </Typography>
                       </TableCell>
-                      {activeTab === 0 && <TableCell sx={{ color: '#64748b' }}>{req.current_tat_days ?? 'None'}</TableCell>}
-                      {activeTab === 0 && <TableCell sx={{ fontWeight: 700, color: '#0f172a' }}>{req.updated_tat_days}</TableCell>}
                       <TableCell>
                         <Chip
                           label={req.status}
@@ -200,7 +180,7 @@ const ApprovalsPage = () => {
         {/* Review Modal */}
         <Dialog open={reviewOpen} onClose={() => setReviewOpen(false)} maxWidth="sm" fullWidth>
           <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
-            Review {activeTab === 0 ? 'TAT Change' : 'Case Deletion'} Request
+            Review Case Deletion Request
             <IconButton onClick={() => setReviewOpen(false)} size="small" sx={{ position: 'absolute', right: 16, top: 16 }}>
               <Close />
             </IconButton>
@@ -208,24 +188,11 @@ const ApprovalsPage = () => {
           <DialogContent dividers sx={{ py: 3 }}>
             {selectedReq && (
               <Box>
-                {activeTab === 0 ? (
-                  <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-                    <Box sx={{ flex: 1, p: 2, bgcolor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                      <Typography sx={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', mb: 0.5 }}>Current TAT</Typography>
-                      <Typography sx={{ fontSize: '24px', fontWeight: 800, color: '#475569' }}>{selectedReq.current_tat_days ?? 'None'}</Typography>
-                    </Box>
-                    <Box sx={{ flex: 1, p: 2, bgcolor: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-                      <Typography sx={{ fontSize: '12px', color: '#2563eb', fontWeight: 600, textTransform: 'uppercase', mb: 0.5 }}>Requested TAT</Typography>
-                      <Typography sx={{ fontSize: '24px', fontWeight: 800, color: '#1e40af' }}>{selectedReq.updated_tat_days}</Typography>
-                    </Box>
-                  </Box>
-                ) : (
                   <Box sx={{ p: 2, mb: 3, bgcolor: '#fef2f2', borderRadius: '12px', border: '1px solid #fecaca' }}>
                     <Typography sx={{ fontSize: '12px', color: '#dc2626', fontWeight: 600, textTransform: 'uppercase', mb: 0.5 }}>Target Case</Typography>
                     <Typography sx={{ fontSize: '20px', fontWeight: 700, color: '#991b1b' }}>{selectedReq.case_number || selectedReq.case_id}</Typography>
                   </Box>
-                )}
-                <Typography sx={{ fontSize: '13px', color: '#64748b', fontWeight: 600, mb: 0.5 }}>Reason for {activeTab === 0 ? 'change' : 'deletion'}:</Typography>
+                <Typography sx={{ fontSize: '13px', color: '#64748b', fontWeight: 600, mb: 0.5 }}>Reason for deletion:</Typography>
                 <Paper elevation={0} sx={{ p: 2, bgcolor: '#f1f5f9', borderRadius: '8px', fontSize: '14px', color: '#1e293b' }}>
                   {selectedReq.reason}
                 </Paper>

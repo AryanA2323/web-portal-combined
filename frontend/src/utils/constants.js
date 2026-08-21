@@ -134,8 +134,8 @@ export const ADMIN_SUB_ROLES = {
 const DEFAULT_ADMIN_PERMISSIONS = [
   '/case_manager/dashboard',
   '/case_manager/cases',
-  '/case_manager/completed-cases',
-  '/case_manager/ai-brief',
+  '/case_manager/closed-cases',
+  '/case_manager/ai-case-review',
   '/case_manager/legal-review',
   '/case_manager/reports',
   '/case_manager/audit-logs',
@@ -157,7 +157,7 @@ export const SUB_ROLE_CONFIG = {
     label: 'Case Handler',
     description: 'Manage and handle cases',
     icon: 'FolderOpen',
-    permissions: ['/case_manager/dashboard', '/case_manager/cases', '/case_manager/completed-cases']
+    permissions: ['/case_manager/dashboard', '/case_manager/cases', '/case_manager/closed-cases']
   },
   report_manager: {
     label: 'Report Manager',

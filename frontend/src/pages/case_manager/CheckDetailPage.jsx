@@ -187,12 +187,11 @@ const CHECK_META = {
 const STATUS_CFG = {
   Pending: { color: '#e65100', bg: '#fff3e0' },
   'In Progress': { color: '#1565c0', bg: '#e3f2fd' },
-  Completed: { color: '#2e7d32', bg: '#e8f5e9' },
+  Closed: { color: '#2e7d32', bg: '#e8f5e9' },
   Verified: { color: '#2e7d32', bg: '#e8f5e9' },
   Reassigned: { color: '#c62828', bg: '#ffebee' },
   Done: { color: '#2e7d32', bg: '#e8f5e9' },
   Open: { color: '#1565c0', bg: '#e3f2fd' },
-  Closed: { color: '#37474f', bg: '#eceff1' },
   WIP: { color: '#1565c0', bg: '#e3f2fd' },
   Submitted: { color: '#6a1b9a', bg: '#f3e5f5' },
   Approved: { color: '#2e7d32', bg: '#e8f5e9' },
@@ -237,13 +236,11 @@ const CASE_FIELDS_DEF = [
   { name: 'claim_number', label: 'Claim Number' },
   { name: 'client_name', label: 'Client Name' },
   { name: 'category', label: 'Category', options: ['MACT', 'GPA', 'PA', 'Health', 'Fire', 'Marine', 'Misc'] },
-  { name: 'case_type', label: 'Case Type', options: ['Full Case', 'Partial', 'Reinvestigation'] },
+  { name: 'investigation_type', label: 'Investigation Type', options: ['Full Case', 'Partial', 'Reinvestigation'] },
   { name: 'case_receive_date', label: 'Receive Date', type: 'date' },
   { name: 'case_due_date', label: 'Due Date', type: 'date' },
-  { name: 'completion_date', label: 'Completion Date', type: 'date' },
+  { name: 'closure_date', label: 'Closure Date', type: 'date' },
   { name: 'sla', label: 'SLA', options: ['AT', 'WT'] },
-  { name: 'investigation_report_status', label: 'IR Status', options: ['Open', 'Submitted', 'Approved', 'Rejected', 'Under Review', 'Closed'] },
-  { name: 'full_case_status', label: 'Case Status', options: ['WIP', 'Completed', 'Pending', 'On Hold', 'Cancelled'] },
   { name: 'special_instructions', label: 'Special Instructions' },
 ];
 
@@ -253,7 +250,7 @@ const CHECK_FIELDS_DEF = {
     { name: 'claimant_contact', label: 'Contact' },
     { name: 'claimant_address', label: 'Address' },
     { name: 'claimant_income', label: 'Income (₹)', type: 'number' },
-    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Completed', 'Verified', 'Reassigned'] },
+    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
     { name: 'statement', label: 'Statement' },
     { name: 'triggers', label: 'Triggers' },
   ],
@@ -267,7 +264,7 @@ const CHECK_FIELDS_DEF = {
     { name: 'permit', label: 'Permit' },
     { name: 'driver_and_insured_same', label: 'Insured Same as Driver', type: 'boolean' },
     { name: 'insured_cum_driver', label: 'Insured Same as Driver', type: 'boolean' },
-    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Completed', 'Verified', 'Reassigned'] },
+    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
     { name: 'statement', label: 'Statement' },
     { name: 'triggers', label: 'Triggers' },
   ],
@@ -280,7 +277,7 @@ const CHECK_FIELDS_DEF = {
     { name: 'occupation', label: 'Occupation' },
     { name: 'driver_and_insured_same', label: 'Driver Same as Insured', type: 'boolean' },
     { name: 'insured_cum_driver', label: 'Insured Same as Driver', type: 'boolean' },
-    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Completed', 'Verified', 'Reassigned'] },
+    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
     { name: 'statement', label: 'Statement' },
     { name: 'triggers', label: 'Triggers' },
   ],
@@ -291,7 +288,7 @@ const CHECK_FIELDS_DEF = {
     { name: 'city', label: 'City' },
     { name: 'police_station', label: 'Police Station' },
     { name: 'fir_number', label: 'FIR Number' },
-    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Completed', 'Verified', 'Reassigned'] },
+    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
     { name: 'accident_brief', label: 'Accident Brief' },
     { name: 'triggers', label: 'Triggers' },
   ],
@@ -306,7 +303,7 @@ const CHECK_FIELDS_DEF = {
     { name: 'fir_delay_days', label: 'FIR Delay Days', type: 'number' },
     { name: 'bsn_section', label: 'BSN Section' },
     { name: 'ipc', label: 'IPC' },
-    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Completed', 'Verified', 'Reassigned'] },
+    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
     { name: 'statement', label: 'Statement' },
     { name: 'triggers', label: 'Triggers' },
   ],
@@ -319,7 +316,7 @@ const CHECK_FIELDS_DEF = {
     { name: 'permit_number', label: 'Permit Number' },
     { name: 'rc_checked', label: 'RC', type: 'boolean' },
     { name: 'rc_number', label: 'RC Number' },
-    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Completed', 'Verified', 'Reassigned'] },
+    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
     { name: 'remarks', label: 'Remarks' },
   ],
   rto: [
@@ -331,7 +328,7 @@ const CHECK_FIELDS_DEF = {
     { name: 'permit_number', label: 'Permit Number' },
     { name: 'rc_checked', label: 'RC', type: 'boolean' },
     { name: 'rc_number', label: 'RC Number' },
-    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Completed', 'Verified', 'Reassigned'] },
+    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
     { name: 'remarks', label: 'Remarks' },
   ],
 };
@@ -480,13 +477,7 @@ const CheckDetailPage = () => {
   const [checkData, setCheckData] = useState({});
   const [caseDraft, setCaseDraft] = useState({});
   const [checkDraft, setCheckDraft] = useState({});
-  const [tatRequest, setTatRequest] = useState(null);
 
-  // TAT Change Modal state
-  const [tatChangeOpen, setTatChangeOpen] = useState(false);
-  const [updatedTatDays, setUpdatedTatDays] = useState('');
-  const [tatReason, setTatReason] = useState('');
-  const [tatSubmitting, setTatSubmitting] = useState(false);
 
   // Media preview & upload states
   const [activeMediaTab, setActiveMediaTab] = useState(0);
@@ -508,17 +499,6 @@ const CheckDetailPage = () => {
       setCaseData(res.data.case || {});
       setCheckData(res.data.check || {});
 
-      // Fetch TAT Change Request
-      try {
-        const tatRes = await api.get(`/cases/${caseId}/approval/`);
-        if (tatRes.data.has_request) {
-          setTatRequest(tatRes.data.request);
-        } else {
-          setTatRequest(null);
-        }
-      } catch (tatErr) {
-        console.error("Failed to load TAT request status", tatErr);
-      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load details.');
     } finally { setLoading(false); }
@@ -530,26 +510,6 @@ const CheckDetailPage = () => {
   const handleCancelEdit = () => { setEditing(false); setCaseDraft({}); setCheckDraft({}); setSuccess(''); setError(''); };
   const handleCaseChange = (n, v) => setCaseDraft((p) => ({ ...p, [n]: v }));
   const handleCheckChange = (n, v) => setCheckDraft((p) => ({ ...p, [n]: v }));
-
-  const handleTatChangeSubmit = async () => {
-    if (!updatedTatDays || !tatReason) return;
-    setTatSubmitting(true);
-    try {
-      await api.post(`/cases/${caseId}/approval/`, {
-        updated_tat_days: parseInt(updatedTatDays, 10),
-        reason: tatReason,
-      });
-      setSuccess('TAT Change Request submitted successfully.');
-      setTatChangeOpen(false);
-      setUpdatedTatDays('');
-      setTatReason('');
-      await fetchDetail(); // Refresh to get the new request status
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to submit TAT change request.');
-    } finally {
-      setTatSubmitting(false);
-    }
-  };
 
 
   const handleSave = async () => {
@@ -609,8 +569,6 @@ const CheckDetailPage = () => {
   const caseVal = (n) => (editing ? caseDraft[n] ?? '' : caseData[n] ?? '');
   const checkVal = (n) => (editing ? checkDraft[n] ?? '' : checkData[n] ?? '');
 
-  const irCfg = STATUS_CFG[caseData.investigation_report_status] || { color: '#78909c', bg: '#eceff1' };
-  const staCfg = STATUS_CFG[caseData.full_case_status] || { color: '#78909c', bg: '#eceff1' };
   const checkFieldsDef = CHECK_FIELDS_DEF[checkType] || [];
   const latKey = checkType === 'spot' ? 'spot_lat' : `${checkType}_lat`;
   const lngKey = checkType === 'spot' ? 'spot_lng' : `${checkType}_lng`;
@@ -752,8 +710,6 @@ const CheckDetailPage = () => {
               <StatBadge icon={<FolderOpen sx={{ fontSize: 18 }} />} label="Claim Number" value={caseData.claim_number} color="#667eea" />
               <StatBadge icon={<CalendarToday sx={{ fontSize: 18 }} />} label="Receive Date" value={fmtDateDisplay(caseData.case_receive_date)} color="#06b6d4" />
               <StatBadge icon={<Speed sx={{ fontSize: 18 }} />} label="TAT Days" value={caseData.tat_days != null ? `${caseData.tat_days} days` : null} color="#f59e0b" />
-              <StatBadge icon={<CheckCircleOutline sx={{ fontSize: 18 }} />} label="IR Status" value={caseData.investigation_report_status} color={irCfg.color} />
-              <StatBadge icon={<VerifiedUser sx={{ fontSize: 18 }} />} label="Case Status" value={caseData.full_case_status} color={staCfg.color} />
               <StatBadge icon={<PinDrop sx={{ fontSize: 18 }} />} label="Check Status" value={checkData.check_status} color={meta.color} />
             </Paper>
           )}
@@ -783,46 +739,7 @@ const CheckDetailPage = () => {
                         <TabularFieldsView fields={CASE_FIELDS_DEF} getVal={caseVal} />
                       )}
                       
-                      {/* TAT Days Change Management Sub-section */}
-                      <Box sx={{ mt: 3, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
-                        <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', mb: 2 }}>
-                          Change Management - TAT Days
-                        </Typography>
-                        <Grid container spacing={2} alignItems="center">
-                          <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              label="TAT Days"
-                              value={caseData.tat_days !== null ? caseData.tat_days : ''}
-                              InputProps={{ readOnly: true }}
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f5f5f5' }, '& .MuiInputBase-input': { fontSize: '13px' } }}
-                            />
-                          </Grid>
-                          <Grid size={{ xs: 12, sm: 6 }}>
-                            <Button 
-                              variant="outlined" 
-                              size="small" 
-                              onClick={() => setTatChangeOpen(true)}
-                              sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
-                            >
-                              Request Change
-                            </Button>
-                          </Grid>
-                        </Grid>
-                        
-                        {/* Request Status Display */}
-                        {tatRequest && (
-                          <Box sx={{ mt: 2, p: 1.5, borderRadius: '8px', bgcolor: tatRequest.status === 'REJECTED' ? '#fef2f2' : '#eff6ff', border: '1px solid', borderColor: tatRequest.status === 'REJECTED' ? '#fecaca' : '#bfdbfe' }}>
-                            <Typography sx={{ fontSize: '12.5px', fontWeight: 600, color: tatRequest.status === 'REJECTED' ? '#dc2626' : '#2563eb' }}>
-                              Status: {tatRequest.status === 'PENDING' ? 'Pending Super Admin Approval' : tatRequest.status === 'REJECTED' ? 'Rejected' : tatRequest.status}
-                            </Typography>
-                            <Typography sx={{ fontSize: '12px', color: '#475569', mt: 0.5 }}>
-                              Requested TAT: {tatRequest.updated_tat_days} days
-                            </Typography>
-                          </Box>
-                        )}
-                      </Box>
+
                     </Box>
                   </Paper>
                 </Grid>
@@ -1221,46 +1138,7 @@ const CheckDetailPage = () => {
         </Dialog>
 
         
-        {/* TAT CHANGE REQUEST MODAL */}
-        <Dialog open={tatChangeOpen} onClose={() => setTatChangeOpen(false)} maxWidth="xs" fullWidth>
-          <Box sx={{ p: 3 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>Request TAT Days Change</Typography>
-            <Stack spacing={2}>
-              <TextField
-                label="Updated TAT Days"
-                type="number"
-                fullWidth
-                size="small"
-                value={updatedTatDays}
-                onChange={(e) => setUpdatedTatDays(e.target.value)}
-                autoFocus
-              />
-              <TextField
-                label="Reason for Change"
-                multiline
-                rows={3}
-                fullWidth
-                size="small"
-                value={tatReason}
-                onChange={(e) => setTatReason(e.target.value)}
-                placeholder="Provide a detailed reason for the requested change"
-              />
-            </Stack>
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 3 }}>
-              <Button onClick={() => setTatChangeOpen(false)} color="inherit" sx={{ textTransform: 'none' }}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleTatChangeSubmit} 
-                variant="contained" 
-                disabled={!updatedTatDays || !tatReason || tatSubmitting}
-                sx={{ textTransform: 'none', background: '#3b82f6' }}
-              >
-                {tatSubmitting ? 'Submitting...' : 'Submit Request'}
-              </Button>
-            </Box>
-          </Box>
-        </Dialog>
+
 {/* ── STICKY SAVE BAR ───────────────────────────────────────────── */}
         {editing && !loading && (
           <Box sx={{

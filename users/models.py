@@ -638,8 +638,8 @@ class InsuranceCase(models.Model):
         ('CLOSED', 'Closed'),
     ]
     
-    # Case Type choices
-    CASE_TYPE_CHOICES = [
+    # Investigation Type choices
+    INVESTIGATION_TYPE_CHOICES = [
         ('Full Case', 'Full Case'),
         ('Partial Case', 'Partial Case'),
         ('Reassessment', 'Reassessment'),
@@ -659,7 +659,7 @@ class InsuranceCase(models.Model):
     FULL_CASE_STATUS_CHOICES = [
         ('WIP', 'WIP'),
         ('Pending CS', 'Pending CS'),
-        ('Completed', 'Completed'),
+        ('Closed', 'Closed'),
         ('IR-Writing', 'IR-Writing'),
         ('NI', 'NI'),
         ('Withdraw', 'Withdraw'),
@@ -714,8 +714,8 @@ class InsuranceCase(models.Model):
     # =========================================================================
     case_receive_date = models.DateField(null=True, blank=True, help_text='Date case was received')
     receive_month = models.CharField(max_length=20, blank=True, help_text='Month of receive')
-    completion_date = models.DateField(null=True, blank=True, help_text='Date case was completed')
-    completion_month = models.CharField(max_length=20, blank=True, help_text='Month of completion')
+    closure_date = models.DateField(null=True, blank=True, help_text='Date case was closed')
+    closure_month = models.CharField(max_length=20, blank=True, help_text='Month of closure')
     case_due_date = models.DateField(null=True, blank=True, help_text='Due date for the case')
     tat_days = models.IntegerField(null=True, blank=True, help_text='Turn Around Time in days')
     sla_status = models.CharField(max_length=10, choices=SLA_CHOICES, blank=True, help_text='SLA status - AT or WT')
@@ -723,7 +723,7 @@ class InsuranceCase(models.Model):
     # =========================================================================
     # Case Classification
     # =========================================================================
-    case_type = models.CharField(max_length=50, choices=CASE_TYPE_CHOICES, blank=True, help_text='Full Case / Partial / Reassessment / Connected')
+    investigation_type = models.CharField(max_length=50, choices=INVESTIGATION_TYPE_CHOICES, blank=True, help_text='Full Case / Partial / Reassessment / Connected')
     investigation_report_status = models.CharField(max_length=20, choices=INVESTIGATION_REPORT_CHOICES, default='Open', help_text='Investigation report status')
     full_case_status = models.CharField(max_length=30, choices=FULL_CASE_STATUS_CHOICES, default='WIP', help_text='Detailed case status')
     special_instructions = models.TextField(blank=True, help_text='Scope of work for this case')
@@ -926,28 +926,7 @@ class Report(models.Model):
 # Import verification models
 from .models_verification import CaseVerification, VerificationDocument, VerificationComment, ClaimantDependent
 
-class TatChangeRequest(models.Model):
-    class Status(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
-        APPROVED = 'APPROVED', 'Approved'
-        REJECTED = 'REJECTED', 'Rejected'
 
-    case_id = models.CharField(max_length=255, db_index=True)
-    requested_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='tat_requests_made')
-    requested_at = models.DateTimeField(auto_now_add=True)
-    current_tat_days = models.IntegerField(null=True, blank=True)
-    updated_tat_days = models.IntegerField()
-    reason = models.TextField()
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-    reviewed_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='tat_requests_reviewed')
-    reviewed_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ['-requested_at']
-        db_table = 'tat_change_requests'
-
-    def __str__(self):
-        return f"TAT Change Request {self.id} for case {self.case_id}"
 
 class CaseDeletionRequest(models.Model):
     class Status(models.TextChoices):

@@ -198,9 +198,9 @@ class EnhancedEmailToCaseMapper:
         data['receive_month'] = email.received_at.strftime('%b-%y')
         data['case_due_date'] = data['case_receive_date'] + timedelta(days=30)
         
-        # Determine case type and scope
+        # Determine investigation type and scope
         if 'intimation' in subject_text.lower() or 'Full Case' in all_text:
-            data['case_type'] = 'Full Case'
+            data['investigation_type'] = 'Full Case'
             data['special_instructions'] = 'Full Investigation'
         
         # Set initial status
@@ -479,7 +479,7 @@ class EnhancedEmailToCaseMapper:
             case_due_date=data['case_due_date'],
             
             # Case details
-            case_type=data.get('case_type', ''),
+            investigation_type=data.get('investigation_type', ''),
             investigation_report_status=data['investigation_report_status'],
             full_case_status=data['full_case_status'],
             special_instructions=data.get('special_instructions', ''),

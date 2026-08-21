@@ -122,7 +122,6 @@ const SuperAdminDashboard = () => {
     recent_users,
     case_managers = [],
     activity_logs = [],
-    tat_logs = [],
     deletion_logs = [],
   } = dashboardData || {};
 
@@ -421,82 +420,12 @@ const SuperAdminDashboard = () => {
               >
                 Approval Logs
               </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2.5, flex: 1 }}>
-                {/* Left Part (50%): TAT Change Logs */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                {/* Case Deletion Change Logs */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <Typography
                     variant="subtitle2"
-                    onClick={() => navigate('/super-admin/approvals', { state: { tab: 0 } })}
-                    sx={{
-                      fontWeight: 700,
-                      color: '#334155',
-                      fontSize: '13px',
-                      mb: 1.5,
-                      pl: 1,
-                      borderLeft: '3px solid #6366f1',
-                      cursor: 'pointer',
-                      width: 'fit-content',
-                      '&:hover': { color: '#6366f1' },
-                    }}
-                  >
-                    TAT Change Logs
-                  </Typography>
-
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, flex: 1 }}>
-                    {tat_logs && tat_logs.length > 0 ? (
-                      tat_logs.slice(0, 3).map((tat) => (
-                        <Paper
-                          key={tat.id}
-                          variant="outlined"
-                          onClick={() => navigate('/super-admin/approvals', { state: { tab: 0, requestId: tat.id } })}
-                          sx={{
-                            p: 1.5,
-                            borderRadius: '10px',
-                            backgroundColor: tat.status === 'APPROVED' ? '#f0fdf4' : tat.status === 'REJECTED' ? '#fef2f2' : '#ffffff',
-                            borderColor: tat.status === 'APPROVED' ? '#bbf7d0' : tat.status === 'REJECTED' ? '#fecaca' : '#e2e8f0',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease-in-out',
-                            '&:hover': {
-                              borderColor: tat.status === 'APPROVED' ? '#86efac' : tat.status === 'REJECTED' ? '#fca5a5' : '#cbd5e1',
-                              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.08)',
-                              transform: 'translateY(-1px)',
-                            },
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 700, color: tat.status === 'APPROVED' ? '#15803d' : tat.status === 'REJECTED' ? '#b91c1c' : '#1e3a8a', fontSize: '13px' }}>
-                              Case #{tat.case_id}
-                            </Typography>
-                            {tat.status !== 'APPROVED' && tat.status !== 'REJECTED' && (
-                              <Chip
-                                label={tat.status}
-                                size="small"
-                                color="warning"
-                                sx={{ height: 20, fontSize: '10.5px', fontWeight: 700 }}
-                              />
-                            )}
-                          </Box>
-                          <Typography variant="caption" sx={{ color: '#475569', display: 'block', fontSize: '11.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            Reason: {tat.reason}
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '10.5px', mt: 0.25, display: 'block' }}>
-                            {tat.requested_at ? new Date(tat.requested_at).toLocaleDateString() : 'N/A'} • {tat.requested_by}
-                          </Typography>
-                        </Paper>
-                      ))
-                    ) : (
-                      <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic', display: 'block', mt: 2 }}>
-                        No TAT change logs available.
-                      </Typography>
-                    )}
-                  </Box>
-                </Box>
-
-                {/* Right Part (50%): Case Deletion Change Logs */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <Typography
-                    variant="subtitle2"
-                    onClick={() => navigate('/super-admin/approvals', { state: { tab: 1 } })}
+                    onClick={() => navigate('/super-admin/approvals')}
                     sx={{
                       fontWeight: 700,
                       color: '#334155',
@@ -518,7 +447,7 @@ const SuperAdminDashboard = () => {
                         <Paper
                           key={del.id}
                           variant="outlined"
-                          onClick={() => navigate('/super-admin/approvals', { state: { tab: 1, requestId: del.id } })}
+                          onClick={() => navigate('/super-admin/approvals', { state: { requestId: del.id } })}
                           sx={{
                             p: 1.5,
                             borderRadius: '10px',
