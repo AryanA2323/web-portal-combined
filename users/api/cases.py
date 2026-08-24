@@ -1433,6 +1433,13 @@ def generate_ai_case_review_report(
     if not is_admin_or_super_admin(request.user):
         raise HttpError(403, "Admin access required")
 
+    # Ensure the other_document column exists in the database
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS other_document VARCHAR(1000);")
+    except Exception as e:
+        logger.warning(f"Failed to ensure other_document column exists: {e}")
+
     try:
         case_context = _fetch_ai_case_review_case_context(case_id)
         statement_text = str(case_context.get("vendor_statement_text") or "").strip()
