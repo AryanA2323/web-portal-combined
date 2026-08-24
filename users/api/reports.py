@@ -487,7 +487,6 @@ def _verified_incident_case_numbers() -> List[str]:
         'insured_checks',
         'driver_checks',
         'spot_checks',
-        'chargesheets',
     ]
 
     try:
