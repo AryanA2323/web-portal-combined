@@ -1465,7 +1465,7 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
 
             # Update check_status
             cursor.execute(f"""
-                UPDATE {table} SET check_status = 'Closed', updated_at = NOW()
+                UPDATE {table} SET check_status = 'Under Verification', updated_at = NOW()
                 WHERE id = %s
             """, [check_id])
 
@@ -1479,7 +1479,7 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
                 if icd_row and icd_row[0]:
                     paired_table = 'driver_checks' if table == 'insured_checks' else 'insured_checks'
                     cursor.execute(f"""
-                        UPDATE {paired_table} SET check_status = 'Closed', updated_at = NOW()
+                        UPDATE {paired_table} SET check_status = 'Under Verification', updated_at = NOW()
                         WHERE case_id = %s
                     """, [case_id])
                     logger.info(f"Insured-cum-driver: also closed {paired_table} for case_id={case_id}")
