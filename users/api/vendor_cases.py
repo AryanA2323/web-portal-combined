@@ -465,7 +465,7 @@ def get_vendor_cases(
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
     
     vendor_ids = get_vendor_ids_from_user(request.user)
@@ -1466,10 +1466,11 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
                         return 400, {"error": "Cannot complete check: Statements are required but missing."}
 
             # Update check_status
+            target_status = 'Verified' if table == 'rto_checks' else 'Under Verification'
             cursor.execute(f"""
-                UPDATE {table} SET check_status = 'Under Verification', updated_at = NOW()
+                UPDATE {table} SET check_status = %s, updated_at = NOW()
                 WHERE id = %s
-            """, [check_id])
+            """, [target_status, check_id])
 
             # --- Insured cum driver: also complete the paired check ---
             if table in ('insured_checks', 'driver_checks'):
@@ -1861,7 +1862,7 @@ def delete_vendor_check_statement(request: HttpRequest, case_id: int, check_type
     """Delete a recorded speech statement entry by its 1-based index from statement_entries."""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
 
     vendor_id = get_vendor_id_from_user(request.user)
@@ -1973,7 +1974,7 @@ def get_evidence_photos(
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
     
     # Get vendor profile
@@ -2069,7 +2070,7 @@ def delete_evidence_photo(
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
     
     # Get vendor profile
@@ -2139,7 +2140,7 @@ def upload_evidence(
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return 403, {"error": "Vendor access required"}
     
     # Get vendor profile
@@ -2406,7 +2407,7 @@ def _validate_vendor_check_assignment(request, case_id: int, check_type: str):
     """
     if not request.user.is_authenticated:
         return (401, {"error": "Not authenticated"}), None, None, None, None
-    if request.user.role != 'VENDOR':
+    if request.user.role not in ('VENDOR', 'ADVOCATE'):
         return (403, {"error": "Vendor access required"}), None, None, None, None
 
     vendor_id = get_vendor_id_from_user(request.user)

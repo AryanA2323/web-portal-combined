@@ -1483,7 +1483,6 @@ const CasesPage = ({ isClosedView = false }) => {
                                                       <Button
                                                         size="small"
                                                         variant="outlined"
-                                                        disabled={!sub.advocate_status || sub.advocate_status.toLowerCase() !== 'not found'}
                                                         onClick={() => handleOpenFileRti(row.id, sub.sub_id)}
                                                         sx={{
                                                           textTransform: 'none',
