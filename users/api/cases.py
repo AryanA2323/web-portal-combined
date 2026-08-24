@@ -1519,7 +1519,7 @@ def generate_ai_case_review_report(
         raise
     except Exception as exc:
         logger.error(f"Unexpected AI case review generation error for case {case_id}: {exc}")
-        raise HttpError(500, "Failed to generate AI case review report")
+        raise HttpError(500, f"Failed to generate AI case review report: {str(exc)}")
 
 
 @router.delete(
