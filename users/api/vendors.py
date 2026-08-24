@@ -57,7 +57,7 @@ def get_vendor_profile(request):
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated", "code": "NOT_AUTHENTICATED"}
 
-    if getattr(request.user, "role", None) != "VENDOR":
+    if getattr(request.user, "role", None) not in ("VENDOR", "ADVOCATE"):
         return 403, {"error": "Vendor access required", "code": "PERMISSION_DENIED"}
 
     try:

@@ -65,7 +65,7 @@ def _get_vendor_id(request) -> Optional[int]:
 
     Returns None if the user is not authenticated or does not have the VENDOR role.
     """
-    if not request.user.is_authenticated or request.user.role != 'VENDOR':
+    if not request.user.is_authenticated or request.user.role not in ('VENDOR', 'ADVOCATE'):
         return None
     try:
         from users.models import Vendor
