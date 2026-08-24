@@ -2378,6 +2378,11 @@ def convert_to_degrees(value):
 _CHECK_STATEMENT_COLUMN_MAP = {
     'claimant': ('claimant_checks', 'statement'),
     'insured': ('insured_checks', 'statement'),
+    'insured_cum_driver': ('insured_checks', 'statement'),
+    'insured cum driver': ('insured_checks', 'statement'),
+    'insured%20cum%20driver': ('insured_checks', 'statement'),
+    'insured%2-cum%20driver': ('insured_checks', 'statement'),
+    'insured%2cum%20driver': ('insured_checks', 'statement'),
     'driver': ('driver_checks', 'statement'),
     'chargesheet': ('chargesheets', 'statement'),
     'spot': ('spot_checks', 'observations'),  # spot uses observations instead of statement
