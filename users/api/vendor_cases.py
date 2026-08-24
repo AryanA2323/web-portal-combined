@@ -2836,6 +2836,10 @@ def vendor_check_statement_audio_apply(request: HttpRequest, case_id: int, check
     description="Apply manually edited English statement text to the case.",
 )
 def vendor_check_statement_text_apply(request: HttpRequest, case_id: int, check_type: str):
+    import urllib.parse
+    check_type = urllib.parse.unquote(check_type).replace(\'_\', \' \')
+    if \'insured cum\' in check_type.lower():
+        check_type = \'insured\'
     """
     Apply manually edited statement text to the case.
 
