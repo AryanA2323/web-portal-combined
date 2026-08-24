@@ -62,7 +62,8 @@ const NotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
       const currentReadIds = stored ? JSON.parse(stored) : [];
 
       const formatted = rawData.map((item, index) => {
-        const id = item.id || `${item.event_time}-${item.event_type}-${index}`;
+        // Use a stable combination of fields for the ID to ensure read state persists even if order changes
+        const id = item.id || `${item.event_time}-${item.event_type}-${item.target_user_email || item.case_id || item.actor || 'sys'}`;
         return {
           id,
           description: item.description || item.event_type,
