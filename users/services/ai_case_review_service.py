@@ -27,7 +27,7 @@ def _load_pymupdf():
 class AICaseReviewService:
     """Generate concise AI case review reports using Groq and statement context."""
 
-    text_model = "llama-3.1-70b-versatile"
+    text_model = "openai/gpt-oss-120b"
     vision_model = "meta-llama/llama-4-scout-17b-16e-instruct"
     api_url = "https://api.groq.com/openai/v1/chat/completions"
 
