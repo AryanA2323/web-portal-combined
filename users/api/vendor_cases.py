@@ -589,6 +589,8 @@ _CHECK_TABLE_MAP = {
     'rto_checks':        'rto_checks',
     'insured_cum_driver':'insured_checks',
     'insured cum driver':'insured_checks',
+    'insured%20cum%20driver':'insured_checks',
+    'insured%2cum%20driver':'insured_checks',
 }
 
 _CHECK_DETAIL_COLUMNS = {
