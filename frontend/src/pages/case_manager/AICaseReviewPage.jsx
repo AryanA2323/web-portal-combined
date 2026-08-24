@@ -311,7 +311,10 @@ const AICaseReviewPage = () => {
     let filteredCases = cases.filter((row) => {
       const checks = row.sub_items || [];
       if (checks.length === 0) return false;
-      return checks.every((check) => check.check_status === 'Verified');
+      return checks.every((check) => {
+        if (check.type === 'Chargesheet') return true;
+        return check.check_status === 'Verified';
+      });
     });
 
     if (reportFilter === 'generated') {
