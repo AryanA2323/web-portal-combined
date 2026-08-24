@@ -736,6 +736,8 @@ def get_vendor_assigned_checks(request: HttpRequest):
             for table, label in _CHECK_TYPE_LABELS.items():
                 if request.user.role == 'ADVOCATE' and table != 'chargesheets':
                     continue
+                if request.user.role == 'VENDOR' and table == 'chargesheets':
+                    continue
                 if table not in _CHECK_DETAIL_COLUMNS:
                     continue
                 meta = _CHECK_DETAIL_COLUMNS[table]

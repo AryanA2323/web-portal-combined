@@ -800,7 +800,7 @@ const CasesPage = ({ isClosedView = false }) => {
       const res = await api.get(`/cases/incident-db/${caseId}/check/${slug}`);
       setReviewData(res.data);
 
-      const vRes = await api.get('/check-vendors');
+      const vRes = await api.get(`/check-vendors?check_type=${slug}`);
       setVendorList(vRes.data || []);
     } catch (err) {
       console.error('Failed to fetch check detail for review:', err);
