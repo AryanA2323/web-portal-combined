@@ -117,7 +117,7 @@ def get_config() -> Dict[str, Any]:
         "max_duration_seconds": int(os.environ.get("SPEECH_MAX_DURATION_SECONDS", "300")),
         "request_timeout_seconds": int(os.environ.get("SPEECH_REQUEST_TIMEOUT_SECONDS", "60")),
         "stt_model": os.environ.get("SPEECH_STT_MODEL", "whisper-large-v3"),
-        "translation_model": os.environ.get("SPEECH_TRANSLATION_MODEL", "llama3-70b-8192"),
+        "translation_model": os.environ.get("SPEECH_TRANSLATION_MODEL", "openai/gpt-oss-120b"),
         # Speechmatics Batch API settings
         "speechmatics_api_key": os.environ.get("SPEECHMATICS_API_KEY", ""),
         "speechmatics_api_url": os.environ.get(
