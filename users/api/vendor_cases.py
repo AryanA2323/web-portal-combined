@@ -2578,6 +2578,10 @@ def _update_final_statement_column(
     description="Upload Marathi audio, transcribe, and translate to English. Does NOT update the final statement.",
 )
 def vendor_check_statement_audio_preview(request: HttpRequest, case_id: int, check_type: str):
+    import urllib.parse
+    check_type = urllib.parse.unquote(check_type).replace('_', ' ')
+    if 'insured cum' in check_type.lower():
+        check_type = 'insured'
     """
     Process audio recording and return preview of transcript/translation.
 
@@ -2693,6 +2697,10 @@ def vendor_check_statement_audio_preview(request: HttpRequest, case_id: int, che
     description="Upload Marathi audio, transcribe, translate, and save to the case statement field.",
 )
 def vendor_check_statement_audio_apply(request: HttpRequest, case_id: int, check_type: str):
+    import urllib.parse
+    check_type = urllib.parse.unquote(check_type).replace('_', ' ')
+    if 'insured cum' in check_type.lower():
+        check_type = 'insured'
     """
     Process audio recording and apply translation to the case statement.
 
