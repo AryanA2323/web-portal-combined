@@ -12,7 +12,7 @@ const getApiBaseUrl = () => {
     // Automatically detect local Wi-Fi IP from Expo Metro if available
     if (hostUri && !hostUri.includes('exp.direct') && !hostUri.includes('loca.lt')) {
       const expoHost = hostUri.split(':')[0];
-      return `http://${expoHost}:8000/api`;
+      return `http://${expoHost}:8001/api`;
     }
 
     if (
@@ -24,7 +24,7 @@ const getApiBaseUrl = () => {
     }
     
     // Fallback to the current local Wi-Fi IP Address of the PC
-    return 'http://192.168.1.2:8000/api';
+    return 'http://192.168.1.2:8001/api';
   } else if (normalizedEnvUrl && !normalizedEnvUrl.includes('loca.lt')) {
     return normalizedEnvUrl;
   }

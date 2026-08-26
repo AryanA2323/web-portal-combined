@@ -31,6 +31,11 @@ import {
   Close as CloseIcon,
   UploadFile as UploadFileIcon,
 } from '@mui/icons-material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { TimePicker } from '@mui/x-date-pickers/TimePicker';
+import { renderTimeViewClock } from '@mui/x-date-pickers/timeViewRenderers';
+import dayjs from 'dayjs';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
 import AlertMessage from '../../components/common/AlertMessage';
@@ -41,6 +46,20 @@ const NewCasePage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const parseTimeStringToDayjs = (timeStr) => {
+    if (!timeStr) return null;
+    if (dayjs.isDayjs(timeStr)) return timeStr.isValid() ? timeStr : null;
+    if (typeof timeStr === 'string') {
+      const trimmed = timeStr.trim();
+      if (!trimmed) return null;
+      const withDate = dayjs(`2000-01-01 ${trimmed}`);
+      if (withDate.isValid()) return withDate;
+      const direct = dayjs(trimmed);
+      if (direct.isValid()) return direct;
+    }
+    return null;
+  };
 
   const getInvestigationTypeTatDays = (caseType) => {
     if (caseType === 'Full Case') return 30;
@@ -294,6 +313,9 @@ const NewCasePage = () => {
   // Dependents for Claimant Check
   const [dependents, setDependents] = useState([]);
 
+  // Tracks which section initiated the "same as" link: 'insured' | 'driver' | null
+  const [sameAsSource, setSameAsSource] = useState(null);
+
   const handleVerificationSelect = (e) => {
     const { name, checked } = e.target;
     setSelectedVerifications(prev => ({
@@ -302,18 +324,78 @@ const NewCasePage = () => {
     }));
   };
 
+  const handleInsuredSameAsDriverChange = (e) => {
+    const isChecked = e.target.checked;
+    if (isChecked) {
+      setSameAsSource('insured');
+      setVerificationData(prev => ({
+        ...prev,
+        driver_and_insured_same: true,
+        insured_cum_driver: true,
+        driver_name: prev.insured_name || '',
+        driver_contact: prev.insured_contact || '',
+        driver_address: prev.insured_address || '',
+      }));
+    } else {
+      setSameAsSource(null);
+      setVerificationData(prev => ({
+        ...prev,
+        driver_and_insured_same: false,
+        insured_cum_driver: false,
+      }));
+    }
+  };
+
+  const handleDriverSameAsInsuredChange = (e) => {
+    const isChecked = e.target.checked;
+    if (isChecked) {
+      setSameAsSource('driver');
+      setVerificationData(prev => ({
+        ...prev,
+        driver_and_insured_same: true,
+        insured_cum_driver: true,
+        insured_name: prev.driver_name || '',
+        insured_contact: prev.driver_contact || '',
+        insured_address: prev.driver_address || '',
+      }));
+    } else {
+      setSameAsSource(null);
+      setVerificationData(prev => ({
+        ...prev,
+        driver_and_insured_same: false,
+        insured_cum_driver: false,
+      }));
+    }
+  };
+
   const handleVerificationChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, type, checked } = e.target;
+    let value = e.target.value;
+    
+    // Add 10-digit validation for contact fields
+    if (['claimant_contact', 'insured_contact', 'driver_contact'].includes(name)) {
+      value = value.replace(/\D/g, '').slice(0, 10);
+    }
+    
+    const newVal = type === 'checkbox' ? checked : value;
+
     setVerificationData(prev => {
       const newData = {
         ...prev,
-        [name]: type === 'checkbox' ? checked : value
+        [name]: newVal
       };
 
-      if (name === 'driver_same_as_insured' && checked) {
-        newData.driver_name = newData.insured_name || '';
-        newData.driver_contact = newData.insured_contact || '';
-        newData.driver_address = newData.insured_address || '';
+      // Real-time synchronization when Insured is same as Driver or vice-versa is active
+      if (prev.driver_and_insured_same) {
+        if (sameAsSource === 'insured' || !sameAsSource) {
+          if (name === 'insured_name') newData.driver_name = newVal;
+          if (name === 'insured_contact') newData.driver_contact = newVal;
+          if (name === 'insured_address') newData.driver_address = newVal;
+        } else if (sameAsSource === 'driver') {
+          if (name === 'driver_name') newData.insured_name = newVal;
+          if (name === 'driver_contact') newData.insured_contact = newVal;
+          if (name === 'driver_address') newData.insured_address = newVal;
+        }
       }
 
       return newData;
@@ -336,7 +418,11 @@ const NewCasePage = () => {
 
   const handleDependentChange = (index, field, value) => {
     const newDependents = [...dependents];
-    newDependents[index][field] = value;
+    if (field === 'dependent_contact') {
+      newDependents[index][field] = value.replace(/\D/g, '').slice(0, 10);
+    } else {
+      newDependents[index][field] = value;
+    }
     setDependents(newDependents);
   };
 
@@ -736,6 +822,9 @@ const NewCasePage = () => {
     navigate('/case_manager/cases');
   };
 
+  const isInsuredAutoFilled = Boolean(verificationData.driver_and_insured_same && sameAsSource === 'driver');
+  const isDriverAutoFilled = Boolean(verificationData.driver_and_insured_same && (sameAsSource === 'insured' || !sameAsSource));
+
   return (
     <CaseManagerLayout>
       <Box sx={{ p: 3 }}>
@@ -956,21 +1045,42 @@ const NewCasePage = () => {
                   </Box>
 
                   {/* Completion Column */}
-                  <Box sx={{ p: 2, borderRadius: '10px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
+                  <Box sx={{ p: 2, borderRadius: '10px', bgcolor: '#f1f5f9', border: '1px solid #cbd5e1' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
                       Case Completion
                     </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                       <TextField
                         fullWidth
                         size="small"
-                        label="Closure Date"
+                        label="Closure Date (Auto)"
                         name="closure_date"
                         type="date"
                         value={commonFields.closure_date}
                         onChange={handleCommonFieldChange}
                         InputLabelProps={{ shrink: true }}
-                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#ffffff' } }}
+                        InputProps={{ readOnly: true }}
+                        placeholder="Auto-filled on closure"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '8px',
+                            bgcolor: '#e2e8f0',
+                            '& fieldset': { borderColor: '#cbd5e1' },
+                            '&:hover fieldset': { borderColor: '#cbd5e1' },
+                            '&.Mui-focused fieldset': { borderColor: '#cbd5e1' },
+                            cursor: 'not-allowed',
+                          },
+                          '& .MuiInputBase-input': {
+                            color: '#64748b',
+                            WebkitTextFillColor: '#64748b',
+                            fontWeight: 600,
+                            cursor: 'not-allowed',
+                          },
+                          '& .MuiInputLabel-root': {
+                            color: '#64748b',
+                            '&.Mui-focused': { color: '#64748b' },
+                          },
+                        }}
                       />
                       <TextField
                         fullWidth
@@ -981,16 +1091,32 @@ const NewCasePage = () => {
                         InputProps={{ readOnly: true }}
                         placeholder="Auto-filled from closure date"
                         sx={{
-                          '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f1f5f9' },
-                          '& .MuiInputBase-input': { color: '#334155', fontWeight: 500 }
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '8px',
+                            bgcolor: '#e2e8f0',
+                            '& fieldset': { borderColor: '#cbd5e1' },
+                            '&:hover fieldset': { borderColor: '#cbd5e1' },
+                            '&.Mui-focused fieldset': { borderColor: '#cbd5e1' },
+                            cursor: 'not-allowed',
+                          },
+                          '& .MuiInputBase-input': {
+                            color: '#64748b',
+                            WebkitTextFillColor: '#64748b',
+                            fontWeight: 600,
+                            cursor: 'not-allowed',
+                          },
+                          '& .MuiInputLabel-root': {
+                            color: '#64748b',
+                            '&.Mui-focused': { color: '#64748b' },
+                          },
                         }}
                       />
                     </Box>
                   </Box>
 
                   {/* SLA & TAT Column */}
-                  <Box sx={{ p: 2, borderRadius: '10px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
+                  <Box sx={{ p: 2, borderRadius: '10px', bgcolor: '#f1f5f9', border: '1px solid #cbd5e1' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
                       SLA &amp; Turnaround (TAT)
                     </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -1004,8 +1130,24 @@ const NewCasePage = () => {
                         InputLabelProps={{ shrink: true }}
                         InputProps={{ readOnly: true }}
                         sx={{
-                          '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f1f5f9' },
-                          '& .MuiInputBase-input': { color: '#334155', fontWeight: 500 }
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '8px',
+                            bgcolor: '#e2e8f0',
+                            '& fieldset': { borderColor: '#cbd5e1' },
+                            '&:hover fieldset': { borderColor: '#cbd5e1' },
+                            '&.Mui-focused fieldset': { borderColor: '#cbd5e1' },
+                            cursor: 'not-allowed',
+                          },
+                          '& .MuiInputBase-input': {
+                            color: '#64748b',
+                            WebkitTextFillColor: '#64748b',
+                            fontWeight: 600,
+                            cursor: 'not-allowed',
+                          },
+                          '& .MuiInputLabel-root': {
+                            color: '#64748b',
+                            '&.Mui-focused': { color: '#64748b' },
+                          },
                         }}
                       />
                       <TextField
@@ -1018,8 +1160,24 @@ const NewCasePage = () => {
                         InputProps={{ readOnly: true }}
                         placeholder="Calculated turnaround days"
                         sx={{
-                          '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f1f5f9' },
-                          '& .MuiInputBase-input': { color: '#334155', fontWeight: 500 }
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '8px',
+                            bgcolor: '#e2e8f0',
+                            '& fieldset': { borderColor: '#cbd5e1' },
+                            '&:hover fieldset': { borderColor: '#cbd5e1' },
+                            '&.Mui-focused fieldset': { borderColor: '#cbd5e1' },
+                            cursor: 'not-allowed',
+                          },
+                          '& .MuiInputBase-input': {
+                            color: '#64748b',
+                            WebkitTextFillColor: '#64748b',
+                            fontWeight: 600,
+                            cursor: 'not-allowed',
+                          },
+                          '& .MuiInputLabel-root': {
+                            color: '#64748b',
+                            '&.Mui-focused': { color: '#64748b' },
+                          },
                         }}
                       />
                     </Box>
@@ -1425,6 +1583,7 @@ const NewCasePage = () => {
                           <Grid item xs={12} sm={4}>
                             <TextField fullWidth size="small" label="Claimant Contact" name="claimant_contact"
                               value={verificationData.claimant_contact} onChange={handleVerificationChange}
+                              inputProps={{ maxLength: 10 }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Grid>
                           <Grid item xs={12} sm={4}>
@@ -1454,6 +1613,7 @@ const NewCasePage = () => {
                               <TextField fullWidth size="small" label="Dependent Contact"
                                 value={dependent.dependent_contact}
                                 onChange={(e) => handleDependentChange(index, 'dependent_contact', e.target.value)}
+                                inputProps={{ maxLength: 10 }}
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                             </Grid>
                             <Grid item xs={12} sm={5}>
@@ -1523,30 +1683,82 @@ const NewCasePage = () => {
                           <Typography variant="overline" sx={{ fontWeight: 700, color: '#2e7d32', letterSpacing: '1px', lineHeight: 1 }}>Personal Details</Typography>
                         </Box>
                         <FormControlLabel
-                          control={<Checkbox checked={verificationData.driver_and_insured_same || false} onChange={(e) => {
-                            handleVerificationChange({ target: { name: 'driver_and_insured_same', value: e.target.checked } });
-                            handleVerificationChange({ target: { name: 'insured_cum_driver', value: e.target.checked } });
-                          }} name="driver_and_insured_same" sx={{ '&.Mui-checked': { color: '#2e7d32' } }} />}
+                          control={<Checkbox checked={verificationData.driver_and_insured_same || false} onChange={handleInsuredSameAsDriverChange} name="driver_and_insured_same" sx={{ '&.Mui-checked': { color: '#2e7d32' } }} />}
                           label="Insured is same as Driver"
                           sx={{ mb: 2 }}
                         />
                         <Grid container spacing={2.5} sx={{ mb: 3 }}>
                           <Grid item xs={12} sm={4}>
-                            <TextField fullWidth size="small" label="Insured Name" name="insured_name"
-                              value={verificationData.insured_name} onChange={handleVerificationChange}
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="Insured Name"
+                              name="insured_name"
+                              value={verificationData.insured_name}
+                              onChange={handleVerificationChange}
                               required
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                              disabled={isInsuredAutoFilled}
+                              helperText={isInsuredAutoFilled ? 'Auto-filled from Driver Details' : undefined}
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: '8px',
+                                  bgcolor: isInsuredAutoFilled ? '#f1f5f9' : 'inherit',
+                                },
+                                '& .MuiInputBase-input.Mui-disabled': {
+                                  WebkitTextFillColor: '#334155',
+                                  color: '#334155',
+                                  fontWeight: 500,
+                                },
+                              }}
+                            />
                           </Grid>
                           <Grid item xs={12} sm={4}>
-                            <TextField fullWidth size="small" label="Insured Contact" name="insured_contact"
-                              value={verificationData.insured_contact} onChange={handleVerificationChange}
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="Insured Contact"
+                              name="insured_contact"
+                              value={verificationData.insured_contact}
+                              onChange={handleVerificationChange}
+                              inputProps={{ maxLength: 10 }}
+                              disabled={isInsuredAutoFilled}
+                              helperText={isInsuredAutoFilled ? 'Auto-filled from Driver Details' : undefined}
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: '8px',
+                                  bgcolor: isInsuredAutoFilled ? '#f1f5f9' : 'inherit',
+                                },
+                                '& .MuiInputBase-input.Mui-disabled': {
+                                  WebkitTextFillColor: '#334155',
+                                  color: '#334155',
+                                  fontWeight: 500,
+                                },
+                              }}
+                            />
                           </Grid>
                           <Grid item xs={12} sm={4}>
-                            <TextField fullWidth size="small" label="Insured Address" name="insured_address"
-                              value={verificationData.insured_address} onChange={handleVerificationChange}
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="Insured Address"
+                              name="insured_address"
+                              value={verificationData.insured_address}
+                              onChange={handleVerificationChange}
                               required
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                              disabled={isInsuredAutoFilled}
+                              helperText={isInsuredAutoFilled ? 'Auto-filled from Driver Details' : undefined}
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: '8px',
+                                  bgcolor: isInsuredAutoFilled ? '#f1f5f9' : 'inherit',
+                                },
+                                '& .MuiInputBase-input.Mui-disabled': {
+                                  WebkitTextFillColor: '#334155',
+                                  color: '#334155',
+                                  fontWeight: 500,
+                                },
+                              }}
+                            />
                           </Grid>
                         </Grid>
 
@@ -1629,30 +1841,82 @@ const NewCasePage = () => {
                           <Typography variant="overline" sx={{ fontWeight: 700, color: '#ed6c02', letterSpacing: '1px', lineHeight: 1 }}>Personal Details</Typography>
                         </Box>
                         <FormControlLabel
-                          control={<Checkbox checked={verificationData.driver_and_insured_same || false} onChange={(e) => {
-                            handleVerificationChange({ target: { name: 'driver_and_insured_same', value: e.target.checked } });
-                            handleVerificationChange({ target: { name: 'insured_cum_driver', value: e.target.checked } });
-                          }} name="driver_and_insured_same" sx={{ '&.Mui-checked': { color: '#6a1b9a' } }} />}
+                          control={<Checkbox checked={verificationData.driver_and_insured_same || false} onChange={handleDriverSameAsInsuredChange} name="driver_and_insured_same" sx={{ '&.Mui-checked': { color: '#ed6c02' } }} />}
                           label="Driver is same as Insured"
                           sx={{ mb: 2 }}
                         />
                         <Grid container spacing={2.5} sx={{ mb: 3 }}>
                           <Grid item xs={12} sm={4}>
-                            <TextField fullWidth size="small" label="Driver Name" name="driver_name"
-                              value={verificationData.driver_name} onChange={handleVerificationChange}
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="Driver Name"
+                              name="driver_name"
+                              value={verificationData.driver_name}
+                              onChange={handleVerificationChange}
                               required
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                              disabled={isDriverAutoFilled}
+                              helperText={isDriverAutoFilled ? 'Auto-filled from Insured Details' : undefined}
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: '8px',
+                                  bgcolor: isDriverAutoFilled ? '#f1f5f9' : 'inherit',
+                                },
+                                '& .MuiInputBase-input.Mui-disabled': {
+                                  WebkitTextFillColor: '#334155',
+                                  color: '#334155',
+                                  fontWeight: 500,
+                                },
+                              }}
+                            />
                           </Grid>
                           <Grid item xs={12} sm={4}>
-                            <TextField fullWidth size="small" label="Driver Contact" name="driver_contact"
-                              value={verificationData.driver_contact} onChange={handleVerificationChange}
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="Driver Contact"
+                              name="driver_contact"
+                              value={verificationData.driver_contact}
+                              onChange={handleVerificationChange}
+                              inputProps={{ maxLength: 10 }}
+                              disabled={isDriverAutoFilled}
+                              helperText={isDriverAutoFilled ? 'Auto-filled from Insured Details' : undefined}
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: '8px',
+                                  bgcolor: isDriverAutoFilled ? '#f1f5f9' : 'inherit',
+                                },
+                                '& .MuiInputBase-input.Mui-disabled': {
+                                  WebkitTextFillColor: '#334155',
+                                  color: '#334155',
+                                  fontWeight: 500,
+                                },
+                              }}
+                            />
                           </Grid>
                           <Grid item xs={12} sm={4}>
-                            <TextField fullWidth size="small" label="Driver Address" name="driver_address"
-                              value={verificationData.driver_address} onChange={handleVerificationChange}
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="Driver Address"
+                              name="driver_address"
+                              value={verificationData.driver_address}
+                              onChange={handleVerificationChange}
                               required
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                              disabled={isDriverAutoFilled}
+                              helperText={isDriverAutoFilled ? 'Auto-filled from Insured Details' : undefined}
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: '8px',
+                                  bgcolor: isDriverAutoFilled ? '#f1f5f9' : 'inherit',
+                                },
+                                '& .MuiInputBase-input.Mui-disabled': {
+                                  WebkitTextFillColor: '#334155',
+                                  color: '#334155',
+                                  fontWeight: 500,
+                                },
+                              }}
+                            />
                           </Grid>
                         </Grid>
 
@@ -1727,10 +1991,38 @@ const NewCasePage = () => {
                         </Box>
                         <Grid container spacing={2.5} sx={{ mb: 3 }}>
                           <Grid item xs={12} sm={4}>
-                            <TextField fullWidth size="small" label="Time of Accident" name="time_of_accident"
-                              value={verificationData.time_of_accident} onChange={handleVerificationChange}
-                              required
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            <LocalizationProvider dateAdapter={AdapterDayjs}>
+                              <TimePicker
+                                label="Time of Accident *"
+                                value={parseTimeStringToDayjs(verificationData.time_of_accident)}
+                                onChange={(newValue) => {
+                                  if (newValue && dayjs.isDayjs(newValue) && newValue.isValid()) {
+                                    setVerificationData(prev => ({
+                                      ...prev,
+                                      time_of_accident: newValue.format('hh:mm A'),
+                                    }));
+                                  } else {
+                                    setVerificationData(prev => ({
+                                      ...prev,
+                                      time_of_accident: '',
+                                    }));
+                                  }
+                                }}
+                                viewRenderers={{
+                                  hours: renderTimeViewClock,
+                                  minutes: renderTimeViewClock,
+                                  seconds: renderTimeViewClock,
+                                }}
+                                slotProps={{
+                                  textField: {
+                                    fullWidth: true,
+                                    size: 'small',
+                                    required: true,
+                                    sx: { '& .MuiOutlinedInput-root': { borderRadius: '8px' } },
+                                  },
+                                }}
+                              />
+                            </LocalizationProvider>
                           </Grid>
                           <Grid item xs={12} sm={4}>
                             <TextField fullWidth size="small" label="Place of Accident" name="place_of_accident"

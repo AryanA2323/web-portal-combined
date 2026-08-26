@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 from typing import Any, Dict
 
 import requests
@@ -220,7 +221,8 @@ class AICaseReviewService:
             raise AICaseReviewGenerationError("GROQ_API_KEY is not configured on the backend.")
 
         normalized_text = (statement_text or "").strip()
-        if not normalized_text:
+        has_spot_check = case_context.get("has_spot_check", False)
+        if not normalized_text and not has_spot_check:
             raise AICaseReviewGenerationError("No vendor statements were provided for report generation.")
 
         prompt = self.build_prompt(case_context, normalized_text)
@@ -303,7 +305,17 @@ class AICaseReviewService:
         if not report_text:
             raise AICaseReviewGenerationError("Groq returned an empty report.")
 
-        return report_text
+        return self._strip_markdown(report_text)
+
+    @staticmethod
+    def _strip_markdown(text: str) -> str:
+        """Strip markdown formatting from AI-generated text for clean plain-text display."""
+        # Remove bold/italic markers: **text** -> text, *text* -> text
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+        text = re.sub(r'\*(.+?)\*', r'\1', text)
+        # Remove heading markers: ### Heading -> Heading
+        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        return text
 
     def generate_report(self, case_context: Dict[str, Any], pdf_bytes: bytes) -> Dict[str, str]:
         """Generate a structured AI case review report from case context and PDF."""

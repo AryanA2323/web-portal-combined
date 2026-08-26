@@ -719,6 +719,26 @@ def is_admin_or_super_admin(user) -> bool:
     )
 
 
+def _record_case_log(case_id, case_number='', event_type='', check_type='',
+                     field_name='', old_value='', new_value='',
+                     description='', actor_id=None, actor_name='System',
+                     actor_role='', source='Cases'):
+    """Insert a row into case_activity_logs. Fire-and-forget."""
+    try:
+        with connections['default'].cursor() as cur:
+            cur.execute("""
+                INSERT INTO case_activity_logs
+                    (case_id, case_number, event_type, check_type, field_name,
+                     old_value, new_value, description,
+                     actor_id, actor_name, actor_role, source, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
+            """, [case_id, case_number or '', event_type, check_type or '',
+                  field_name or '', str(old_value or ''), str(new_value or ''),
+                  description, actor_id, actor_name or 'System',
+                  actor_role or '', source or 'Cases'])
+    except Exception as exc:
+        logger.warning(f"Failed to record case activity log: {exc}")
+
 # =============================================================================
 # API Endpoints
 # =============================================================================
@@ -1383,6 +1403,15 @@ def _fetch_ai_case_review_case_context(case_id: int) -> dict:
         ]
     )
 
+    # Detect whether the case has a spot check
+    has_spot_check = False
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("SELECT 1 FROM spot_checks WHERE case_id = %s LIMIT 1", [case_id])
+            has_spot_check = cursor.fetchone() is not None
+    except Exception:
+        pass
+
     return {
         "case_id": row[0],
         "case_number": row[1],
@@ -1416,6 +1445,7 @@ def _fetch_ai_case_review_case_context(case_id: int) -> dict:
         "case_documents": case_documents,
         "vendor_statements": vendor_statements,
         "vendor_statement_text": vendor_statement_text,
+        "has_spot_check": has_spot_check,
     }
 
 
@@ -1443,7 +1473,8 @@ def generate_ai_case_review_report(
     try:
         case_context = _fetch_ai_case_review_case_context(case_id)
         statement_text = str(case_context.get("vendor_statement_text") or "").strip()
-        if not statement_text:
+        has_spot_check = case_context.get("has_spot_check", False)
+        if not statement_text and not has_spot_check:
             raise HttpError(
                 400,
                 "No vendor statements are stored for this case. Please record statements in the vendor portal first.",
@@ -1586,28 +1617,74 @@ def update_case_status(request: HttpRequest, case_id: int, payload: UpdateCaseSt
         if status not in valid_statuses:
             raise HttpError(400, f"Invalid status. Must be one of {valid_statuses}")
 
+        from django.utils import timezone
+        now = timezone.now()
+        
+        closure_date_sql = None
+        closure_month_sql = ""
+        closure_date_orm = None
+        closure_month_orm = ""
+        
+        if status == 'Closed':
+            closure_date_sql = now.date()
+            closure_month_sql = now.strftime('%b-%y')
+            closure_date_orm = closure_date_sql
+            closure_month_orm = closure_month_sql
+
         with connections['default'].cursor() as cursor:
             # Check if case exists and update cases table
-            cursor.execute("SELECT case_number FROM cases WHERE id = %s", [case_id])
+            cursor.execute("SELECT case_number, full_case_status FROM cases WHERE id = %s", [case_id])
             row = cursor.fetchone()
             if not row:
                 raise HttpError(404, "Case not found")
                 
             case_number = row[0]
+            old_status = row[1]
             
-            cursor.execute(
-                "UPDATE cases SET full_case_status = %s, updated_at = NOW() WHERE id = %s",
-                [status, case_id]
-            )
+            if status == 'Closed':
+                cursor.execute(
+                    "UPDATE cases SET full_case_status = %s, updated_at = NOW(), closure_date = %s, closure_month = %s WHERE id = %s",
+                    [status, closure_date_sql, closure_month_sql, case_id]
+                )
+            else:
+                cursor.execute(
+                    "UPDATE cases SET full_case_status = %s, updated_at = NOW() WHERE id = %s",
+                    [status, case_id]
+                )
 
         # Update ORM if exists
         if case_number:
-            InsuranceCase.objects.filter(case_number=case_number).update(
-                full_case_status=status
-            )
+            update_fields = {'full_case_status': status}
+            if status == 'Closed':
+                update_fields['closure_date'] = closure_date_orm
+                update_fields['closure_month'] = closure_month_orm
+                
+            InsuranceCase.objects.filter(case_number=case_number).update(**update_fields)
             
         logger.info(f"[API] Case {case_id} status updated to {status} by user {request.user.username}")
-        return {"success": True, "status": status}
+        
+        if old_status != status:
+            actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+            _record_case_log(
+                case_id=case_id,
+                case_number=case_number,
+                event_type='STATUS_CHANGE',
+                field_name='full_case_status',
+                old_value=old_status,
+                new_value=status,
+                description=f"Case status changed from '{old_status}' to '{status}'",
+                actor_id=request.user.id,
+                actor_name=actor_name,
+                actor_role=getattr(request.user, 'role', ''),
+                source='Cases'
+            )
+
+        return {
+            "success": True, 
+            "status": status, 
+            "closure_date": closure_date_orm.isoformat() if closure_date_orm else None,
+            "closure_month": closure_month_orm
+        }
         
     except HttpError:
         raise
@@ -1673,19 +1750,30 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
 
                 # Normalize evidence photos
                 import json as _json
-                evidence_raw = check_data.get('vendor_evidence') or check_data.get('evidence')
-                evidence_photos = []
-                if evidence_raw:
-                    if isinstance(evidence_raw, str):
-                        try:
-                            evidence_photos = _json.loads(evidence_raw)
-                        except Exception:
-                            evidence_photos = []
-                    elif isinstance(evidence_raw, list):
-                        evidence_photos = evidence_raw
+                
+                # We will gather photos from multiple possible columns (especially for chargesheets)
+                photo_columns = ['vendor_evidence', 'evidence', 'applied_cs_photos', 'cs_received_photos', 'dispatched_photos']
+                
+                all_raw_photos = []
+                for p_col in photo_columns:
+                    raw_val = check_data.get(p_col)
+                    parsed_list = []
+                    if raw_val:
+                        if isinstance(raw_val, str):
+                            try:
+                                parsed_list = _json.loads(raw_val)
+                            except Exception:
+                                parsed_list = []
+                        elif isinstance(raw_val, list):
+                            parsed_list = raw_val
+                            
+                        # Replace the string in the dictionary with the parsed list for individual rendering
+                        check_data[p_col] = parsed_list
+                        
+                    all_raw_photos.extend(parsed_list)
 
                 normalized_photos = []
-                for p in evidence_photos:
+                for p in all_raw_photos:
                     if not p:
                         continue
                     enriched = _enrich_evidence_metadata(request, p)
@@ -1695,6 +1783,7 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
                         enriched['url'] = enriched['preview_url']
                     if enriched.get('url'):
                         normalized_photos.append(enriched)
+                        
                 check_data['evidence_photos'] = normalized_photos
 
                 # Statement audio URL
@@ -1904,19 +1993,30 @@ def get_full_case_details(request: HttpRequest, case_id: int):
 
                 # Evidence photos
                 import json as _json
-                evidence_raw = ch_data.get('vendor_evidence') or ch_data.get('evidence')
-                evidence_photos = []
-                if evidence_raw:
-                    if isinstance(evidence_raw, str):
-                        try:
-                            evidence_photos = _json.loads(evidence_raw)
-                        except Exception:
-                            evidence_photos = []
-                    elif isinstance(evidence_raw, list):
-                        evidence_photos = evidence_raw
+                
+                # We will gather photos from multiple possible columns (especially for chargesheets)
+                photo_columns = ['vendor_evidence', 'evidence', 'applied_cs_photos', 'cs_received_photos', 'dispatched_photos']
+                
+                all_raw_photos = []
+                for p_col in photo_columns:
+                    raw_val = ch_data.get(p_col)
+                    parsed_list = []
+                    if raw_val:
+                        if isinstance(raw_val, str):
+                            try:
+                                parsed_list = _json.loads(raw_val)
+                            except Exception:
+                                parsed_list = []
+                        elif isinstance(raw_val, list):
+                            parsed_list = raw_val
+                            
+                        # Replace the string in the dictionary with the parsed list for individual rendering
+                        ch_data[p_col] = parsed_list
+                        
+                    all_raw_photos.extend(parsed_list)
 
                 normalized_photos = []
-                for p in evidence_photos:
+                for p in all_raw_photos:
                     if not p:
                         continue
                     enriched = _enrich_evidence_metadata(request, p)
@@ -1925,6 +2025,7 @@ def get_full_case_details(request: HttpRequest, case_id: int):
                             enriched['url'] = enriched['preview_url']
                         if enriched.get('url'):
                             normalized_photos.append(enriched)
+                            
                 ch_data['evidence_photos'] = normalized_photos
 
                 # Audio recording URL
@@ -2106,9 +2207,11 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
     try:
         with connections['default'].cursor() as cursor:
             # Verify case exists
-            cursor.execute("SELECT id FROM cases WHERE id = %s", [case_id])
-            if not cursor.fetchone():
+            cursor.execute("SELECT id, case_number FROM cases WHERE id = %s", [case_id])
+            case_row = cursor.fetchone()
+            if not case_row:
                 raise HttpError(404, f"Case id={case_id} not found")
+            case_number = case_row[1]
 
             # ── Update cases table ────────────────────────────────────────
             safe_case = {k: v for k, v in case_updates.items() if k in CASE_FIELDS}
@@ -2138,12 +2241,34 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
                         safe_case['sla'] = 'AT' if _date.today() > due_dt else 'WT'
 
             if safe_case:
+                cols = list(safe_case.keys())
+                cursor.execute(f"SELECT {', '.join(cols)} FROM cases WHERE id = %s", [case_id])
+                old_case_vals = dict(zip(cols, cursor.fetchone()))
+
                 set_clause = ', '.join(f'{k} = %s' for k in safe_case)
                 vals = list(safe_case.values()) + [case_id]
                 cursor.execute(
                     f"UPDATE cases SET {set_clause}, updated_at = NOW() WHERE id = %s",
                     vals
                 )
+
+                actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                for k, new_v in safe_case.items():
+                    old_v = old_case_vals.get(k)
+                    if str(old_v) != str(new_v):
+                        _record_case_log(
+                            case_id=case_id,
+                            case_number=case_number,
+                            event_type='FIELD_UPDATED',
+                            field_name=k,
+                            old_value=old_v,
+                            new_value=new_v,
+                            description=f"Case field '{k}' updated",
+                            actor_id=request.user.id,
+                            actor_name=actor_name,
+                            actor_role=getattr(request.user, 'role', ''),
+                            source='Cases'
+                        )
 
             # ── Update check table ────────────────────────────────────────
             allowed_check_fields = CHECK_FIELDS.get(table, set())
@@ -2157,6 +2282,10 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
                 cursor.execute(f"SELECT id FROM {table} WHERE case_id = %s", [case_id])
                 existing = cursor.fetchone()
                 if existing:
+                    cols2 = list(safe_check.keys())
+                    cursor.execute(f"SELECT {', '.join(cols2)} FROM {table} WHERE case_id = %s", [case_id])
+                    old_check_vals = dict(zip(cols2, cursor.fetchone()))
+
                     set_clause2 = ', '.join(f'{k} = %s' for k in safe_check)
                     vals2 = list(safe_check.values()) + [case_id]
                     cursor.execute(
@@ -2164,6 +2293,25 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
                         vals2
                     )
                     check_row_id = existing[0]
+
+                    actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                    for k, new_v in safe_check.items():
+                        old_v = old_check_vals.get(k)
+                        if str(old_v) != str(new_v):
+                            _record_case_log(
+                                case_id=case_id,
+                                case_number=case_number,
+                                event_type='FIELD_UPDATED',
+                                check_type=check_type,
+                                field_name=k,
+                                old_value=old_v,
+                                new_value=new_v,
+                                description=f"Check field '{k}' updated",
+                                actor_id=request.user.id,
+                                actor_name=actor_name,
+                                actor_role=getattr(request.user, 'role', ''),
+                                source='Cases'
+                            )
                 else:
                     raise HttpError(404, f"No {check_type} check found for case {case_id}")
 
@@ -2250,10 +2398,16 @@ def assign_vendor_to_check(request: HttpRequest, case_id: int, check_type: str):
 
             # Update the check table
             new_status = 'WIP' if vendor_id else 'Not Initiated'
-            cursor.execute(
-                f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
-                [vendor_id if vendor_id else None, new_status, case_id]
-            )
+            if table == 'chargesheets':
+                cursor.execute(
+                    f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, advocate_status = 'Not Initiated', updated_at = NOW() WHERE case_id = %s",
+                    [vendor_id if vendor_id else None, new_status, case_id]
+                )
+            else:
+                cursor.execute(
+                    f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
+                    [vendor_id if vendor_id else None, new_status, case_id]
+                )
 
             cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
             case_row = cursor.fetchone()
@@ -2268,6 +2422,22 @@ def assign_vendor_to_check(request: HttpRequest, case_id: int, check_type: str):
                     old_vendor_id=previous_vendor_id,
                     new_vendor_id=normalized_vendor_id,
                     case_number=case_number,
+                )
+                
+                actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                _record_case_log(
+                    case_id=case_id,
+                    case_number=case_number,
+                    event_type='VENDOR_ASSIGNED',
+                    check_type=check_type,
+                    field_name='assigned_vendor_id',
+                    old_value=previous_vendor_id,
+                    new_value=normalized_vendor_id,
+                    description=f"Vendor {'assigned' if normalized_vendor_id else 'unassigned'}" + (f" ({vendor_name})" if vendor_name else ""),
+                    actor_id=request.user.id,
+                    actor_name=actor_name,
+                    actor_role=getattr(request.user, 'role', ''),
+                    source='Cases'
                 )
 
             return {
@@ -2862,6 +3032,72 @@ def get_recent_activity(request: HttpRequest):
         return []
 
 
+class CaseLogEntrySchema(Schema):
+    id: int
+    event_time: datetime
+    event_type: str
+    check_type: Optional[str] = None
+    field_name: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    description: str
+    actor: str
+    actor_role: Optional[str] = None
+    source: str
+
+@router.get(
+    "/case-logs/{case_id}",
+    response=List[CaseLogEntrySchema],
+    summary="Get Case Activity Logs",
+    description="Get detailed activity logs for a specific case.",
+)
+def get_case_logs(request: HttpRequest, case_id: int):
+    """Get detailed activity logs for a case."""
+    if not request.user.is_authenticated:
+        return []
+
+    logs = []
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    created_at,
+                    event_type,
+                    check_type,
+                    field_name,
+                    old_value,
+                    new_value,
+                    description,
+                    actor_name,
+                    actor_role,
+                    source
+                FROM case_activity_logs
+                WHERE case_id = %s
+                ORDER BY created_at DESC
+                """,
+                [case_id]
+            )
+            for row in cursor.fetchall():
+                logs.append({
+                    "id": row[0],
+                    "event_time": row[1],
+                    "event_type": row[2],
+                    "check_type": row[3],
+                    "field_name": row[4],
+                    "old_value": row[5],
+                    "new_value": row[6],
+                    "description": row[7],
+                    "actor": row[8] or "System",
+                    "actor_role": row[9],
+                    "source": row[10] or "Cases"
+                })
+    except Exception as exc:
+        logger.warning(f"Failed to fetch case logs for case {case_id}: {exc}")
+        
+    return logs
+
 @router.get(
     "/audit-logs",
     response=List[AuditLogEntrySchema],
@@ -3264,6 +3500,54 @@ def get_audit_logs(
                     f"QC '{qc_name}' {'approved' if is_accepted else 'rejected'} report for case {case_number}",
                     case_number,
                     "Legal Review",
+                )
+
+            # case_activity_logs events
+            if cm_user_id:
+                cursor.execute(
+                    """
+                    SELECT
+                        created_at,
+                        event_type,
+                        actor_name,
+                        description,
+                        case_number,
+                        source
+                    FROM case_activity_logs
+                    WHERE created_at IS NOT NULL
+                      AND case_id IN (
+                          SELECT id FROM insurance_case WHERE created_by_id = %s
+                      )
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    [cm_user_id, safe_limit],
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT
+                        created_at,
+                        event_type,
+                        actor_name,
+                        description,
+                        case_number,
+                        source
+                    FROM case_activity_logs
+                    WHERE created_at IS NOT NULL
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    [safe_limit],
+                )
+            for created_at, event_type_val, actor_name, desc, case_number, source in cursor.fetchall():
+                _add_event(
+                    created_at,
+                    event_type_val,
+                    actor_name,
+                    desc,
+                    case_number,
+                    source,
                 )
 
         # Sort latest first globally
@@ -3964,15 +4248,18 @@ def reassign_check_vendor(
 
     new_vendor_id = payload.vendor_id
 
+    new_vendor_name = None
     # 3. Validate vendor_id if provided
     if new_vendor_id is not None:
         with connections["default"].cursor() as cursor:
             cursor.execute(
-                "SELECT id FROM users_vendor WHERE id = %s AND is_active = TRUE",
+                "SELECT id, company_name FROM users_vendor WHERE id = %s AND is_active = TRUE",
                 [new_vendor_id],
             )
-            if not cursor.fetchone():
+            vendor_row = cursor.fetchone()
+            if not vendor_row:
                 return 404, {"error": f"Vendor {new_vendor_id} not found or not active"}
+            new_vendor_name = vendor_row[1]
 
     with connections["default"].cursor() as cursor:
         # 4. Fetch existing check row (validates case_id + check_type combo)
@@ -3984,6 +4271,13 @@ def reassign_check_vendor(
         if row is None:
             return 404, {"error": f"No {check_type} check found for case {case_id}"}
         previous_vendor_id = row[0]
+        
+        previous_vendor_name = None
+        if previous_vendor_id is not None:
+            cursor.execute("SELECT company_name FROM users_vendor WHERE id = %s", [previous_vendor_id])
+            prev_row = cursor.fetchone()
+            if prev_row:
+                previous_vendor_name = prev_row[0]
 
         # 5. Fetch case_number for notification messages
         cursor.execute(
@@ -3995,10 +4289,16 @@ def reassign_check_vendor(
 
         # 6. Update assigned_vendor_id and check_status
         new_status = 'WIP' if new_vendor_id else 'Not Initiated'
-        cursor.execute(
-            f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
-            [new_vendor_id, new_status, case_id],
-        )
+        if table == 'chargesheets':
+            cursor.execute(
+                f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, advocate_status = 'Not Initiated', updated_at = NOW() WHERE case_id = %s",
+                [new_vendor_id, new_status, case_id],
+            )
+        else:
+            cursor.execute(
+                f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
+                [new_vendor_id, new_status, case_id],
+            )
 
     # 7. Fire-and-forget notifications (errors are swallowed inside notify_reassignment)
     if previous_vendor_id != new_vendor_id:
@@ -4009,6 +4309,22 @@ def reassign_check_vendor(
             old_vendor_id=previous_vendor_id,
             new_vendor_id=new_vendor_id,
             case_number=case_number,
+        )
+        
+        actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+        _record_case_log(
+            case_id=case_id,
+            case_number=case_number,
+            event_type='VENDOR_REASSIGNED',
+            check_type=check_type,
+            field_name='assigned_vendor_id',
+            old_value=previous_vendor_id,
+            new_value=new_vendor_id,
+            description=f"Vendor reassigned from '{previous_vendor_name or previous_vendor_id or 'None'}' to '{new_vendor_name or new_vendor_id or 'None'}'",
+            actor_id=request.user.id,
+            actor_name=actor_name,
+            actor_role=getattr(request.user, 'role', ''),
+            source='Cases'
         )
 
     return 200, {
@@ -4044,6 +4360,26 @@ def review_check(request: HttpRequest, case_id: int, check_type: str, payload: A
         with connections['default'].cursor() as cursor:
             if action == 'accept':
                 cursor.execute(f"UPDATE {table} SET check_status = 'Verified' WHERE case_id = %s", [case_id])
+                
+                actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+                case_row = cursor.fetchone()
+                case_number = case_row[0] if case_row and case_row[0] else str(case_id)
+                _record_case_log(
+                    case_id=case_id,
+                    case_number=case_number,
+                    event_type='CHECK_REVIEWED',
+                    check_type=check_type,
+                    field_name='check_status',
+                    old_value='WIP',
+                    new_value='Verified',
+                    description=f"Check accepted by admin",
+                    actor_id=request.user.id,
+                    actor_name=actor_name,
+                    actor_role=getattr(request.user, 'role', ''),
+                    source='Cases'
+                )
+                
                 return {"success": True, "message": "Check accepted"}
                 
             elif action == 'reject':
@@ -4068,6 +4404,25 @@ def review_check(request: HttpRequest, case_id: int, check_type: str, payload: A
                 params.append(case_id)
                 
                 cursor.execute(update_sql, params)
+                
+                cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+                case_row = cursor.fetchone()
+                case_number = case_row[0] if case_row and case_row[0] else str(case_id)
+                _record_case_log(
+                    case_id=case_id,
+                    case_number=case_number,
+                    event_type='CHECK_REVIEWED',
+                    check_type=check_type,
+                    field_name='check_status',
+                    old_value='WIP',
+                    new_value='Reassigned',
+                    description=f"Check rejected by admin",
+                    actor_id=request.user.id,
+                    actor_name=admin_name,
+                    actor_role=getattr(request.user, 'role', ''),
+                    source='Cases'
+                )
+                
                 return {"success": True, "message": "Check rejected and reassigned"}
             
             else:
@@ -4198,6 +4553,26 @@ def upload_check_media(
                 f"UPDATE {table} SET statement_audio_path = %s WHERE case_id = %s AND (statement_audio_path IS NULL OR statement_audio_path = '')",
                 [rel_url, case_id]
             )
+            
+        actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+        cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+        case_row = cursor.fetchone()
+        case_number = case_row[0] if case_row and case_row[0] else str(case_id)
+        
+        _record_case_log(
+            case_id=case_id,
+            case_number=case_number,
+            event_type='MEDIA_UPLOADED',
+            check_type=check_type,
+            field_name=col_name,
+            old_value=f"{len(existing_list) - 1} items",
+            new_value=f"{len(existing_list)} items",
+            description=f"Uploaded {cat_clean} ({file.name})",
+            actor_id=request.user.id,
+            actor_name=actor_name,
+            actor_role=getattr(request.user, 'role', ''),
+            source='Cases'
+        )
 
     new_item["url"] = abs_url
     if "audio_url" in new_item:

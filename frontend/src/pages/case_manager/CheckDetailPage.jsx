@@ -81,7 +81,7 @@ const resolveMediaUrl = (rawUrl) => {
     const origin = new URL(apiBase, window.location.origin).origin;
     return `${origin}${path}`;
   } catch {
-    return `http://localhost:8000${path}`;
+    return `http://localhost:8001${path}`;
   }
 };
 
@@ -436,11 +436,18 @@ const EditFormGrid = ({ fields, getVal, onChange }) => {
               label={fd.label}
               type={fd.type || 'text'}
               value={val}
-              onChange={(e) => onChange(fd.name, e.target.value)}
+              onChange={(e) => {
+                let newVal = e.target.value;
+                if (fd.name.includes('contact')) {
+                  newVal = newVal.replace(/\D/g, '').slice(0, 10);
+                }
+                onChange(fd.name, newVal);
+              }}
               multiline={isLong}
               minRows={isLong ? 3 : undefined}
               sx={{ mb: 1, '& .MuiOutlinedInput-root': { borderRadius: '8px' }, '& .MuiInputBase-input': { fontSize: '13px' } }}
               InputLabelProps={fd.type === 'date' ? { shrink: true } : undefined}
+              inputProps={fd.name.includes('contact') ? { maxLength: 10 } : undefined}
             />
           </Grid>
         );

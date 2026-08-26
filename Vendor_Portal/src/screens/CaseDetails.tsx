@@ -185,45 +185,51 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingPhotoName, setDeletingPhotoName] = useState<string | null>(null);
-  const isCompleted = data?.check?.check_status === 'Completed' || data?.check?.check_status === 'Verified' || data?.check?.check_status === 'Failed';
+  const isCompleted = data?.check?.check_status === 'Completed' || data?.check?.check_status === 'Verified' || data?.check?.check_status === 'Unable to Verify';
 
   const CHARGESHEET_STATUS_OPTIONS = [
-    'WIP',
+    'Not Initiated',
     'Applied for CS',
     'CS Recieved to adv',
     'Dispatched',
     'not found',
   ];
 
-  const [selectedChargesheetStatus, setSelectedChargesheetStatus] = useState<string>('WIP');
+  const [selectedChargesheetStatus, setSelectedChargesheetStatus] = useState<string>('Applied for CS');
   const [advocateRemark, setAdvocateRemark] = useState<string>('');
   const [rtoRemark, setRtoRemark] = useState<string>('');
   const [isSavingStatus, setIsSavingStatus] = useState<boolean>(false);
   const [showStatusModal, setShowStatusModal] = useState<boolean>(false);
 
+  const checkAdvocateStatus = data?.check?.advocate_status;
+  const checkStatus = data?.check?.check_status;
+  const checkAdvocateRemark = data?.check?.advocate_remark;
+  const vendorFeedback = data?.check?.vendor_feedback;
+  const checkRemarks = data?.check?.remarks;
+  const qRtoRemark = data?.check?.questionnaire?.rto_remark;
+  const qVendorFeedback = data?.check?.questionnaire?.vendor_feedback;
+
   useEffect(() => {
-    if (data?.check?.advocate_status) {
-      setSelectedChargesheetStatus(data.check.advocate_status);
-    } else if (data?.check?.check_status) {
-      setSelectedChargesheetStatus(data.check.check_status);
+    if (checkAdvocateStatus) {
+      setSelectedChargesheetStatus(checkAdvocateStatus);
+    } else if (checkStatus) {
+      setSelectedChargesheetStatus(checkStatus);
     }
-    if (data?.check?.advocate_remark) {
-      setAdvocateRemark(data.check.advocate_remark);
+    if (checkAdvocateRemark) {
+      setAdvocateRemark(checkAdvocateRemark);
     }
-    if (data?.check) {
-      const existingRtoRemark =
-        data.check.vendor_feedback ||
-        data.check.remarks ||
-        data.check.questionnaire?.rto_remark ||
-        data.check.questionnaire?.vendor_feedback ||
-        '';
-      setRtoRemark(existingRtoRemark);
-    }
-  }, [data?.check]);
+    const existingRtoRemark =
+      vendorFeedback ||
+      checkRemarks ||
+      qRtoRemark ||
+      qVendorFeedback ||
+      '';
+    setRtoRemark(existingRtoRemark);
+  }, [checkAdvocateStatus, checkStatus, checkAdvocateRemark, vendorFeedback, checkRemarks, qRtoRemark, qVendorFeedback]);
 
   const handleUpdateChargesheetStatus = (newStatus: string) => {
     setSelectedChargesheetStatus(newStatus);
-    const isPhotoRequired = (newStatus === 'Applied for CS' || newStatus === 'Dispatched');
+    const isPhotoRequired = (newStatus === 'Applied for CS' || newStatus === 'CS Recieved to adv' || newStatus === 'Dispatched');
     if (isPhotoRequired && evidencePhotos.length === 0 && pendingPhotos.length === 0) {
       showToast({
         type: 'info',
@@ -921,6 +927,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const checkInfo = data.check || {};
   const evidencePhotos = checkInfo.evidence_photos || [];
   const appliedCsPhotos = Array.isArray(checkInfo.applied_cs_photos) ? checkInfo.applied_cs_photos : (typeof checkInfo.applied_cs_photos === 'string' ? (() => { try { return JSON.parse(checkInfo.applied_cs_photos); } catch { return []; } })() : []);
+  const csReceivedPhotos = Array.isArray(checkInfo.cs_received_photos) ? checkInfo.cs_received_photos : (typeof checkInfo.cs_received_photos === 'string' ? (() => { try { return JSON.parse(checkInfo.cs_received_photos); } catch { return []; } })() : []);
   const dispatchedPhotos = Array.isArray(checkInfo.dispatched_photos) ? checkInfo.dispatched_photos : (typeof checkInfo.dispatched_photos === 'string' ? (() => { try { return JSON.parse(checkInfo.dispatched_photos); } catch { return []; } })() : []);
   const writtenStatementPhotos = checkInfo.written_statement_photos || [];
   const rawDocs = checkInfo.documents || checkInfo.vendor_documents || checkInfo.case_documents || [];
@@ -1255,6 +1262,134 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             );
           })()}
 
+          {normalizedCheckType === 'chargesheet' && selectedChargesheetStatus === 'CS Recieved to adv' && (() => {
+            const photos = csReceivedPhotos;
+            const category = 'cs_received';
+            const sectionTitle = 'CS Received to Adv - Photos';
+
+            const handleUploadFromGallery = async () => {
+              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (status !== 'granted') {
+                showToast({ type: 'error', title: 'Permission Denied', message: 'We need access to your photos.' });
+                return;
+              }
+              const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+              let location = null;
+              if (locStatus === 'granted') {
+                try { location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }); } catch (e) { }
+              }
+              const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images' as any, allowsMultipleSelection: true, quality: 0.8 });
+              if (result.canceled || !result.assets || result.assets.length === 0) return;
+              const newPhotos = result.assets.map((asset, i) => ({
+                uri: asset.uri,
+                name: asset.fileName || `cs_received_${Date.now()}_${i}.jpg`,
+                lat: location?.coords?.latitude?.toString() || '',
+                long: location?.coords?.longitude?.toString() || '',
+              }));
+              setUploading(true);
+              try {
+                await apiService.uploadCheckEvidence(caseId, checkType, newPhotos, category);
+                showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
+                await loadData(false);
+              } catch (err: any) {
+                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+              } finally {
+                setUploading(false);
+              }
+            };
+
+            const handleTakePhoto = async () => {
+              const { status } = await ImagePicker.requestCameraPermissionsAsync();
+              if (status !== 'granted') {
+                showToast({ type: 'error', title: 'Permission Denied', message: 'We need camera access.' });
+                return;
+              }
+              const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+              let location = null;
+              if (locStatus === 'granted') {
+                try { location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }); } catch (e) { }
+              } else {
+                showToast({ type: 'error', title: 'Location Required', message: 'Location permission is required.' });
+                return;
+              }
+              const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+              if (result.canceled || !result.assets || result.assets.length === 0) return;
+              const newPhotos = result.assets.map((asset, i) => ({
+                uri: asset.uri,
+                name: asset.fileName || `cs_received_cam_${Date.now()}_${i}.jpg`,
+                lat: location?.coords?.latitude?.toString() || '',
+                long: location?.coords?.longitude?.toString() || '',
+              }));
+              setUploading(true);
+              try {
+                await apiService.uploadCheckEvidence(caseId, checkType, newPhotos, category);
+                showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
+                await loadData(false);
+              } catch (err: any) {
+                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+              } finally {
+                setUploading(false);
+              }
+            };
+
+            const handleDelete = async (photo: any) => {
+              const fname = getEvidencePhotoName(photo);
+              setDeletingPhotoName(fname);
+              try {
+                await apiService.deleteCheckEvidence(caseId, checkType, fname, category);
+                showToast({ type: 'success', title: 'Photo Deleted', message: 'Photo removed.' });
+                await loadData(false);
+              } catch (err: any) {
+                showToast({ type: 'error', title: 'Delete Failed', message: err?.message || 'Failed to delete photo.' });
+              } finally {
+                setDeletingPhotoName(null);
+              }
+            };
+
+            return (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>
+                  {sectionTitle} ({photos.length})
+                </Text>
+                {photos.length === 0 ? (
+                  <Text style={styles.noEvidenceText}>No photos uploaded yet</Text>
+                ) : (
+                  <View style={styles.photosGrid}>
+                    {photos.map((photo: any, idx: number) => (
+                      <View key={`cs-rec-${getEvidencePhotoName(photo)}-${idx}`} style={styles.photoCard}>
+                        <View style={styles.photoImageWrapper}>
+                          <Image source={{ uri: getEvidencePhotoUri(photo, apiHost) }} style={styles.photoImage} resizeMode="cover" />
+                          <TouchableOpacity
+                            style={[styles.removePhotoButton, deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled]}
+                            onPress={() => handleDelete(photo)}
+                            disabled={deletingPhotoName === getEvidencePhotoName(photo)}
+                            activeOpacity={0.8}
+                          >
+                            {deletingPhotoName === getEvidencePhotoName(photo) ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <Text style={styles.removePhotoButtonText}>×</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.photoName} numberOfLines={1}>{getEvidencePhotoName(photo)}</Text>
+                        <Text style={styles.photoDate}>{photo.uploaded_at ? new Date(photo.uploaded_at).toLocaleDateString() : ''}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]} onPress={handleUploadFromGallery} disabled={uploading} activeOpacity={0.8}>
+                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>From Gallery</Text></>)}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]} onPress={handleTakePhoto} disabled={uploading} activeOpacity={0.8}>
+                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>Take Photo</Text></>)}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
+
           {normalizedCheckType === 'chargesheet' && selectedChargesheetStatus === 'Dispatched' && (() => {
             const photos = dispatchedPhotos;
             const category = 'dispatched';
@@ -1386,8 +1521,8 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
 
           {normalizedCheckType === 'chargesheet' && (() => {
-            const isPhotoRequired = (selectedChargesheetStatus === 'Applied for CS' || selectedChargesheetStatus === 'Dispatched');
-            const statusPhotos = selectedChargesheetStatus === 'Applied for CS' ? appliedCsPhotos : dispatchedPhotos;
+            const isPhotoRequired = (selectedChargesheetStatus === 'Applied for CS' || selectedChargesheetStatus === 'CS Recieved to adv' || selectedChargesheetStatus === 'Dispatched');
+            const statusPhotos = selectedChargesheetStatus === 'Applied for CS' ? appliedCsPhotos : (selectedChargesheetStatus === 'CS Recieved to adv' ? csReceivedPhotos : dispatchedPhotos);
             const hasPhoto = statusPhotos.length > 0;
             const isSubmitDisabled = uploading || (isPhotoRequired && !hasPhoto);
 
@@ -1446,7 +1581,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
           {normalizedCheckType !== 'chargesheet' && (
             <>
-              {normalizedCheckType !== 'rto' && (
+              {normalizedCheckType !== 'rto' && normalizedCheckType !== 'spot' && (
                 <View style={styles.section}>
                   <Text style={styles.sectionEyebrow}>Statement</Text>
                   <Text style={styles.sectionTitle}>Record statement in Marathi</Text>
@@ -2020,8 +2155,8 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                                     await apiService.saveQuestionnaire(caseId, checkType, currentQ);
                                     await clearDraftQuestionnaire(caseId, checkType);
                                     await apiService.updateCheckStatus(caseId, checkType, 'FAILED');
-                                    dispatch(updateCheckStatusInStore({ caseId, status: 'Failed' }));
-                                    showToast({ type: 'success', title: 'Check Failed', message: 'Check marked as failed.' });
+                                    dispatch(updateCheckStatusInStore({ caseId, status: 'Unable to Verify' }));
+                                    showToast({ type: 'success', title: 'Check Unable to Verify', message: 'Check marked as unable to verify.' });
                                     router.back();
                                   } catch (err: any) {
                                     console.error('Failed to fail check:', err);
@@ -2042,7 +2177,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                         ) : (
                           <View style={styles.uploadButtonContent}>
                             <MaterialCommunityIcons name="close-circle-outline" size={20} color="#FFFFFF" />
-                            <Text style={styles.uploadButtonText}>Failed</Text>
+                            <Text style={styles.uploadButtonText}>Unable to Verify</Text>
                           </View>
                         )}
                       </TouchableOpacity>

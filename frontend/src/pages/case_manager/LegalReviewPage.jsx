@@ -23,6 +23,8 @@ import {
   DialogContent,
   DialogActions,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import {
   Description,
@@ -41,6 +43,7 @@ import api from '../../services/api';
 import { NotificationBell } from '../../components/case_manager';
 import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
 import AlertMessage from '../../components/common/AlertMessage';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 const formatEvidenceTimestamp = (photo) => {
   const rawValue = photo?.captured_at || photo?.uploaded_at || photo?.timestamp;
@@ -104,6 +107,7 @@ const LegalReviewPage = () => {
 
   // Report detail modal state
   const [reportDetailOpen, setReportDetailOpen] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [selectedReport, setSelectedReport] = useState(null);
   const [editableReportContent, setEditableReportContent] = useState('');
   const [savingReportContent, setSavingReportContent] = useState(false);
@@ -133,6 +137,9 @@ const LegalReviewPage = () => {
     fetchReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+  useAutoRefresh(fetchReports);
+
 
   // Open qc assignment modal
   const openQCModal = async (reportId, mode = 'assign') => {
@@ -179,6 +186,44 @@ const LegalReviewPage = () => {
     } catch (err) {
       console.error('Failed to assign qc:', err);
       alert(`Failed to ${qcModalMode === 'reassign' ? 'reassign' : 'assign'} qc. Please try again.`);
+    } finally {
+      setAssigningQC(false);
+    }
+  };
+
+  // Directly reassign to the same QC
+  const handleDirectReassign = async () => {
+    if (!selectedReport?.id || !selectedReport?.assigned_qc_id) {
+       openQCModal(selectedReport?.id, 'reassign');
+       return;
+    }
+    setAssigningQC(true);
+    
+    // Auto-save changes if there are any
+    if (editableReportContent !== selectedReport.report_content) {
+      try {
+        await api.put(`/reports/${selectedReport.id}/content`, {
+          report_content: editableReportContent,
+        });
+      } catch (err) {
+        console.error('Failed to update report content before reassignment:', err);
+        setSnackbar({ open: true, message: 'Failed to save changes before reassignment. Please try saving first.', severity: 'error' });
+        setAssigningQC(false);
+        return;
+      }
+    }
+
+    try {
+      const res = await api.post(`/reports/${selectedReport.id}/reassign`, {
+        qc_id: selectedReport.assigned_qc_id,
+      });
+      setSelectedReport(res.data);
+      setEditableReportContent(res.data?.report_content || '');
+      await fetchReports();
+      setSnackbar({ open: true, message: 'Report successfully reassigned to the same Quality Analyst.', severity: 'success' });
+    } catch (err) {
+      console.error('Failed to reassign qc:', err);
+      setSnackbar({ open: true, message: 'Failed to reassign qc. Please try again.', severity: 'error' });
     } finally {
       setAssigningQC(false);
     }
@@ -1089,8 +1134,8 @@ const LegalReviewPage = () => {
           {selectedReport?.status === 'REJECTED' && (
             <Button
               variant="outlined"
-              onClick={() => openQCModal(selectedReport.id, 'reassign')}
-              disabled={savingReportContent || editableReportContent !== selectedReport.report_content}
+              onClick={handleDirectReassign}
+              disabled={savingReportContent || assigningQC}
               sx={{
                 textTransform: 'none',
                 fontWeight: 600,
@@ -1142,6 +1187,17 @@ const LegalReviewPage = () => {
           )}
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%', borderRadius: '8px' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   </CaseManagerLayout>
   );

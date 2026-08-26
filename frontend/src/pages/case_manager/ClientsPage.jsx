@@ -51,6 +51,7 @@ import {
 import CaseManagerLayout from './components/CaseManagerLayout';
 import AlertMessage from '../../components/common/AlertMessage';
 import api from '../../services/api';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 import { NotificationBell } from '../../components/case_manager';
 import { resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
 
@@ -97,6 +98,8 @@ const ClientsPage = () => {
   useEffect(() => {
     fetchClients();
   }, []);
+
+  useAutoRefresh(fetchClients);
 
   // Highlight state
   const [highlightFields, setHighlightFields] = useState(false);

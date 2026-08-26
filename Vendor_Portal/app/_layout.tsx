@@ -12,6 +12,7 @@ import * as ScreenCapture from 'expo-screen-capture';
 import { addNotificationResponseListener, registerForPushNotifications } from '@/services/pushNotifications';
 import 'react-native-reanimated';
 import { ToastProvider } from '@/components/Toast';
+import { DailyDisclaimerModal } from '@/components/DailyDisclaimerModal';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -98,11 +99,14 @@ function RootNavigator() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-      }}
-    />
+    <>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      />
+      {isAuthenticated && <DailyDisclaimerModal />}
+    </>
   );
 }
 

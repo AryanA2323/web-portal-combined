@@ -21,6 +21,7 @@ import {
 import { CheckCircle, Description, FileDownload, Refresh, Search } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 import AlertMessage from '../../components/common/AlertMessage';
 import { NotificationBell } from '../../components/case_manager';
 import jsPDF from 'jspdf';
@@ -122,6 +123,8 @@ const ReportsPage = () => {
   useEffect(() => {
     fetchApprovedReports();
   }, []);
+
+  useAutoRefresh(fetchApprovedReports);
 
   const filteredReports = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();

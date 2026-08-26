@@ -306,12 +306,16 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
   const handleChange = (key: string, value: string) => {
     if (disabled) return;
     setFormData((prev) => {
-      const updated = { ...prev, [key]: value };
+      let finalValue = value;
+      if (key === 'insured_contact' || key === 'driver_contact') {
+        finalValue = value.replace(/\D/g, '').slice(0, 10);
+      }
+      const updated = { ...prev, [key]: finalValue };
       
       if (normType === 'insured_cum_driver') {
-        if (key === 'insured_name') updated.driver_name = value;
-        if (key === 'insured_address') updated.driver_address = value;
-        if (key === 'insured_contact') updated.driver_contact = value;
+        if (key === 'insured_name') updated.driver_name = finalValue;
+        if (key === 'insured_address') updated.driver_address = finalValue;
+        if (key === 'insured_contact') updated.driver_contact = finalValue;
         if (key === 'driver_relation') {
           // just keep it
         }
@@ -680,6 +684,7 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
                         onBlur={() => setFocusedKey(null)}
                         multiline={field.type === 'multiline'}
                         numberOfLines={field.type === 'multiline' ? 4 : 1}
+                        maxLength={field.key === 'insured_contact' || field.key === 'driver_contact' ? 10 : undefined}
                       />
                     </View>
                   )}

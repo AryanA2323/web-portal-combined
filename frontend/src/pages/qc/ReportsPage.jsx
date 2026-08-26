@@ -34,6 +34,7 @@ import {
 import QCLayout from './components/QCLayout';
 import QCNotificationBell from './components/QCNotificationBell';
 import api from '../../services/api';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 import AlertMessage from '../../components/common/AlertMessage';
 import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
 
@@ -112,6 +113,9 @@ const ReportsPage = () => {
   useEffect(() => {
     fetchReports();
   }, []);
+
+  useAutoRefresh(fetchReports);
+
 
   // Open review dialog
   const handleReview = async (reportId) => {

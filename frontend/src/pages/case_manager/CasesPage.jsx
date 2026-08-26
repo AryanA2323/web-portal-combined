@@ -39,6 +39,7 @@ import {
   Stack,
   Divider,
   Tooltip,
+  Drawer,
 } from '@mui/material';
 import {
   Search,
@@ -58,6 +59,7 @@ import {
   Assignment,
   Collections,
   InsertDriveFile,
+  History,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import StatCard from './components/StatCard';
@@ -69,7 +71,7 @@ import { NotificationBell } from '../../components/case_manager';
 const resolveMediaUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('http')) return url;
-  const baseUrl = api.defaults.baseURL || 'http://localhost:8000/api';
+  const baseUrl = api.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api';
   const cleanBase = baseUrl.endsWith('/api') ? baseUrl.slice(0, -4) : baseUrl;
   return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
 };
@@ -153,6 +155,45 @@ const KNOWN_Q_KEYS = new Set(Object.keys({
   driver_name: 1, driver_contact: 1, dl: 1, dl_expiry: 1, insurance_holder_name: 1, policy_expiry_date: 1, different_owner_reason: 1,
   driver_address: 1, driver_relation: 1,
 }));
+
+const CHECK_SPECIFIC_Q_KEYS = {
+  claimant: [
+    'relation', 'claim_type', 'deceased_injury_name', 'deceased_injury_income',
+    'monthly_income', 'hr_manager', 'fir_date', 'reason_if_delayed',
+    'date_of_accident', 'time_of_accident', 'description_of_accident', 'investigation_datetime'
+  ],
+  insured: [
+    'insured_name', 'insured_address', 'insured_contact', 'vehicle_number', 'vehicle_type',
+    'rc', 'rc_expiry', 'driver_name', 'driver_contact', 'dl', 'dl_expiry',
+    'insurance_holder_name', 'policy_expiry_date', 'different_owner_reason',
+    'date_of_accident', 'time_of_accident', 'description_of_accident', 'investigation_datetime'
+  ],
+  driver: [
+    'driver_name', 'driver_address', 'driver_contact', 'driver_relation',
+    'insured_name', 'insured_contact', 'vehicle_number', 'vehicle_type',
+    'dl', 'dl_expiry', 'insurance_holder_name', 'different_owner_reason',
+    'date_of_accident', 'time_of_accident', 'description_of_accident', 'investigation_datetime'
+  ],
+};
+
+const getQuestionnaireDisplayObj = (checkType, qData) => {
+  const tType = (checkType || '').toLowerCase();
+  const keys = CHECK_SPECIFIC_Q_KEYS[tType];
+  const hasData = qData && typeof qData === 'object' && Object.keys(qData).length > 0;
+  
+  if (keys) {
+    const obj = {};
+    keys.forEach(k => {
+      obj[k] = (qData && qData[k] !== undefined && qData[k] !== null && qData[k] !== '') ? qData[k] : '—';
+    });
+    return { displayObj: obj, hasData };
+  }
+  
+  return { 
+    displayObj: hasData ? qData : Object.keys(QUESTIONNAIRE_LABELS).reduce((acc, k) => ({ ...acc, [k]: '—' }), {}),
+    hasData
+  };
+};
 
 const parseQuestionnaire = (rawVal) => {
   if (!rawVal) return null;
@@ -247,6 +288,12 @@ const CasesPage = ({ isClosedView = false }) => {
   const [confirmAcceptOpen, setConfirmAcceptOpen] = useState(false);
   const [confirmRejectOpen, setConfirmRejectOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // Case Logs Drawer State
+  const [caseLogsDrawerOpen, setCaseLogsDrawerOpen] = useState(false);
+  const [caseLogsLoading, setCaseLogsLoading] = useState(false);
+  const [caseLogsData, setCaseLogsData] = useState([]);
+  const [caseLogsTarget, setCaseLogsTarget] = useState(null); // { id, case_number }
 
   // RTI Modal State
   const [rtiModalOpen, setRtiModalOpen] = useState(false);
@@ -560,9 +607,30 @@ const CasesPage = ({ isClosedView = false }) => {
       setSection134Generating(false);
     }
   };
+  const handleOpenCaseLogs = async (caseId, caseNumber) => {
+    setCaseLogsTarget({ id: caseId, case_number: caseNumber });
+    setCaseLogsDrawerOpen(true);
+    setCaseLogsLoading(true);
+    try {
+      const res = await api.get(`/case-logs/${caseId}`);
+      setCaseLogsData(res.data);
+    } catch (err) {
+      console.error('Failed to fetch case logs:', err);
+      setSnackbar({ open: true, message: 'Failed to load case logs', severity: 'error' });
+      setCaseLogsData([]);
+    } finally {
+      setCaseLogsLoading(false);
+    }
+  };
 
-
-
+  const handleCloseCaseLogs = () => {
+    setCaseLogsDrawerOpen(false);
+    setTimeout(() => {
+      setCaseLogsData([]);
+      setCaseLogsTarget(null);
+    }, 300);
+  };
+  
   // Fetch data on mount
   useEffect(() => {
     fetchData(false);
@@ -687,17 +755,34 @@ const CasesPage = ({ isClosedView = false }) => {
   const handleToggleCaseStatus = async (caseId, newStatus) => {
     try {
       setStatusLoading(true);
-      await api.patch(`/cases/incident-db/${caseId}/status`, { status: newStatus });
+      const response = await api.patch(`/cases/incident-db/${caseId}/status`, { status: newStatus });
       setSnackbar({ open: true, message: `Case status updated to ${newStatus}`, severity: 'success' });
+      
+      const { closure_date, closure_month } = response.data;
+      
       // Update local state for immediate feedback
       if (fullCaseData && fullCaseData.case.id === caseId) {
-        setFullCaseData(prev => ({
-          ...prev,
-          case: { ...prev.case, full_case_status: newStatus }
-        }));
+        setFullCaseData(prev => {
+          const updatedCase = { ...prev.case, full_case_status: newStatus };
+          if (newStatus === 'Closed') {
+            updatedCase.closure_date = closure_date || prev.case.closure_date;
+            updatedCase.closure_month = closure_month || prev.case.closure_month;
+          }
+          return { ...prev, case: updatedCase };
+        });
       }
       setCases(prevCases =>
-        prevCases.map(c => c.id === caseId ? { ...c, full_case_status: newStatus } : c)
+        prevCases.map(c => {
+          if (c.id === caseId) {
+            const updatedCase = { ...c, full_case_status: newStatus };
+            if (newStatus === 'Closed') {
+              updatedCase.closure_date = closure_date || c.closure_date;
+              updatedCase.closure_month = closure_month || c.closure_month;
+            }
+            return updatedCase;
+          }
+          return c;
+        })
       );
     } catch (error) {
       console.error('Error updating case status:', error);
@@ -1216,7 +1301,7 @@ const CasesPage = ({ isClosedView = false }) => {
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Category</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Case Status</TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>TAT Days</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', borderRight: 'none' }}>Last Updated</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', textAlign: 'center', borderRight: 'none' }}>Logs</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1328,11 +1413,33 @@ const CasesPage = ({ isClosedView = false }) => {
                           </Typography>
                         </TableCell>
 
-                        {/* Last Updated */}
-                        <TableCell>
-                          <Typography sx={{ fontSize: '15px', color: '#666' }}>
-                            {formatDate(row.updated_at)}
-                          </Typography>
+                        {/* Logs */}
+                        <TableCell sx={{ textAlign: 'center' }}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<History sx={{ fontSize: 16 }} />}
+                            sx={{
+                              textTransform: 'none',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              borderRadius: '8px',
+                              py: 0.4,
+                              px: 1.5,
+                              borderColor: '#667eea',
+                              color: '#667eea',
+                              '&:hover': {
+                                borderColor: '#5a67d8',
+                                backgroundColor: 'rgba(102, 126, 234, 0.08)',
+                              },
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenCaseLogs(row.id, row.case_number);
+                            }}
+                          >
+                            Case Logs
+                          </Button>
                         </TableCell>
                       </TableRow>
 
@@ -1873,29 +1980,46 @@ const CasesPage = ({ isClosedView = false }) => {
                                 <TableCell sx={{ color: '#2d3748', wordBreak: 'break-word', py: 1.5 }}>
                                   {key.toLowerCase().includes('document') && Array.isArray(val) && val.length > 0 ? (
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                      {val.map((doc, dIdx) => (
-                                        <Button
-                                          key={dIdx}
-                                          size="small"
-                                          variant="outlined"
-                                          component="a"
-                                          href={doc.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          startIcon={<InsertDriveFile fontSize="small" />}
-                                          sx={{ textTransform: 'none', borderRadius: '4px', p: 0.5, px: 1 }}
-                                        >
-                                          Preview {doc.filename || 'Document'}
-                                        </Button>
-                                      ))}
+                                      {val.map((doc, dIdx) => {
+                                        const docUrl = typeof doc === 'string' ? doc : (doc.url || doc.file_url);
+                                        const resolvedUrl = docUrl ? resolveMediaUrl(docUrl) : '#';
+                                        return (
+                                          <Button
+                                            key={dIdx}
+                                            size="small"
+                                            variant="outlined"
+                                            component="a"
+                                            href={resolvedUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            startIcon={<InsertDriveFile fontSize="small" />}
+                                            sx={{ textTransform: 'none', borderRadius: '4px', p: 0.5, px: 1 }}
+                                          >
+                                            Preview {doc.filename || 'Document'}
+                                          </Button>
+                                        );
+                                      })}
                                     </Box>
-                                  ) : (key === 'applied_cs_photos' || key === 'dispatched_photos') ? (
+                                  ) : (key === 'applied_cs_photos' || key === 'cs_received_photos' || key === 'dispatched_photos') ? (
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                                       {(Array.isArray(val) ? val : (typeof val === 'string' && val.trim() ? [{ url: val }] : [])).map((photoObj, idx) => {
-                                        const pUrl = photoObj.preview_url || photoObj.url;
+                                        const pUrl = typeof photoObj === 'string' ? photoObj : (photoObj.preview_url || photoObj.url);
                                         return pUrl ? (
-                                          <Box key={idx} sx={{ width: '150px', cursor: 'pointer' }} onClick={() => setActivePhotoPreview(resolveMediaUrl(pUrl))}>
-                                            <img src={resolveMediaUrl(pUrl)} alt={`${key} ${idx}`} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '8px', display: 'block', border: '1px solid #e2e8f0' }} />
+                                          <Box key={idx} sx={{ width: '150px' }}>
+                                            <Box sx={{ cursor: 'pointer' }} onClick={() => setActivePhotoPreview(resolveMediaUrl(pUrl))}>
+                                              <img src={resolveMediaUrl(pUrl)} alt={`${key} ${idx}`} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '8px', display: 'block', border: '1px solid #e2e8f0' }} />
+                                            </Box>
+                                            <Button
+                                              size="small"
+                                              variant="outlined"
+                                              component="a"
+                                              href={resolveMediaUrl(pUrl)}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              sx={{ mt: 1, width: '100%', textTransform: 'none' }}
+                                            >
+                                              Preview Photo
+                                            </Button>
                                           </Box>
                                         ) : null;
                                       })}
@@ -1927,12 +2051,9 @@ const CasesPage = ({ isClosedView = false }) => {
                 </Paper>
 
                 {/* Dedicated Questionnaire Form Section */}
-                {reviewData.check_type?.toLowerCase() !== 'chargesheet' && (() => {
+                {['claimant', 'insured', 'driver'].includes(reviewData.check_type?.toLowerCase()) && (() => {
                   const qData = parseQuestionnaire(reviewData?.check?.questionnaire);
-                  const hasData = qData && typeof qData === 'object' && Object.keys(qData).length > 0;
-                  const displayObj = hasData
-                    ? qData
-                    : Object.keys(QUESTIONNAIRE_LABELS).reduce((acc, k) => ({ ...acc, [k]: '—' }), {});
+                  const { displayObj, hasData } = getQuestionnaireDisplayObj(reviewData.check_type, qData);
 
                   return (
                     <Paper elevation={0} sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #e2e8f0', bgcolor: '#fff' }}>
@@ -2663,21 +2784,78 @@ const CasesPage = ({ isClosedView = false }) => {
                                       <TableBody>
                                         {Object.entries(checkData)
                                           .filter(([k]) => !['id', 'case_id', 'created_at', 'updated_at', 'vendor_evidence', 'evidence', 'evidence_photos', 'statement_audio', 'statement_audio_url', 'statement', 'statement_mr', 'statement_en', 'statement_entries', 'vendor_documents', 'documents', 'assigned_vendor_name', 'questionnaire'].includes(k))
-                                          .map(([key, val], idx) => {
+                                          .map(([key, rawVal], idx) => {
+                                            // Parse JSON strings into arrays/objects
+                                            let val = rawVal;
+                                            if (typeof rawVal === 'string' && rawVal.startsWith('[') && rawVal.endsWith(']')) {
+                                              try { val = JSON.parse(rawVal); } catch (e) { }
+                                            }
+
+                                            const isPhotoField = key === 'applied_cs_photos' || key === 'cs_received_photos' || key === 'dispatched_photos';
+                                            const isDocField = key.toLowerCase().includes('document') && Array.isArray(val) && val.length > 0;
+                                            const isUrlString = typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/media/'));
+
+                                            // Fallback display value for non-special fields
                                             const displayVal = val === null || val === undefined || val === '' || val === '[]' || val === '{}'
                                               ? 'N/A'
                                               : Array.isArray(val)
-                                                ? val.join(', ')
-                                                : typeof val === 'object'
+                                                ? (val.length > 0 ? val.map(item => typeof item === 'object' ? JSON.stringify(item) : item).join(', ') : 'N/A')
+                                                : typeof val === 'object' && val !== null
                                                   ? JSON.stringify(val)
                                                   : String(val);
+
+                                            // Build cell content
+                                            let cellContent;
+                                            if (isPhotoField && Array.isArray(val) && val.length > 0) {
+                                              cellContent = (
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                                                  {val.map((photoObj, pIdx) => {
+                                                    const pUrl = typeof photoObj === 'string' ? photoObj : (photoObj.preview_url || photoObj.url);
+                                                    if (!pUrl) return null;
+                                                    return (
+                                                      <Box key={pIdx} sx={{ width: '140px' }}>
+                                                        <Box sx={{ cursor: 'pointer', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }} onClick={() => setActivePhotoPreview(resolveMediaUrl(pUrl))}>
+                                                          <img src={resolveMediaUrl(pUrl)} alt={`${key} ${pIdx + 1}`} style={{ width: '100%', height: '95px', objectFit: 'cover', display: 'block' }} />
+                                                        </Box>
+                                                        <Button size="small" variant="outlined" component="a" href={resolveMediaUrl(pUrl)} target="_blank" rel="noopener noreferrer" sx={{ mt: 0.5, width: '100%', textTransform: 'none', fontSize: '11px' }}>
+                                                          Preview
+                                                        </Button>
+                                                      </Box>
+                                                    );
+                                                  })}
+                                                </Box>
+                                              );
+                                            } else if (isDocField) {
+                                              cellContent = (
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                                  {val.map((doc, dIdx) => {
+                                                    const docUrl = typeof doc === 'string' ? doc : (doc.url || doc.file_url);
+                                                    const resolved = docUrl ? resolveMediaUrl(docUrl) : '#';
+                                                    return (
+                                                      <Button key={dIdx} size="small" variant="outlined" component="a" href={resolved} target="_blank" rel="noopener noreferrer" startIcon={<InsertDriveFile fontSize="small" />} sx={{ textTransform: 'none', borderRadius: '4px', p: 0.5, px: 1 }}>
+                                                        Preview {(typeof doc === 'object' && doc.filename) || `Document ${dIdx + 1}`}
+                                                      </Button>
+                                                    );
+                                                  })}
+                                                </Box>
+                                              );
+                                            } else if (isUrlString) {
+                                              cellContent = (
+                                                <Button size="small" variant="outlined" component="a" href={resolveMediaUrl(val)} target="_blank" rel="noopener noreferrer" startIcon={<InsertDriveFile fontSize="small" />} sx={{ textTransform: 'none', borderRadius: '4px', p: 0.5, px: 1 }}>
+                                                  Preview
+                                                </Button>
+                                              );
+                                            } else {
+                                              cellContent = displayVal;
+                                            }
+
                                             return (
                                               <TableRow key={key} sx={{ bgcolor: idx % 2 === 0 ? '#f8fafc' : '#ffffff' }}>
                                                 <TableCell component="th" sx={{ width: '35%', fontWeight: 600, color: '#475569', textTransform: 'capitalize', borderRight: '1px solid #e2e8f0', py: 1.2 }}>
                                                   {key.replace(/_/g, ' ')}
                                                 </TableCell>
                                                 <TableCell sx={{ color: '#0f172a', fontWeight: 500, py: 1.2, wordBreak: 'break-word' }}>
-                                                  {displayVal}
+                                                  {cellContent}
                                                 </TableCell>
                                               </TableRow>
                                             );
@@ -2688,12 +2866,9 @@ const CasesPage = ({ isClosedView = false }) => {
                                 </Paper>
 
                                 {/* Dedicated Questionnaire Form Section */}
-                                {(() => {
+                                {['claimant', 'insured', 'driver'].includes(currentCheckObj.check_type?.toLowerCase()) && (() => {
                                   const qData = parseQuestionnaire(checkData?.questionnaire);
-                                  const hasData = qData && typeof qData === 'object' && Object.keys(qData).length > 0;
-                                  const displayObj = hasData
-                                    ? qData
-                                    : Object.keys(QUESTIONNAIRE_LABELS).reduce((acc, k) => ({ ...acc, [k]: '—' }), {});
+                                  const { displayObj, hasData } = getQuestionnaireDisplayObj(currentCheckObj.check_type, qData);
 
                                   return (
                                     <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)' }}>
@@ -3355,8 +3530,12 @@ const CasesPage = ({ isClosedView = false }) => {
                         label="Contact Number"
                         size="small"
                         value={rtoDocForm.contactNumber}
-                        onChange={(e) => setRtoDocForm({ ...rtoDocForm, contactNumber: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setRtoDocForm({ ...rtoDocForm, contactNumber: val });
+                        }}
                         placeholder="Enter Contact Number"
+                        inputProps={{ maxLength: 10 }}
                       />
                     </Grid>
                     <Grid item xs={12} sm={4}>
@@ -3401,6 +3580,72 @@ const CasesPage = ({ isClosedView = false }) => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Case Logs Drawer */}
+        <Drawer
+          anchor="right"
+          open={caseLogsDrawerOpen}
+          onClose={handleCloseCaseLogs}
+          PaperProps={{
+            sx: { width: { xs: '100%', sm: 450, md: 550 }, backgroundColor: '#f8fafc' }
+          }}
+        >
+          <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <History sx={{ color: '#667eea' }} />
+                Case Logs {caseLogsTarget ? `- ${caseLogsTarget.case_number}` : ''}
+              </Typography>
+              <IconButton onClick={handleCloseCaseLogs} size="small">
+                <Close />
+              </IconButton>
+            </Box>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {caseLogsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : caseLogsData.length === 0 ? (
+              <Box sx={{ textAlign: 'center', my: 4, color: '#64748b' }}>
+                <Typography>No logs available for this case.</Typography>
+              </Box>
+            ) : (
+              <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                <Stack spacing={2}>
+                  {caseLogsData.map((log) => (
+                    <Paper key={log.id} elevation={0} sx={{ p: 1.5, border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1.5, mb: log.check_type ? 0.5 : 0 }}>
+                        <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#334155', flex: 1 }}>
+                          {log.description}
+                        </Typography>
+                        <Typography sx={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap', flexShrink: 0, mt: '2px' }}>
+                          {new Date(log.event_time).toLocaleString()}
+                        </Typography>
+                      </Box>
+                      
+                      {log.check_type && (
+                        <Typography sx={{ fontSize: '12px', color: '#64748b', mb: 0 }}>
+                          <strong>Check:</strong> {log.check_type}
+                        </Typography>
+                      )}
+
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, pt: 0.75, borderTop: '1px dashed #cbd5e1' }}>
+                        <Typography sx={{ fontSize: '11px', color: '#64748b' }}>
+                          <strong>By:</strong> {log.actor} {log.actor_role ? `(${log.actor_role})` : ''}
+                        </Typography>
+                        <Typography sx={{ fontSize: '11px', color: '#64748b', ml: 'auto' }}>
+                          <strong>Source:</strong> {log.source}
+                        </Typography>
+                      </Box>
+                    </Paper>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+          </Box>
+        </Drawer>
 
         {/* Snackbar for Notifications */}
         <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>

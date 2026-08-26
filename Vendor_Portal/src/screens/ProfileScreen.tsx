@@ -75,10 +75,17 @@ export default function ProfileScreen() {
           <TextInput
             style={styles.input}
             value={formData[field as keyof typeof formData]}
-            onChangeText={(text) => setFormData({ ...formData, [field]: text })}
+            onChangeText={(text) => {
+              if (field === 'phone') {
+                setFormData({ ...formData, [field]: text.replace(/\D/g, '').slice(0, 10) });
+              } else {
+                setFormData({ ...formData, [field]: text });
+              }
+            }}
             placeholder={`Enter ${label.toLowerCase()}`}
             placeholderTextColor={theme.colors.textMuted}
             editable={field !== 'email'}
+            maxLength={field === 'phone' ? 10 : undefined}
           />
         </View>
       );

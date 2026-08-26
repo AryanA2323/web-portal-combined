@@ -25,6 +25,7 @@ import QCLayout from './components/QCLayout';
 import QCNotificationBell from './components/QCNotificationBell';
 import api from '../../services/api';
 import AlertMessage from '../../components/common/AlertMessage';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 const LogsPage = () => {
   const [logs, setLogs] = useState([]);
@@ -56,6 +57,9 @@ const LogsPage = () => {
   useEffect(() => {
     fetchLogs();
   }, []);
+
+  useAutoRefresh(fetchLogs);
+
 
   const getStatusColor = (action) => {
     switch (action.toLowerCase()) {

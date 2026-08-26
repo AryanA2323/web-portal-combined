@@ -23,6 +23,7 @@ import { FileDownload, History, Refresh, Search } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
 import AlertMessage from '../../components/common/AlertMessage';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 import { NotificationBell } from '../../components/case_manager';
 
 const eventTypeColor = {
@@ -33,6 +34,12 @@ const eventTypeColor = {
   AI_REPORT_GENERATED: '#2b8a3e',
   QC_ACCEPTED_REPORT: '#2f9e44',
   QC_REJECTED_REPORT: '#e03131',
+  FIELD_UPDATED: '#667eea',
+  VENDOR_REASSIGNED: '#f56565',
+  CHECK_REVIEWED: '#48bb78',
+  MEDIA_UPLOADED: '#4299e1',
+  CHECK_SUBMITTED: '#ed8936',
+  VENDOR_STATUS_CHANGE: '#9f7aea',
 };
 
 const formatEventType = (value) => {
@@ -71,13 +78,9 @@ const AuditLogsPage = () => {
 
   useEffect(() => {
     fetchAuditLogs();
-
-    const intervalId = setInterval(() => {
-      fetchAuditLogs();
-    }, 15000);
-
-    return () => clearInterval(intervalId);
   }, []);
+
+  useAutoRefresh(fetchAuditLogs);
 
   const filteredLogs = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();

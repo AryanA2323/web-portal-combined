@@ -29,7 +29,7 @@ const checkStatusColors: Record<string, { solid: string; soft: string; icon: key
   'not found': { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
   Completed: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   Verified: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
-  'Failed': { solid: '#EF4444', soft: '#FEE2E2', icon: 'close-octagon-outline' },
+  'Unable to Verify': { solid: '#EF4444', soft: '#FEE2E2', icon: 'close-octagon-outline' },
   Reassigned: { solid: '#D64545', soft: '#FDECEC', icon: 'refresh' },
   'Not Initiated': { solid: '#71839A', soft: '#EEF3F8', icon: 'clock-outline' },
   Stop: { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
@@ -69,7 +69,7 @@ export default function CompletedScreen() {
   const [showToPicker, setShowToPicker] = useState(false);
 
   const activeChecks = useMemo(() => {
-    let filtered = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Failed');
+    let filtered = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Unable to Verify');
     
     if (fromDate) {
       const startOfDay = new Date(fromDate);
@@ -133,7 +133,7 @@ export default function CompletedScreen() {
   const summary = useMemo(() => {
     const totalChecks = checks.length;
     const wipChecks = checks.filter((c: any) => c.check_status === 'WIP').length;
-    const completedChecks = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Failed').length;
+    const completedChecks = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Unable to Verify').length;
     const notInitiated = checks.filter((c: any) => c.check_status === 'Not Initiated').length;
     return { totalChecks, wipChecks, completedChecks, notInitiated };
   }, [checks]);

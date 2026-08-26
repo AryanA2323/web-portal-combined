@@ -652,14 +652,14 @@ _CHECK_DETAIL_COLUMNS = {
                      cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
                      cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
                      cs.questionnaire, cs.vendor_feedback, cs.negative_status,
-                     cs.applied_cs_photos, cs.dispatched_photos, cs.advocate_remark''',
+                     cs.applied_cs_photos, cs.cs_received_photos, cs.dispatched_photos, cs.advocate_remark''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','advocate_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
                     'police_station_name','court_district','court_case_no',
                     'statement','triggers','evidence','vendor_documents','case_documents',
                     'questionnaire','vendor_feedback','negative_status',
-                    'applied_cs_photos','dispatched_photos','advocate_remark'],
+                    'applied_cs_photos','cs_received_photos','dispatched_photos','advocate_remark'],
     },
     'chargesheet_checks': {
         'select': '''cs.id, cs.case_id, cs.check_status, cs.advocate_status,
@@ -669,14 +669,14 @@ _CHECK_DETAIL_COLUMNS = {
                      cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
                      cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
                      cs.questionnaire, cs.vendor_feedback, cs.negative_status,
-                     cs.applied_cs_photos, cs.dispatched_photos, cs.advocate_remark''',
+                     cs.applied_cs_photos, cs.cs_received_photos, cs.dispatched_photos, cs.advocate_remark''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','advocate_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
                     'police_station_name','court_district','court_case_no',
                     'statement','triggers','evidence','vendor_documents','case_documents',
                     'questionnaire','vendor_feedback','negative_status',
-                    'applied_cs_photos','dispatched_photos','advocate_remark'],
+                    'applied_cs_photos','cs_received_photos','dispatched_photos','advocate_remark'],
     },
     'rti_checks': {
         'select': '''rt.id, rt.case_id, rt.check_status,
@@ -1161,8 +1161,8 @@ def get_vendor_check_detail_by_id(request: HttpRequest, check_id: int, check_typ
                 else None
             )
 
-            # Normalize advocate chargesheet photos (applied_cs_photos, dispatched_photos)
-            for photo_field in ('applied_cs_photos', 'dispatched_photos'):
+            # Normalize advocate chargesheet photos (applied_cs_photos, cs_received_photos, dispatched_photos)
+            for photo_field in ('applied_cs_photos', 'cs_received_photos', 'dispatched_photos'):
                 raw_photos = check_detail.get(photo_field)
                 photo_list = parse_json_list(raw_photos) if raw_photos else []
                 normalized = []
@@ -1214,7 +1214,7 @@ def _evaluate_and_update_check_status(cursor, table: str, check_id: int, check_t
     # Based on incident_case_db.py, VALID_CHECK_TYPES. RTI and RTO might not need statements depending on the schema, but the safest way is to check if the statement column is filled if it exists.
     # Actually, let's check _statement_entries_column_exists
     statement_done = True
-    if _statement_entries_column_exists(table):
+    if _statement_entries_column_exists(table) and check_type != 'spot':
         # Check if there are any statement entries
         stmt_count = _get_statement_entries_count(table, check_id)
         if stmt_count == 0:
@@ -1250,6 +1250,8 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
     photo_category = request.POST.get('photo_category', '') or request.GET.get('photo_category', '')
     if table == 'chargesheets' and photo_category == 'applied_cs':
         evidence_column = 'applied_cs_photos'
+    elif table == 'chargesheets' and photo_category == 'cs_received':
+        evidence_column = 'cs_received_photos'
     elif table == 'chargesheets' and photo_category == 'dispatched':
         evidence_column = 'dispatched_photos'
     else:
@@ -1458,7 +1460,7 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
             error_response, _, _, _, _ = _validate_vendor_check_assignment(request, case_id, check_type)
             can_add_statement = (error_response is None)
             
-            if can_add_statement:
+            if can_add_statement and check_type != 'spot':
                 from users.api.vendor_cases import _statement_entries_column_exists, _get_statement_entries_count
                 if _statement_entries_column_exists(table):
                     stmt_count = _get_statement_entries_count(table, check_id)
@@ -1467,10 +1469,36 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
 
             # Update check_status
             target_status = 'Verified' if table == 'rto_checks' else 'Under Verification'
+            
+            cursor.execute(f"SELECT check_status FROM {table} WHERE id = %s", [check_id])
+            old_status_row = cursor.fetchone()
+            old_status = old_status_row[0] if old_status_row else ''
+
             cursor.execute(f"""
                 UPDATE {table} SET check_status = %s, updated_at = NOW()
                 WHERE id = %s
             """, [target_status, check_id])
+            
+            from users.api.cases import _record_case_log
+            actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+            cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+            case_row = cursor.fetchone()
+            case_number = case_row[0] if case_row and case_row[0] else str(case_id)
+            
+            _record_case_log(
+                case_id=case_id,
+                case_number=case_number,
+                event_type='CHECK_SUBMITTED',
+                check_type=check_type,
+                field_name='check_status',
+                old_value=old_status,
+                new_value=target_status,
+                description=f"Vendor completed check",
+                actor_id=request.user.id,
+                actor_name=actor_name,
+                actor_role=getattr(request.user, 'role', ''),
+                source='Vendor Portal'
+            )
 
             # --- Insured cum driver: also complete the paired check ---
             if table in ('insured_checks', 'driver_checks'):
@@ -1548,9 +1576,9 @@ def vendor_check_status_update(request: HttpRequest, case_id: int, check_type: s
     # Map status aliases (like 'REJECTED' / 'FAILED') to DB check constraint values ('Stop', etc.)
     status_map = {
         'REJECTED': 'Stop',
-        'FAILED': 'Failed' if table == 'rto_checks' else 'Stop',
-        'FAILED SUBMIT': 'Failed' if table == 'rto_checks' else 'Stop',
-        'FAIL': 'Failed' if table == 'rto_checks' else 'Stop',
+        'FAILED': 'Unable to Verify' if table == 'rto_checks' else 'Stop',
+        'FAILED SUBMIT': 'Unable to Verify' if table == 'rto_checks' else 'Stop',
+        'FAIL': 'Unable to Verify' if table == 'rto_checks' else 'Stop',
     }
     db_status = status_map.get(new_status.upper(), new_status)
 
@@ -1566,7 +1594,14 @@ def vendor_check_status_update(request: HttpRequest, case_id: int, check_type: s
                 return 404, {"error": "Check not found or not assigned to you"}
 
             check_id = row[0]
+            
+            status_col = 'advocate_status' if table == 'chargesheets' else 'check_status'
+            cursor.execute(f"SELECT {status_col} FROM {table} WHERE id = %s", [check_id])
+            old_status_row = cursor.fetchone()
+            old_status = old_status_row[0] if old_status_row else ''
+
             if table == 'chargesheets':
+
                 cursor.execute(
                     f"UPDATE {table} SET advocate_status = %s, advocate_remark = %s, updated_at = NOW() WHERE id = %s",
                     [db_status, payload.advocate_remark or '', check_id],
@@ -1575,6 +1610,27 @@ def vendor_check_status_update(request: HttpRequest, case_id: int, check_type: s
                 cursor.execute(
                     f"UPDATE {table} SET check_status = %s, updated_at = NOW() WHERE id = %s",
                     [db_status, check_id],
+                )
+                
+            if str(old_status) != str(db_status):
+                from users.api.cases import _record_case_log
+                actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+                case_row = cursor.fetchone()
+                case_number = case_row[0] if case_row and case_row[0] else str(case_id)
+                _record_case_log(
+                    case_id=case_id,
+                    case_number=case_number,
+                    event_type='VENDOR_STATUS_CHANGE',
+                    check_type=check_type,
+                    field_name=status_col,
+                    old_value=old_status,
+                    new_value=db_status,
+                    description=f"Vendor updated check status to {db_status}",
+                    actor_id=request.user.id,
+                    actor_name=actor_name,
+                    actor_role=getattr(request.user, 'role', ''),
+                    source='Vendor Portal'
                 )
     except Exception as e:
         logger.error(f"Failed to update check_status for case_id={case_id} check_type={check_type}: {e}", exc_info=True)
@@ -1725,6 +1781,8 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
     photo_category = request.GET.get('photo_category', '')
     if table == 'chargesheets' and photo_category == 'applied_cs':
         evidence_column = 'applied_cs_photos'
+    elif table == 'chargesheets' and photo_category == 'cs_received':
+        evidence_column = 'cs_received_photos'
     elif table == 'chargesheets' and photo_category == 'dispatched':
         evidence_column = 'dispatched_photos'
     else:
