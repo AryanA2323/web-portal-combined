@@ -14,9 +14,9 @@ caseManager_path = os.environ.get('DJANGO_ADMIN_PATH', 'caseManager').strip('/')
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    re_path(r'^api/media/(?P<path>.*)$', serve_media, {'document_root': settings.MEDIA_ROOT}),
     path('api/', api.urls),
     re_path(r'^media/(?P<path>.*)$', serve_media, {'document_root': settings.MEDIA_ROOT}),
-    re_path(r'^api/media/(?P<path>.*)$', serve_media, {'document_root': settings.MEDIA_ROOT}),
 ]
 
 # Serve static files in development
