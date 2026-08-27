@@ -75,7 +75,7 @@ const resolveMediaUrl = (url) => {
   const baseUrl = api.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api';
   const cleanBase = baseUrl.endsWith('/api') ? baseUrl : baseUrl.replace(/\/+$/, '') + '/api';
   // Route through /api/media/ so VPS Passenger routing picks it up
-  const mediaPath = url.startsWith('/media/') ? url.slice(7) : url.startsWith('media/') ? url.slice(6) : url.replace(/^\/+/, '');
+  const mediaPath = url.startsWith('/api/media/') ? url.slice(11) : url.startsWith('/media/') ? url.slice(7) : url.startsWith('media/') ? url.slice(6) : url.replace(/^\/+/, '');
   return `${cleanBase}/media/${mediaPath}`;
 };
 
@@ -2136,7 +2136,7 @@ const CasesPage = ({ isClosedView = false }) => {
                           <Grid item xs={6} sm={4} md={3} key={pIdx}>
                             <Paper
                               elevation={0}
-                              onClick={() => setActivePhotoPreview(photo.preview_url || photo.url)}
+                              onClick={() => setActivePhotoPreview(resolveMediaUrl(photo.preview_url || photo.url))}
                               sx={{
                                 border: '1px solid #e2e8f0',
                                 borderRadius: '8px',
@@ -2148,7 +2148,7 @@ const CasesPage = ({ isClosedView = false }) => {
                             >
                               <Box
                                 component="img"
-                                src={photo.preview_url || photo.url}
+                                src={resolveMediaUrl(photo.preview_url || photo.url)}
                                 alt={photo.filename || `Visit Photo ${pIdx + 1}`}
                                 sx={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block', bgcolor: '#f7fafc' }}
                                 onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=Image+Error'; }}

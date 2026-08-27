@@ -70,8 +70,8 @@ const resolveMediaUrl = (rawUrl) => {
   if (!rawUrl) return '';
   if (rawUrl.startsWith('data:') || rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
 
-  // Strip leading /media/ or media/ to get the clean path
-  const mediaPath = rawUrl.startsWith('/media/') ? rawUrl.slice(7) : rawUrl.startsWith('media/') ? rawUrl.slice(6) : rawUrl.replace(/^\/+/, '');
+  // Strip leading /api/media/, /media/, or media/ to get the clean path
+  const mediaPath = rawUrl.startsWith('/api/media/') ? rawUrl.slice(11) : rawUrl.startsWith('/media/') ? rawUrl.slice(7) : rawUrl.startsWith('media/') ? rawUrl.slice(6) : rawUrl.replace(/^\/+/, '');
 
   const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
   try {

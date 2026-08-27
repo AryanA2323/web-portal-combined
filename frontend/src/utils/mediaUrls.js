@@ -20,8 +20,8 @@ export const resolveEvidencePhotoUrl = (photoUrl) => {
   if (photoUrl.startsWith('data:')) return photoUrl;
   if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) return photoUrl;
 
-  // Strip leading /media/ or media/ to get the clean path
-  const mediaPath = photoUrl.startsWith('/media/') ? photoUrl.slice(7) : photoUrl.startsWith('media/') ? photoUrl.slice(6) : photoUrl.replace(/^\/+/, '');
+  // Strip leading /api/media/, /media/, or media/ to get the clean path
+  const mediaPath = photoUrl.startsWith('/api/media/') ? photoUrl.slice(11) : photoUrl.startsWith('/media/') ? photoUrl.slice(7) : photoUrl.startsWith('media/') ? photoUrl.slice(6) : photoUrl.replace(/^\/+/, '');
 
   return `${getApiBase()}/media/${mediaPath}`;
 };
