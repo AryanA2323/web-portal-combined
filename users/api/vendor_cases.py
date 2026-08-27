@@ -430,13 +430,13 @@ def build_absolute_media_url(request: HttpRequest, raw_url: str) -> str:
         return str(raw_url)
 
     normalized_path = str(raw_url)
-    # Strip any leading /media/ or media/ to get the clean relative path
-    if normalized_path.startswith("/media/"):
+    # Strip any leading /api/media/, /media/, or media/ to get the clean relative path
+    if normalized_path.startswith("/api/media/"):
+        normalized_path = normalized_path[11:]
+    elif normalized_path.startswith("/media/"):
         normalized_path = normalized_path[7:]
     elif normalized_path.startswith("media/"):
         normalized_path = normalized_path[6:]
-    elif normalized_path.startswith("/api/media/"):
-        normalized_path = normalized_path[11:]
     elif normalized_path.startswith("/"):
         normalized_path = normalized_path[1:]
 
