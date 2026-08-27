@@ -8,13 +8,14 @@ from django.urls import path, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from core.api import api
-from core.media_serve import serve_media
+from core.media_serve import serve_media, download_file
 
 caseManager_path = os.environ.get('DJANGO_ADMIN_PATH', 'caseManager').strip('/') or 'caseManager'
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     re_path(r'^api/media/(?P<path>.*)$', serve_media, {'document_root': settings.MEDIA_ROOT}),
+    path('api/download-file', download_file, name='download_file'),
     path('api/', api.urls),
     re_path(r'^media/(?P<path>.*)$', serve_media, {'document_root': settings.MEDIA_ROOT}),
 ]

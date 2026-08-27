@@ -3030,7 +3030,7 @@ const CasesPage = ({ isClosedView = false }) => {
                                               <Button
                                                 variant="outlined"
                                                 size="small"
-                                                onClick={() => window.open(doc.url || doc.preview_url || doc.file_url, '_blank')}
+                                                onClick={() => window.open(resolveMediaUrl(doc.url || doc.preview_url || doc.file_url), '_blank')}
                                                 sx={{ mt: 'auto', textTransform: 'none', borderRadius: '6px' }}
                                               >
                                                 View Document
@@ -3414,7 +3414,7 @@ const CasesPage = ({ isClosedView = false }) => {
                               <Button
                                 variant="outlined"
                                 size="small"
-                                onClick={() => window.open(doc.url || doc.preview_url || doc.file_url, '_blank')}
+                                onClick={() => window.open(resolveMediaUrl(doc.url || doc.preview_url || doc.file_url), '_blank')}
                                 sx={{ mt: 'auto', textTransform: 'none', borderRadius: '6px', color: '#166534', borderColor: '#166534' }}
                               >
                                 View Document

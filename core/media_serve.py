@@ -26,8 +26,9 @@ def serve_media(request, path, document_root=None):
     Serve media files with support for HTTP Range requests (partial content).
     This is essential for audio/video playback in browsers.
     """
-    # Normalise path (prevent directory traversal)
-    path = posixpath.normpath(path).lstrip("/")
+    # Normalise path (prevent directory traversal) and URL decode it
+    from urllib.parse import unquote
+    path = posixpath.normpath(unquote(path)).lstrip("/")
     fullpath = Path(document_root) / path
 
     if not fullpath.exists() or fullpath.is_dir():
@@ -103,4 +104,56 @@ def serve_media(request, path, document_root=None):
     response["Access-Control-Expose-Headers"] = (
         "Content-Range, Accept-Ranges, Content-Length"
     )
+    return response
+
+
+def download_file(request):
+    """
+    Handle forcing a file download with Content-Disposition.
+    Required for Vendor Portal's /api/download-file endpoint.
+    """
+    from django.conf import settings
+    from urllib.parse import unquote
+
+    raw_url = request.GET.get('file_url')
+    filename = request.GET.get('filename', 'document')
+
+    if not raw_url:
+        raise Http404("Missing file_url parameter")
+
+    # Normalize the path from the URL
+    path = str(raw_url)
+    if path.startswith(("http://", "https://")):
+        from urllib.parse import urlparse
+        path = urlparse(path).path
+
+    if path.startswith("/api/media/"):
+        path = path[11:]
+    elif path.startswith("/media/"):
+        path = path[7:]
+    elif path.startswith("media/"):
+        path = path[6:]
+    
+    path = posixpath.normpath(unquote(path)).lstrip("/")
+    fullpath = Path(settings.MEDIA_ROOT) / path
+
+    if not fullpath.exists() or fullpath.is_dir():
+        raise Http404("File not found")
+
+    fullpath = fullpath.resolve()
+    if not str(fullpath).startswith(str(Path(settings.MEDIA_ROOT).resolve())):
+        raise Http404("Access denied")
+
+    content_type, _ = mimetypes.guess_type(str(fullpath))
+    content_type = content_type or "application/octet-stream"
+
+    response = FileResponse(
+        open(fullpath, "rb"),
+        as_attachment=True,
+        filename=filename,
+        content_type=content_type
+    )
+    
+    response["Content-Length"] = str(fullpath.stat().st_size)
+    response["Access-Control-Allow-Origin"] = "*"
     return response
