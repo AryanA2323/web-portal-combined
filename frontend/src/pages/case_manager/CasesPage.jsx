@@ -71,11 +71,29 @@ import { NotificationBell } from '../../components/case_manager';
 
 const resolveMediaUrl = (url) => {
   if (!url) return '';
-  if (url.startsWith('http')) return url;
+  
   const baseUrl = api.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api';
   const cleanBase = baseUrl.endsWith('/api') ? baseUrl : baseUrl.replace(/\/+$/, '') + '/api';
-  // Route through /api/media/ so VPS Passenger routing picks it up
-  const mediaPath = url.startsWith('/api/media/') ? url.slice(11) : url.startsWith('/media/') ? url.slice(7) : url.startsWith('media/') ? url.slice(6) : url.replace(/^\/+/, '');
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    if (url.includes('api.claimverify.shovelsolutions.in')) {
+      let fixedUrl = url.replace('http://', 'https://');
+      fixedUrl = fixedUrl.replace('/api/media/api/media/', '/api/media/');
+      return fixedUrl;
+    }
+    return url;
+  }
+  
+  if (url.startsWith('data:')) return url;
+
+  let mediaPath = url.replace(/^\/+/, '');
+  if (mediaPath.startsWith('api/media/')) {
+    mediaPath = mediaPath.slice(10);
+  } else if (mediaPath.startsWith('media/')) {
+    mediaPath = mediaPath.slice(6);
+  }
+  mediaPath = mediaPath.replace(/^\/+/, '');
+
   return `${cleanBase}/media/${mediaPath}`;
 };
 

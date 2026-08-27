@@ -15,13 +15,34 @@ export const getEvidencePhotoUrl = (photo) => {
   return photo.preview_url || photo.url || photo.photo_url || '';
 };
 
-export const resolveEvidencePhotoUrl = (photoUrl) => {
-  if (!photoUrl) return '';
-  if (photoUrl.startsWith('data:')) return photoUrl;
-  if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) return photoUrl;
+export const resolveEvidencePhotoUrl = (rawUrl) => {
+  if (!rawUrl) return '';
+  
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+  const cleanBase = baseUrl.endsWith('/api') ? baseUrl : baseUrl.replace(/\/+$/, '') + '/api';
 
-  // Strip leading /api/media/, /media/, or media/ to get the clean path
-  const mediaPath = photoUrl.startsWith('/api/media/') ? photoUrl.slice(11) : photoUrl.startsWith('/media/') ? photoUrl.slice(7) : photoUrl.startsWith('media/') ? photoUrl.slice(6) : photoUrl.replace(/^\/+/, '');
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    if (rawUrl.includes('api.claimverify.shovelsolutions.in')) {
+      let fixedUrl = rawUrl.replace('http://', 'https://');
+      fixedUrl = fixedUrl.replace('/api/media/api/media/', '/api/media/');
+      return fixedUrl;
+    }
+    return rawUrl;
+  }
+  
+  if (rawUrl.startsWith('data:')) return rawUrl;
 
-  return `${getApiBase()}/media/${mediaPath}`;
+  let mediaPath = rawUrl.replace(/^\/+/, '');
+  if (mediaPath.startsWith('api/media/')) {
+    mediaPath = mediaPath.slice(10);
+  } else if (mediaPath.startsWith('media/')) {
+    mediaPath = mediaPath.slice(6);
+  }
+  mediaPath = mediaPath.replace(/^\/+/, '');
+
+  try {
+    return `${cleanBase}/media/${mediaPath}`;
+  } catch (e) {
+    return rawUrl;
+  }
 };

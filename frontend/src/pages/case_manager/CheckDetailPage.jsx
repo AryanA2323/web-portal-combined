@@ -68,17 +68,32 @@ import { NotificationBell } from '../../components/case_manager';
 // Helper to resolve media URLs to full backend origin so audio & images load properly
 const resolveMediaUrl = (rawUrl) => {
   if (!rawUrl) return '';
-  if (rawUrl.startsWith('data:') || rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
+  
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+  const cleanBase = baseUrl.endsWith('/api') ? baseUrl : baseUrl.replace(/\/+$/, '') + '/api';
 
-  // Strip leading /api/media/, /media/, or media/ to get the clean path
-  const mediaPath = rawUrl.startsWith('/api/media/') ? rawUrl.slice(11) : rawUrl.startsWith('/media/') ? rawUrl.slice(7) : rawUrl.startsWith('media/') ? rawUrl.slice(6) : rawUrl.replace(/^\/+/, '');
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    if (rawUrl.includes('api.claimverify.shovelsolutions.in')) {
+      let fixedUrl = rawUrl.replace('http://', 'https://');
+      fixedUrl = fixedUrl.replace('/api/media/api/media/', '/api/media/');
+      return fixedUrl;
+    }
+    return rawUrl;
+  }
+  
+  if (rawUrl.startsWith('data:')) return rawUrl;
 
-  const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
+  let mediaPath = rawUrl.replace(/^\/+/, '');
+  if (mediaPath.startsWith('api/media/')) {
+    mediaPath = mediaPath.slice(10);
+  } else if (mediaPath.startsWith('media/')) {
+    mediaPath = mediaPath.slice(6);
+  }
+  mediaPath = mediaPath.replace(/^\/+/, '');
+
   try {
-    const baseUrl = new URL(apiBase, window.location.origin).href.replace(/\/+$/, '');
-    const cleanBase = baseUrl.endsWith('/api') ? baseUrl : baseUrl + '/api';
     return `${cleanBase}/media/${mediaPath}`;
-  } catch {
+  } catch (e) {
     return `http://localhost:8001/api/media/${mediaPath}`;
   }
 };
