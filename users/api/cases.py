@@ -30,21 +30,36 @@ def _build_absolute_media_url(request: HttpRequest, raw_url: str) -> str:
     """Build an absolute media URL using the current request host."""
     if not raw_url:
         return ""
-    if str(raw_url).startswith(("http://", "https://")):
-        return str(raw_url)
 
-    normalized_path = str(raw_url).lstrip("/")
+    url_str = str(raw_url)
+
+    # If already an absolute URL, fix any double api/media/ paths and ensure https
+    if url_str.startswith(("http://", "https://")):
+        # Fix double api/media/ paths that may have been saved to the DB
+        while "/api/media/api/media/" in url_str:
+            url_str = url_str.replace("/api/media/api/media/", "/api/media/")
+        # Ensure https for production
+        if "claimverify.shovelsolutions.in" in url_str:
+            url_str = url_str.replace("http://", "https://")
+        return url_str
+
+    normalized_path = url_str.lstrip("/")
     
     # Strip any leading api/media/ or media/ to get the clean relative path
-    if normalized_path.startswith("api/media/"):
+    # Loop to handle multiple prefixes e.g. api/media/api/media/...
+    while normalized_path.startswith("api/media/"):
         normalized_path = normalized_path[10:]
-    elif normalized_path.startswith("media/"):
+    if normalized_path.startswith("media/"):
         normalized_path = normalized_path[6:]
         
     normalized_path = normalized_path.lstrip("/")
 
     # Route through /api/media/ so VPS Passenger routing picks it up
-    return request.build_absolute_uri(f"/api/media/{normalized_path}")
+    result = request.build_absolute_uri(f"/api/media/{normalized_path}")
+    # Ensure https for production
+    if "claimverify.shovelsolutions.in" in result:
+        result = result.replace("http://", "https://")
+    return result
 
 
 def _extract_evidence_filename(evidence_item) -> str:
@@ -70,6 +85,9 @@ def _media_relative_path_from_url(raw_url: str) -> Optional[str]:
     path = unquote(urlparse(str(raw_url)).path).lstrip("/")
     if not path:
         return None
+    # Strip api/media/ prefix (may or may not have leading slash already stripped)
+    while path.startswith("api/media/"):
+        path = path[10:]
     if path.startswith("media/"):
         path = path[len("media/"):]
     return path or None

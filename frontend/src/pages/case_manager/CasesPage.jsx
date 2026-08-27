@@ -2169,7 +2169,7 @@ const CasesPage = ({ isClosedView = false }) => {
                                 src={resolveMediaUrl(photo.preview_url || photo.url)}
                                 alt={photo.filename || `Visit Photo ${pIdx + 1}`}
                                 sx={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block', bgcolor: '#f7fafc' }}
-                                onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=Image+Error'; }}
+                                onError={(e) => { if (!e.target.dataset.errored) { e.target.dataset.errored = 'true'; e.target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 width%3D%22150%22 height%3D%22150%22%3E%3Crect fill%3D%22%23f0f0f0%22 width%3D%22150%22 height%3D%22150%22%2F%3E%3Ctext x%3D%2250%25%22 y%3D%2250%25%22 dominant-baseline%3D%22middle%22 text-anchor%3D%22middle%22 fill%3D%22%23999%22 font-size%3D%2212%22%3EImage Error%3C%2Ftext%3E%3C%2Fsvg%3E'; } }}
                               />
                               <Box sx={{ p: 1, bgcolor: '#fafafa', borderTop: '1px solid #e2e8f0' }}>
                                 <Typography variant="caption" noWrap sx={{ display: 'block', fontWeight: 600, color: '#4a5568', fontSize: '11px' }}>
