@@ -33,16 +33,15 @@ def _build_absolute_media_url(request: HttpRequest, raw_url: str) -> str:
     if str(raw_url).startswith(("http://", "https://")):
         return str(raw_url)
 
-    normalized_path = str(raw_url)
-    # Strip any leading /api/media/, /media/, or media/ to get the clean relative path
-    if normalized_path.startswith("/api/media/"):
-        normalized_path = normalized_path[11:]
-    elif normalized_path.startswith("/media/"):
-        normalized_path = normalized_path[7:]
+    normalized_path = str(raw_url).lstrip("/")
+    
+    # Strip any leading api/media/ or media/ to get the clean relative path
+    if normalized_path.startswith("api/media/"):
+        normalized_path = normalized_path[10:]
     elif normalized_path.startswith("media/"):
         normalized_path = normalized_path[6:]
-    elif normalized_path.startswith("/"):
-        normalized_path = normalized_path[1:]
+        
+    normalized_path = normalized_path.lstrip("/")
 
     # Route through /api/media/ so VPS Passenger routing picks it up
     return request.build_absolute_uri(f"/api/media/{normalized_path}")
