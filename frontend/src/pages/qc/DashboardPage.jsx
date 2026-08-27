@@ -166,7 +166,7 @@ const DashboardPage = () => {
                       <Typography variant="body2" sx={{ color: '#333' }}>
                         {getActivityText(report)}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: '#667eea', fontWeight: 600 }}>
+                      <Typography variant="caption" sx={{ color: '#17539C', fontWeight: 600 }}>
                         {report.case_number}
                       </Typography>
                       {report.client_name && (

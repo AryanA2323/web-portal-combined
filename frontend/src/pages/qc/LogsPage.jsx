@@ -177,7 +177,7 @@ const LogsPage = () => {
                         return (
                           <TableRow key={log.id} hover>
                             <TableCell>
-                              <Typography sx={{ color: '#667eea', fontWeight: 600 }}>
+                              <Typography sx={{ color: '#17539C', fontWeight: 600 }}>
                                 LOG-{log.id}
                               </Typography>
                             </TableCell>
@@ -290,7 +290,7 @@ const LogsPage = () => {
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
                   Case Number
                 </Typography>
-                <Typography sx={{ mb: 2, color: '#667eea' }}>
+                <Typography sx={{ mb: 2, color: '#17539C' }}>
                   {selectedLog.case_number}
                 </Typography>
 

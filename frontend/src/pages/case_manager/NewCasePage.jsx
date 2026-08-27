@@ -1650,7 +1650,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Statement" name="claimant_statement"
                               value={verificationData.claimant_statement} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This field will be filled by the vendor."
+                              helperText="Note: This field will be filled by the business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
@@ -1658,7 +1658,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Triggers" name="claimant_triggers"
                               value={verificationData.claimant_triggers} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This is the trigger note for vendor."
+                              helperText="Note: This is the trigger note for business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
@@ -1808,7 +1808,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Statement" name="insured_statement"
                               value={verificationData.insured_statement} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This field will be filled by the vendor."
+                              helperText="Note: This field will be filled by the business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
@@ -1816,7 +1816,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Triggers" name="insured_triggers"
                               value={verificationData.insured_triggers} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This is the trigger note for vendor."
+                              helperText="Note: This is the trigger note for business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
@@ -1957,7 +1957,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Statement" name="driver_statement"
                               value={verificationData.driver_statement} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This field will be filled by the vendor."
+                              helperText="Note: This field will be filled by the business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
@@ -1965,7 +1965,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Triggers" name="driver_triggers"
                               value={verificationData.driver_triggers} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This is the trigger note for vendor."
+                              helperText="Note: This is the trigger note for business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
@@ -2098,7 +2098,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Statement" name="spot_statement"
                               value={verificationData.spot_statement} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This field will be filled by the vendor."
+                              helperText="Note: This field will be filled by the business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
@@ -2106,7 +2106,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Triggers" name="spot_triggers"
                               value={verificationData.spot_triggers} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This is the trigger note for vendor."
+                              helperText="Note: This is the trigger note for business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
@@ -2224,7 +2224,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Statement" name="chargesheet_statement"
                               value={verificationData.chargesheet_statement} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This field will be filled by the vendor."
+                              helperText="Note: This field will be filled by the business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>
@@ -2232,7 +2232,7 @@ const NewCasePage = () => {
                             <TextField fullWidth size="small" label="Triggers" name="chargesheet_triggers"
                               value={verificationData.chargesheet_triggers} onChange={handleVerificationChange}
                               multiline rows={3}
-                              helperText="Note: This is the trigger note for vendor."
+                              helperText="Note: This is the trigger note for business partner."
                               FormHelperTextProps={{ sx: { color: '#1976d2', fontWeight: 500 } }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Box>

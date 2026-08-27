@@ -55,6 +55,47 @@ import useAutoRefresh from '../../hooks/useAutoRefresh';
 import { NotificationBell } from '../../components/case_manager';
 import { resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
 
+const GST_STATE_CODES = {
+  '01': ['Jammu', 'Kashmir', 'J&K', 'JK'],
+  '02': ['Himachal', 'HP'],
+  '03': ['Punjab', 'PB'],
+  '04': ['Chandigarh', 'CH'],
+  '05': ['Uttarakhand', 'UK'],
+  '06': ['Haryana', 'HR'],
+  '07': ['Delhi', 'DL'],
+  '08': ['Rajasthan', 'RJ'],
+  '09': ['Uttar Pradesh', 'UP'],
+  '10': ['Bihar', 'BR'],
+  '11': ['Sikkim', 'SK'],
+  '12': ['Arunachal', 'AR'],
+  '13': ['Nagaland', 'NL'],
+  '14': ['Manipur', 'MN'],
+  '15': ['Mizoram', 'MZ'],
+  '16': ['Tripura', 'TR'],
+  '17': ['Meghalaya', 'ML'],
+  '18': ['Assam', 'AS'],
+  '19': ['West Bengal', 'WB'],
+  '20': ['Jharkhand', 'JH'],
+  '21': ['Odisha', 'OR', 'OD'],
+  '22': ['Chhattisgarh', 'CG'],
+  '23': ['Madhya Pradesh', 'MP'],
+  '24': ['Gujarat', 'GJ'],
+  '25': ['Daman', 'Diu', 'DD'],
+  '26': ['Dadra', 'Nagar', 'Haveli', 'DN'],
+  '27': ['Maharashtra', 'MH'],
+  '28': ['Andhra Pradesh', 'AP'],
+  '29': ['Karnataka', 'KA'],
+  '30': ['Goa', 'GA'],
+  '31': ['Lakshadweep', 'LD'],
+  '32': ['Kerala', 'KL'],
+  '33': ['Tamil Nadu', 'TN'],
+  '34': ['Puducherry', 'PY', 'Pondicherry'],
+  '35': ['Andaman', 'Nicobar', 'AN'],
+  '36': ['Telangana', 'TS', 'TG'],
+  '37': ['Andhra Pradesh', 'AP'],
+  '38': ['Ladakh', 'LA']
+};
+
 const EMPTY_FORM = {
   client_code: '',
   client_name: '',
@@ -80,8 +121,37 @@ const ClientsPage = () => {
   const [selectedClient, setSelectedClient] = useState(null);
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [saveLoading, setSaveLoading] = useState(false);
+  const [gstWarning, setGstWarning] = useState('');
 
-  // View Details Modal state
+  useEffect(() => {
+    if (formData.gst_no && formData.gst_no.length === 15) {
+      const stateCode = formData.gst_no.substring(0, 2);
+      const panPart = formData.gst_no.substring(2, 12);
+      
+      let warning = '';
+      
+      // Check PAN
+      if (formData.pan_no && formData.pan_no !== panPart) {
+        warning += 'PAN mismatch in GST number. ';
+      }
+      
+      // Check State
+      const stateNames = GST_STATE_CODES[stateCode];
+      if (stateNames && formData.corporate_address) {
+        const addrLower = formData.corporate_address.toLowerCase();
+        const stateMatch = stateNames.some(name => addrLower.includes(name.toLowerCase()));
+        if (!stateMatch) {
+          warning += `State in GST mismatch with address. `;
+        }
+      } else if (!stateNames && /^\d{2}$/.test(stateCode)) {
+         warning += `Invalid state code in GST. `;
+      }
+      
+      setGstWarning(warning.trim());
+    } else {
+      setGstWarning('');
+    }
+  }, [formData.gst_no, formData.pan_no, formData.corporate_address]);  // View Details Modal state
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [clientToView, setClientToView] = useState(null);
 
@@ -192,7 +262,7 @@ const ClientsPage = () => {
     }
   }, [clients, location.state, navigate, location.pathname]);
 
-  const fetchClients = async () => {
+  async function fetchClients() {
     try {
       setLoading(true);
       const response = await api.get('/clients/all');
@@ -279,6 +349,16 @@ const ClientsPage = () => {
       return;
     }
 
+    if (formData.gst_no && formData.gst_no.trim().length > 0 && formData.gst_no.trim().length < 15) {
+      setError('GST number must be exactly 15 characters long.');
+      return;
+    }
+
+    if (formData.pan_no && formData.pan_no.trim().length > 0 && formData.pan_no.trim().length < 10) {
+      setError('PAN number must be exactly 10 characters long.');
+      return;
+    }
+
     try {
       setSaveLoading(true);
       setError(null);
@@ -358,7 +438,7 @@ const ClientsPage = () => {
               startIcon={<AddIcon />}
               onClick={handleOpenCreate}
               sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)',
                 '&:hover': { background: 'linear-gradient(135deg, #5a6fd6 0%, #6a4293 100%)' },
               }}
             >
@@ -485,7 +565,7 @@ const ClientsPage = () => {
           {/* Top Gradient Header */}
           <DialogTitle
             sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)',
               color: 'white',
               py: 2.5,
               px: 3,
@@ -549,10 +629,10 @@ const ClientsPage = () => {
                     px: 1.75,
                     backgroundColor: '#f1f5f9',
                     borderRadius: '8px',
-                    borderLeft: '4px solid #667eea',
+                    borderLeft: '4px solid #17539C',
                   }}
                 >
-                  <Business sx={{ fontSize: 18, color: '#667eea' }} />
+                  <Business sx={{ fontSize: 18, color: '#17539C' }} />
                   Company Profile
                 </Typography>
 
@@ -567,7 +647,7 @@ const ClientsPage = () => {
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <Business sx={{ color: '#667eea', fontSize: 20 }} />
+                            <Business sx={{ color: '#17539C', fontSize: 20 }} />
                           </InputAdornment>
                         ),
                       }}
@@ -577,8 +657,8 @@ const ClientsPage = () => {
                         '& .MuiOutlinedInput-root': {
                           borderRadius: '10px',
                           backgroundColor: '#ffffff',
-                          '&:hover fieldset': { borderColor: '#667eea' },
-                          '&.Mui-focused fieldset': { borderColor: '#667eea' },
+                          '&:hover fieldset': { borderColor: '#17539C' },
+                          '&.Mui-focused fieldset': { borderColor: '#17539C' },
                         },
                       }}
                     />
@@ -594,7 +674,7 @@ const ClientsPage = () => {
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <LocationOn sx={{ color: '#667eea', fontSize: 20 }} />
+                            <LocationOn sx={{ color: '#17539C', fontSize: 20 }} />
                           </InputAdornment>
                         ),
                       }}
@@ -604,8 +684,8 @@ const ClientsPage = () => {
                         '& .MuiOutlinedInput-root': {
                           borderRadius: '10px',
                           backgroundColor: '#ffffff',
-                          '&:hover fieldset': { borderColor: '#667eea' },
-                          '&.Mui-focused fieldset': { borderColor: '#667eea' },
+                          '&:hover fieldset': { borderColor: '#17539C' },
+                          '&.Mui-focused fieldset': { borderColor: '#17539C' },
                         },
                       }}
                     />
@@ -631,10 +711,10 @@ const ClientsPage = () => {
                     px: 1.75,
                     backgroundColor: '#f1f5f9',
                     borderRadius: '8px',
-                    borderLeft: '4px solid #667eea',
+                    borderLeft: '4px solid #17539C',
                   }}
                 >
-                  <ReceiptLong sx={{ fontSize: 18, color: '#667eea' }} />
+                  <ReceiptLong sx={{ fontSize: 18, color: '#17539C' }} />
                   Tax & Identification
                 </Typography>
 
@@ -642,14 +722,15 @@ const ClientsPage = () => {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
-                      label="GST Number"
-                      placeholder="e.g. 27AAAAA0000A1Z5"
-                      value={formData.gst_no}
-                      onChange={(e) => handleInputChange('gst_no', e.target.value)}
+                      label="PAN Number"
+                      placeholder="e.g. ABCDE1234F"
+                      value={formData.pan_no}
+                      onChange={(e) => handleInputChange('pan_no', e.target.value)}
+                      inputProps={{ maxLength: 10 }}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <ReceiptLong sx={{ color: '#667eea', fontSize: 20 }} />
+                            <CreditCard sx={{ color: '#17539C', fontSize: 20 }} />
                           </InputAdornment>
                         ),
                       }}
@@ -658,8 +739,8 @@ const ClientsPage = () => {
                         '& .MuiOutlinedInput-root': {
                           borderRadius: '10px',
                           backgroundColor: '#ffffff',
-                          '&:hover fieldset': { borderColor: '#667eea' },
-                          '&.Mui-focused fieldset': { borderColor: '#667eea' },
+                          '&:hover fieldset': { borderColor: '#17539C' },
+                          '&.Mui-focused fieldset': { borderColor: '#17539C' },
                         },
                       }}
                     />
@@ -668,14 +749,17 @@ const ClientsPage = () => {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
-                      label="PAN Number"
-                      placeholder="e.g. ABCDE1234F"
-                      value={formData.pan_no}
-                      onChange={(e) => handleInputChange('pan_no', e.target.value)}
+                      label="GST Number"
+                      placeholder="e.g. 27AAAAA0000A1Z5"
+                      value={formData.gst_no}
+                      onChange={(e) => handleInputChange('gst_no', e.target.value)}
+                      error={!!gstWarning}
+                      helperText={gstWarning}
+                      inputProps={{ maxLength: 15 }}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <CreditCard sx={{ color: '#667eea', fontSize: 20 }} />
+                            <ReceiptLong sx={{ color: '#17539C', fontSize: 20 }} />
                           </InputAdornment>
                         ),
                       }}
@@ -684,8 +768,8 @@ const ClientsPage = () => {
                         '& .MuiOutlinedInput-root': {
                           borderRadius: '10px',
                           backgroundColor: '#ffffff',
-                          '&:hover fieldset': { borderColor: '#667eea' },
-                          '&.Mui-focused fieldset': { borderColor: '#667eea' },
+                          '&:hover fieldset': { borderColor: '#17539C' },
+                          '&.Mui-focused fieldset': { borderColor: '#17539C' },
                         },
                       }}
                     />
@@ -711,10 +795,10 @@ const ClientsPage = () => {
                     px: 1.75,
                     backgroundColor: '#f1f5f9',
                     borderRadius: '8px',
-                    borderLeft: '4px solid #667eea',
+                    borderLeft: '4px solid #17539C',
                   }}
                 >
-                  <Assignment sx={{ fontSize: 18, color: '#667eea' }} />
+                  <Assignment sx={{ fontSize: 18, color: '#17539C' }} />
                   Scope of Work & Agreement
                 </Typography>
 
@@ -735,8 +819,8 @@ const ClientsPage = () => {
                           backgroundColor: '#ffffff',
                           minHeight: '52px',
                           boxSizing: 'border-box',
-                          '&:hover fieldset': { borderColor: '#667eea' },
-                          '&.Mui-focused fieldset': { borderColor: '#667eea' },
+                          '&:hover fieldset': { borderColor: '#17539C' },
+                          '&.Mui-focused fieldset': { borderColor: '#17539C' },
                         },
                         '& .MuiSelect-select': {
                           width: '100% !important',
@@ -826,13 +910,13 @@ const ClientsPage = () => {
                         px: 1.75,
                         minHeight: '52px',
                         border: '1.5px dashed',
-                        borderColor: (formData.agreement_copy || formData.existing_agreement_copy) ? '#667eea' : '#cbd5e1',
+                        borderColor: (formData.agreement_copy || formData.existing_agreement_copy) ? '#17539C' : '#cbd5e1',
                         borderRadius: '10px',
                         backgroundColor: (formData.agreement_copy || formData.existing_agreement_copy) ? '#f8faff' : '#ffffff',
                         transition: 'all 0.2s ease',
                         boxSizing: 'border-box',
                         '&:hover': {
-                          borderColor: '#667eea',
+                          borderColor: '#17539C',
                           backgroundColor: '#f8fafc',
                         },
                       }}
@@ -920,8 +1004,8 @@ const ClientsPage = () => {
                             fontSize: '11.5px',
                             fontWeight: 600,
                             borderRadius: '6px',
-                            borderColor: '#667eea',
-                            color: '#667eea',
+                            borderColor: '#17539C',
+                            color: '#17539C',
                             py: 0.3,
                             px: 1.2,
                             minWidth: 'auto',
@@ -975,7 +1059,7 @@ const ClientsPage = () => {
               disabled={saveLoading}
               startIcon={saveLoading ? <CircularProgress size={18} color="inherit" /> : (dialogMode === 'create' ? <AddIcon /> : <Edit />)}
               sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)',
                 color: 'white',
                 textTransform: 'none',
                 fontSize: '14px',
@@ -1085,7 +1169,7 @@ const ClientsPage = () => {
                     borderBottom: '1px solid #f1f5f9',
                   }}
                 >
-                  <Business sx={{ fontSize: 18, color: '#667eea' }} />
+                  <Business sx={{ fontSize: 18, color: '#17539C' }} />
                   Company Profile & Address
                 </Typography>
                 <Grid container spacing={2}>
@@ -1137,7 +1221,7 @@ const ClientsPage = () => {
                     borderBottom: '1px solid #f1f5f9',
                   }}
                 >
-                  <ReceiptLong sx={{ fontSize: 18, color: '#667eea' }} />
+                  <ReceiptLong sx={{ fontSize: 18, color: '#17539C' }} />
                   Legal & Tax Identifiers
                 </Typography>
                 <Grid container spacing={2}>
@@ -1176,7 +1260,7 @@ const ClientsPage = () => {
                     borderBottom: '1px solid #f1f5f9',
                   }}
                 >
-                  <Assignment sx={{ fontSize: 18, color: '#667eea' }} />
+                  <Assignment sx={{ fontSize: 18, color: '#17539C' }} />
                   Scope of Work & Agreement Document
                 </Typography>
                 <Grid container spacing={2}>
@@ -1320,8 +1404,8 @@ const ClientsPage = () => {
                 fontWeight: 600,
                 fontSize: '13.5px',
                 borderRadius: '8px',
-                borderColor: '#667eea',
-                color: '#667eea',
+                borderColor: '#17539C',
+                color: '#17539C',
                 px: 2.5,
                 '&:hover': {
                   borderColor: '#4f46e5',

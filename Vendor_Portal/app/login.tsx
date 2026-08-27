@@ -48,7 +48,7 @@ export default function LoginScreen() {
             <View style={styles.logoCircle}>
               <Text style={styles.logoText}>V</Text>
             </View>
-            <Text style={styles.title}>Vendor Portal</Text>
+            <Text style={styles.title}>Business Partner Portal</Text>
             <Text style={styles.subtitle}>Welcome back! Please login to continue</Text>
           </View>
 

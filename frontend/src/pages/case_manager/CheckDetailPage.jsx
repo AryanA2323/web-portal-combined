@@ -335,7 +335,7 @@ const CHECK_FIELDS_DEF = {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-const StatBadge = ({ icon, label, value, color = '#667eea' }) => (
+const StatBadge = ({ icon, label, value, color = '#17539C' }) => (
   <Box sx={{
     display: 'flex', alignItems: 'center', gap: 1,
     px: 2, py: 1.2,
@@ -497,7 +497,7 @@ const CheckDetailPage = () => {
   const [uploadStatementText, setUploadStatementText] = useState('');
   const [uploading, setUploading] = useState(false);
 
-  const meta = CHECK_META[checkType] || { label: checkType, color: '#667eea', bg: '#f0f0ff', gradient: 'linear-gradient(135deg,#667eea,#764ba2)', icon: <FolderOpen /> };
+  const meta = CHECK_META[checkType] || { label: checkType, color: '#17539C', bg: '#f0f0ff', gradient: 'linear-gradient(135deg,#17539C,#F36F21)', icon: <FolderOpen /> };
 
   const fetchDetail = useCallback(async () => {
     setLoading(true); setError('');
@@ -714,7 +714,7 @@ const CheckDetailPage = () => {
               gap: 1.5,
               bgcolor: '#fff',
             }}>
-              <StatBadge icon={<FolderOpen sx={{ fontSize: 18 }} />} label="Claim Number" value={caseData.claim_number} color="#667eea" />
+              <StatBadge icon={<FolderOpen sx={{ fontSize: 18 }} />} label="Claim Number" value={caseData.claim_number} color="#17539C" />
               <StatBadge icon={<CalendarToday sx={{ fontSize: 18 }} />} label="Receive Date" value={fmtDateDisplay(caseData.case_receive_date)} color="#06b6d4" />
               <StatBadge icon={<Speed sx={{ fontSize: 18 }} />} label="TAT Days" value={caseData.tat_days != null ? `${caseData.tat_days} days` : null} color="#f59e0b" />
               <StatBadge icon={<PinDrop sx={{ fontSize: 18 }} />} label="Check Status" value={checkData.check_status} color={meta.color} />
@@ -731,12 +731,12 @@ const CheckDetailPage = () => {
                 <Grid size={{ xs: 12, md: 6 }}>
                   <Paper elevation={0} sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', height: '100%', bgcolor: '#fff', display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ px: 2.5, pt: 2, pb: 1.5, borderBottom: '1px solid #edf2f7', display: 'flex', alignItems: 'center', gap: 1.2, bgcolor: '#f8fafc' }}>
-                      <Box sx={{ width: 4, height: 24, borderRadius: '2px', background: 'linear-gradient(135deg,#667eea,#764ba2)' }} />
+                      <Box sx={{ width: 4, height: 24, borderRadius: '2px', background: 'linear-gradient(135deg,#17539C,#F36F21)' }} />
                       <Typography sx={{ fontSize: '14px', fontWeight: 800, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         Case Information
                       </Typography>
                       {editing && (
-                        <Chip label="Editing" size="small" sx={{ ml: 'auto', background: '#eef2ff', color: '#667eea', fontWeight: 700, fontSize: '10px', height: '20px' }} />
+                        <Chip label="Editing" size="small" sx={{ ml: 'auto', background: '#eef2ff', color: '#17539C', fontWeight: 700, fontSize: '10px', height: '20px' }} />
                       )}
                     </Box>
                     <Box sx={{ p: 2.5, flex: 1 }}>
@@ -826,7 +826,7 @@ const CheckDetailPage = () => {
               {(checkData.negative_status || checkData.vendor_feedback) && (
                 <Paper elevation={0} sx={{ borderRadius: '14px', border: '1px solid #fecaca', overflow: 'hidden', bgcolor: '#fff5f5', mb: 3 }}>
                   <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid #fee2e2', display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#fef2f2' }}>
-                    <Typography sx={{ fontSize: '14px', fontWeight: 800, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>⚠️ Vendor Feedback</Typography>
+                    <Typography sx={{ fontSize: '14px', fontWeight: 800, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>⚠️ Business Partner Feedback</Typography>
                     {checkData.negative_status && (
                       <Chip label={checkData.negative_status} size="small" sx={{ ml: 1, background: '#fee2e2', color: '#991b1b', fontWeight: 800, border: '1px solid #fca5a5' }} />
                     )}
@@ -853,7 +853,7 @@ const CheckDetailPage = () => {
                         Uploads, Evidence & Audio Recordings
                       </Typography>
                       <Typography sx={{ fontSize: '11.5px', color: '#64748b' }}>
-                        View vendor uploads or attach new documents, visit photos, and audio files
+                        View business partner uploads or attach new documents, visit photos, and audio files
                       </Typography>
                     </Box>
                   </Box>
@@ -900,7 +900,7 @@ const CheckDetailPage = () => {
                       <Box sx={{ py: 5, textAlign: 'center', color: '#94a3b8', bgcolor: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
                         <ImageIcon sx={{ fontSize: 42, opacity: 0.6, mb: 1, color: '#64748b' }} />
                         <Typography sx={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>No Visit Photos Uploaded</Typography>
-                        <Typography sx={{ fontSize: '12px', color: '#64748b', mb: 2 }}>Upload vendor visit photos for this check.</Typography>
+                        <Typography sx={{ fontSize: '12px', color: '#64748b', mb: 2 }}>Upload business partner visit photos for this check.</Typography>
                         <Button size="small" variant="outlined" startIcon={<CloudUpload sx={{ fontSize: 15 }} />} onClick={() => handleOpenUpload('evidence')} sx={{ textTransform: 'none', borderRadius: '8px', fontWeight: 600 }}>
                           Upload Visit Photo
                         </Button>

@@ -34,7 +34,7 @@ const eventTypeColor = {
   AI_REPORT_GENERATED: '#2b8a3e',
   QC_ACCEPTED_REPORT: '#2f9e44',
   QC_REJECTED_REPORT: '#e03131',
-  FIELD_UPDATED: '#667eea',
+  FIELD_UPDATED: '#17539C',
   VENDOR_REASSIGNED: '#f56565',
   CHECK_REVIEWED: '#48bb78',
   MEDIA_UPLOADED: '#4299e1',
@@ -353,7 +353,7 @@ const AuditLogsPage = () => {
               variant="contained"
               startIcon={<FileDownload />}
               sx={{
-                backgroundColor: '#667eea',
+                backgroundColor: '#17539C',
                 textTransform: 'none',
                 fontWeight: 600,
                 borderRadius: '8px',

@@ -110,7 +110,7 @@ const LoginPage = () => {
       sx={{
         minHeight: '100vh',
         width: '100%',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'linear-gradient(135deg, #17539C 0%, #0f3a70 100%)',
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
@@ -274,11 +274,11 @@ const LoginPage = () => {
                 underline="hover"
                 sx={{
                   fontSize: '14px',
-                  color: '#667eea',
+                  color: '#17539C',
                   fontWeight: 500,
                   transition: 'all 0.2s',
                   '&:hover': {
-                    color: '#764ba2',
+                    color: '#F36F21',
                   },
                 }}
               >

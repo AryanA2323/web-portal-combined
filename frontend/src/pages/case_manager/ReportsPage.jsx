@@ -293,7 +293,7 @@ const ReportsPage = () => {
         y = 20;
 
         if (vendorDocs.length > 0) {
-          addLine('VENDOR DOCUMENTS', 13, true);
+          addLine('BUSINESS PARTNER DOCUMENTS', 13, true);
           y += 4;
           for (let i = 0; i < vendorDocs.length; i++) {
             addLine(`Business Partner Document ${i + 1}: ${vendorDocs[i].filename || 'Document'}`, 11, false);

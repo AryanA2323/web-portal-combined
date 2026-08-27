@@ -24,7 +24,7 @@ const RoleSelector = ({ value, onChange, error, disabled = false }) => {
           fontWeight: 600,
           fontSize: '15px',
           color: '#333',
-          '&.Mui-focused': { color: '#667eea' }
+          '&.Mui-focused': { color: '#17539C' }
         }}
       >
         Select Your Role

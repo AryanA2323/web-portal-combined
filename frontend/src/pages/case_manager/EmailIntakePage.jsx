@@ -398,7 +398,7 @@ const EmailIntakePage = () => {
               size="small"
               onClick={handleClearFilters}
               sx={{
-                color: '#667eea',
+                color: '#17539C',
                 textTransform: 'none',
                 fontWeight: 600,
                 '&:hover': { backgroundColor: '#f0f4ff' },
@@ -413,7 +413,7 @@ const EmailIntakePage = () => {
               startIcon={<Add />}
               sx={{
                 ml: 'auto',
-                backgroundColor: '#667eea',
+                backgroundColor: '#17539C',
                 textTransform: 'none',
                 fontWeight: 600,
                 borderRadius: '8px',
@@ -536,7 +536,7 @@ const EmailIntakePage = () => {
                             fontSize: '13px',
                             borderRadius: '6px',
                             '&:hover': {
-                              borderColor: '#667eea',
+                              borderColor: '#17539C',
                               backgroundColor: '#f0f4ff',
                             },
                           }}

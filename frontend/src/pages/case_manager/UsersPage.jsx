@@ -666,9 +666,9 @@ const UsersPage = () => {
               startIcon={<PersonAdd />}
               onClick={handleOpenCreateDialog}
               sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                  background: 'linear-gradient(135deg, #F36F21 0%, #17539C 100%)',
                 },
               }}
             >
@@ -729,10 +729,10 @@ const UsersPage = () => {
                 backgroundColor: '#f8fafc',
                 borderRadius: '8px',
                 '&:hover fieldset': {
-                  borderColor: '#667eea',
+                  borderColor: '#17539C',
                 },
                 '&.Mui-focused fieldset': {
-                  borderColor: '#667eea',
+                  borderColor: '#17539C',
                 },
               },
             }}
@@ -967,7 +967,7 @@ const UsersPage = () => {
           }}
         >
           {/* Accent Header Border */}
-          <Box sx={{ height: '4px', background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)' }} />
+          <Box sx={{ height: '4px', background: 'linear-gradient(90deg, #17539C 0%, #F36F21 100%)' }} />
 
           {/* Dialog Header */}
           <DialogTitle
@@ -1550,7 +1550,7 @@ const UsersPage = () => {
           }}
         >
           {/* Accent Header Border */}
-          <Box sx={{ height: '4px', background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)' }} />
+          <Box sx={{ height: '4px', background: 'linear-gradient(90deg, #17539C 0%, #F36F21 100%)' }} />
 
           {/* Dialog Header */}
           <DialogTitle
@@ -2204,10 +2204,10 @@ const UsersPage = () => {
                 px: 3.5,
                 py: 1,
                 fontWeight: 600,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)',
                 boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                  background: 'linear-gradient(135deg, #F36F21 0%, #17539C 100%)',
                   boxShadow: '0 6px 16px rgba(102, 126, 234, 0.4)',
                 },
               }}
@@ -2232,7 +2232,7 @@ const UsersPage = () => {
         >
           <DialogTitle
             sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)',
               color: 'white',
               py: 3,
               px: 3,
@@ -2260,7 +2260,7 @@ const UsersPage = () => {
                   fontWeight={600}
                   sx={{
                     mb: 2.5,
-                    color: '#667eea',
+                    color: '#17539C',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1,
@@ -2282,7 +2282,7 @@ const UsersPage = () => {
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <EmailIcon sx={{ color: '#667eea' }} />
+                            <EmailIcon sx={{ color: '#17539C' }} />
                           </InputAdornment>
                         ),
                       }}
@@ -2290,14 +2290,14 @@ const UsersPage = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           '&:hover fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                           '&.Mui-focused fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                         },
                         '& .MuiInputLabel-root.Mui-focused': {
-                          color: '#667eea',
+                          color: '#17539C',
                         },
                       }}
                     />
@@ -2313,7 +2313,7 @@ const UsersPage = () => {
                   fontWeight={600}
                   sx={{
                     mb: 2.5,
-                    color: '#667eea',
+                    color: '#17539C',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1,
@@ -2333,14 +2333,14 @@ const UsersPage = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           '&:hover fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                           '&.Mui-focused fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                         },
                         '& .MuiInputLabel-root.Mui-focused': {
-                          color: '#667eea',
+                          color: '#17539C',
                         },
                       }}
                     />
@@ -2356,14 +2356,14 @@ const UsersPage = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           '&:hover fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                           '&.Mui-focused fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                         },
                         '& .MuiInputLabel-root.Mui-focused': {
-                          color: '#667eea',
+                          color: '#17539C',
                         },
                       }}
                     />
@@ -2379,7 +2379,7 @@ const UsersPage = () => {
                   fontWeight={600}
                   sx={{
                     mb: 2.5,
-                    color: '#667eea',
+                    color: '#17539C',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1,
@@ -2400,7 +2400,7 @@ const UsersPage = () => {
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <Lock sx={{ color: '#667eea' }} />
+                            <Lock sx={{ color: '#17539C' }} />
                           </InputAdornment>
                         ),
                         endAdornment: (
@@ -2410,7 +2410,7 @@ const UsersPage = () => {
                               edge="end"
                               onClick={() => setShowCreatePassword((value) => !value)}
                             >
-                              {showCreatePassword ? <VisibilityOff sx={{ color: '#667eea' }} /> : <Visibility sx={{ color: '#667eea' }} />}
+                              {showCreatePassword ? <VisibilityOff sx={{ color: '#17539C' }} /> : <Visibility sx={{ color: '#17539C' }} />}
                             </IconButton>
                           </InputAdornment>
                         ),
@@ -2419,14 +2419,14 @@ const UsersPage = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           '&:hover fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                           '&.Mui-focused fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                         },
                         '& .MuiInputLabel-root.Mui-focused': {
-                          color: '#667eea',
+                          color: '#17539C',
                         },
                       }}
                     />
@@ -2443,7 +2443,7 @@ const UsersPage = () => {
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <Lock sx={{ color: '#667eea' }} />
+                            <Lock sx={{ color: '#17539C' }} />
                           </InputAdornment>
                         ),
                         endAdornment: (
@@ -2453,7 +2453,7 @@ const UsersPage = () => {
                               edge="end"
                               onClick={() => setShowCreateConfirmPassword((value) => !value)}
                             >
-                              {showCreateConfirmPassword ? <VisibilityOff sx={{ color: '#667eea' }} /> : <Visibility sx={{ color: '#667eea' }} />}
+                              {showCreateConfirmPassword ? <VisibilityOff sx={{ color: '#17539C' }} /> : <Visibility sx={{ color: '#17539C' }} />}
                             </IconButton>
                           </InputAdornment>
                         ),
@@ -2463,14 +2463,14 @@ const UsersPage = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           '&:hover fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                           '&.Mui-focused fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                         },
                         '& .MuiInputLabel-root.Mui-focused': {
-                          color: '#667eea',
+                          color: '#17539C',
                         },
                       }}
                     />
@@ -2482,14 +2482,14 @@ const UsersPage = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           '&:hover fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                           '&.Mui-focused fieldset': {
-                            borderColor: '#667eea',
+                            borderColor: '#17539C',
                           },
                         },
                         '& .MuiInputLabel-root.Mui-focused': {
-                          color: '#667eea',
+                          color: '#17539C',
                         },
                       }}
                     >
@@ -2540,7 +2540,7 @@ const UsersPage = () => {
               disabled={createLoading}
               startIcon={createLoading ? <CircularProgress size={18} color="inherit" /> : <PersonAdd />}
               sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)',
                 textTransform: 'none',
                 fontSize: '15px',
                 fontWeight: 600,
@@ -2548,7 +2548,7 @@ const UsersPage = () => {
                 py: 1,
                 boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                  background: 'linear-gradient(135deg, #F36F21 0%, #17539C 100%)',
                   boxShadow: '0 6px 16px rgba(102, 126, 234, 0.5)',
                 },
                 '&:disabled': {

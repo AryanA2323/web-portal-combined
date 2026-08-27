@@ -386,7 +386,7 @@ const ResetPasswordPage = () => {
               <LoadingButton
                 onClick={() => navigate('/login')}
                 sx={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)',
                 }}
               >
                 Go to Login

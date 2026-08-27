@@ -33,14 +33,14 @@ import {
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#1976d2',
-      light: '#42a5f5',
-      dark: '#1565c0',
+      main: '#17539C', // Shovel Blue
+      light: '#3570bd',
+      dark: '#0f3a70',
     },
     secondary: {
-      main: '#dc004e',
-      light: '#ff4081',
-      dark: '#c51162',
+      main: '#F36F21', // Shovel Orange
+      light: '#f58d4d',
+      dark: '#cc5916',
     },
     success: {
       main: '#2e7d32',
@@ -57,7 +57,7 @@ const theme = createTheme({
     },
   },
   typography: {
-    fontFamily: '"Roboto", "Segoe UI", system-ui, -apple-system, sans-serif',
+    fontFamily: '"Montserrat", "Segoe UI", system-ui, -apple-system, sans-serif',
     h4: {
       fontWeight: 700,
     },

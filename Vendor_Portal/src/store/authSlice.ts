@@ -60,7 +60,7 @@ export const restoreToken = createAsyncThunk('auth/restoreToken', async (_, { re
           storage.deleteItem(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
           storage.deleteItem(STORAGE_KEYS.USER_DATA).catch(() => {}),
         ]);
-        return rejectWithValue('Only vendor accounts can use this app');
+        return rejectWithValue('Only business partner accounts can use this app');
       }
 
       return {

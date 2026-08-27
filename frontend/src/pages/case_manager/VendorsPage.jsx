@@ -218,8 +218,8 @@ const VendorsPage = () => {
   useAutoRefresh(fetchVendors);
 
   const statsData = [
-    { title: 'Total Vendors', value: stats.total.toString(), icon: LocationOn, color: '#3498db', bgColor: '#e3f2fd' },
-    { title: 'Active Vendors', value: stats.active.toString(), icon: TrendingUp, color: '#27ae60', bgColor: '#e8f5e9' },
+    { title: 'Total Business Partners', value: stats.total.toString(), icon: LocationOn, color: '#3498db', bgColor: '#e3f2fd' },
+    { title: 'Active Business Partners', value: stats.active.toString(), icon: TrendingUp, color: '#27ae60', bgColor: '#e8f5e9' },
     { title: 'Avg Rating', value: stats.avgRating.toString(), icon: Star, color: '#f39c12', bgColor: '#fff3e0' },
     { title: 'Active Cases', value: stats.activeCases.toString(), icon: TrendingUp, color: '#9b59b6', bgColor: '#f3e5f5' },
   ];
@@ -252,10 +252,10 @@ const VendorsPage = () => {
           <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0', pb: 2 }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a1a', mb: 0.5 }}>
-                Vendors
+                Business Partners
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Manage investigation vendors and assignments
+                Manage investigation business partners and assignments
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -271,7 +271,7 @@ const VendorsPage = () => {
                   '&:hover': { backgroundColor: '#2c2c2c' },
                 }}
               >
-                Add Vendor
+                Add Business Partner
               </Button>
               <NotificationBell />
             </Box>
@@ -331,7 +331,7 @@ const VendorsPage = () => {
 
             {filteredVendors.length === 0 && (
               <Box sx={{ textAlign: 'center', py: 8 }}>
-                <Typography color="text.secondary">No vendors found</Typography>
+                <Typography color="text.secondary">No business partners found</Typography>
               </Box>
             )}
           </Box>
@@ -507,7 +507,7 @@ const VendorsPage = () => {
               '&:hover': { backgroundColor: '#2980b9' },
             }}
           >
-            Edit Vendor
+            Edit Business Partner
           </Button>
         </DialogActions>
       </Dialog>

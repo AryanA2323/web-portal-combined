@@ -269,7 +269,7 @@ const DocumentProcessPage = () => {
                   {...getRootProps()}
                   sx={{
                     border: '2px dashed',
-                    borderColor: isDragActive ? '#667eea' : '#e0e0e0',
+                    borderColor: isDragActive ? '#17539C' : '#e0e0e0',
                     borderRadius: '12px',
                     p: 4,
                     textAlign: 'center',
@@ -277,13 +277,13 @@ const DocumentProcessPage = () => {
                     backgroundColor: isDragActive ? '#f0f4ff' : '#fafafa',
                     transition: 'all 0.2s',
                     '&:hover': {
-                      borderColor: '#667eea',
+                      borderColor: '#17539C',
                       backgroundColor: '#f0f4ff',
                     },
                   }}
                 >
                   <input {...getInputProps()} />
-                  <CloudUpload sx={{ fontSize: 48, color: '#667eea', mb: 2 }} />
+                  <CloudUpload sx={{ fontSize: 48, color: '#17539C', mb: 2 }} />
                   <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
                     {isDragActive ? 'Drop the file here' : 'Drag & drop a file here'}
                   </Typography>
@@ -312,7 +312,7 @@ const DocumentProcessPage = () => {
                         onClick={handleParseFile}
                         disabled={parsing}
                         sx={{
-                          backgroundColor: '#667eea',
+                          backgroundColor: '#17539C',
                           '&:hover': { backgroundColor: '#5a6fd6' },
                         }}
                       >
@@ -364,7 +364,7 @@ Vehicle No: MH-01-AB-1234
                   disabled={parsing || !textContent.trim()}
                   sx={{
                     mt: 2,
-                    backgroundColor: '#667eea',
+                    backgroundColor: '#17539C',
                     '&:hover': { backgroundColor: '#5a6fd6' },
                   }}
                 >
@@ -539,7 +539,7 @@ Vehicle No: MH-01-AB-1234
                     startIcon={creating ? <CircularProgress size={20} color="inherit" /> : <Save />}
                     sx={{
                       flex: 2,
-                      backgroundColor: '#667eea',
+                      backgroundColor: '#17539C',
                       '&:hover': { backgroundColor: '#5a6fd6' },
                     }}
                   >

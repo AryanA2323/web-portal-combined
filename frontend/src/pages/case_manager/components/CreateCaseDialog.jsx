@@ -343,7 +343,7 @@ const CreateCaseDialog = ({ open, onClose, onSuccess }) => {
                 value={formData.latitude}
                 onChange={handleChange}
                 inputProps={{ step: 'any' }}
-                helperText="Optional: For auto-vendor assignment"
+                helperText="Optional: For auto-business partner assignment"
               />
             </Grid>
 
@@ -356,7 +356,7 @@ const CreateCaseDialog = ({ open, onClose, onSuccess }) => {
                 value={formData.longitude}
                 onChange={handleChange}
                 inputProps={{ step: 'any' }}
-                helperText="Optional: For auto-vendor assignment"
+                helperText="Optional: For auto-business partner assignment"
               />
             </Grid>
 
@@ -667,7 +667,7 @@ const CreateCaseDialog = ({ open, onClose, onSuccess }) => {
           variant="contained"
           disabled={loading || !formData.title}
           sx={{
-            backgroundColor: '#667eea',
+            backgroundColor: '#17539C',
             '&:hover': { backgroundColor: '#5568d3' },
           }}
         >

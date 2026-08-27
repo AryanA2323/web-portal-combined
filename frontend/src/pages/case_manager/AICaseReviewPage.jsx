@@ -373,7 +373,7 @@ const AICaseReviewPage = () => {
         iconBgColor: '#ede7f6',
       },
       {
-        title: 'Assigned Vendors',
+        title: 'Assigned Business Partners',
         value: assignedVendorsCount,
         change: 0,
         icon: TrendingUp,
@@ -484,7 +484,7 @@ const AICaseReviewPage = () => {
         vendorDocuments: response.data.vendor_documents || [],
         caseDocuments: response.data.case_documents || [],
         generatedAt: new Date().toISOString(),
-        sourceFileName: 'Stored Vendor Statements',
+        sourceFileName: 'Stored Business Partner Statements',
       };
 
       setReportsByCase((prev) => ({
@@ -536,8 +536,8 @@ const AICaseReviewPage = () => {
       { label: 'Claim Number', value: activeReportCase.claim_number || 'N/A' },
       { label: 'Business Partner', value: activeReportCase.vendorName || 'Unassigned' },
       { label: 'Generated', value: new Date(activeReport.generatedAt).toLocaleString() },
-      { label: 'Statement Source', value: activeReport.sourceFileName || 'Stored Vendor Statements' },
-      { label: 'Vendor Statements', value: (activeReport.vendorStatements || []).length },
+      { label: 'Statement Source', value: activeReport.sourceFileName || 'Stored Business Partner Statements' },
+      { label: 'Business Partner Statements', value: (activeReport.vendorStatements || []).length },
     ];
 
     const evidenceItems = [];
@@ -954,7 +954,7 @@ const AICaseReviewPage = () => {
       setViewReportDialogOpen(false);
       setSelected([activeReportCase.id]);
       setReportDialogOpen(true);
-      setSuccess('Generate a fresh report from the latest stored vendor statements.');
+      setSuccess('Generate a fresh report from the latest stored business partner statements.');
     } catch (err) {
       console.error('Failed to prepare regenerate:', err);
       setError('Failed to prepare report regeneration.');
@@ -1178,7 +1178,7 @@ const AICaseReviewPage = () => {
               size="small"
               onClick={handleClearFilters}
               sx={{
-                color: '#667eea',
+                color: '#17539C',
                 textTransform: 'none',
                 fontWeight: 600,
                 '&:hover': { backgroundColor: '#f0f4ff' },
@@ -1194,7 +1194,7 @@ const AICaseReviewPage = () => {
               disabled={selected.length !== 1}
               sx={{
                 ml: 'auto',
-                backgroundColor: '#667eea',
+                backgroundColor: '#17539C',
                 textTransform: 'none',
                 fontWeight: 600,
                 borderRadius: '8px',
@@ -1266,7 +1266,7 @@ const AICaseReviewPage = () => {
                       }}
                     >
                       <TableCell>
-                        <Typography sx={{ color: '#667eea', fontWeight: 600, fontSize: '14px' }}>
+                        <Typography sx={{ color: '#17539C', fontWeight: 600, fontSize: '14px' }}>
                           {row.case_number || `#${row.id}`}
                         </Typography>
                       </TableCell>
@@ -1282,7 +1282,7 @@ const AICaseReviewPage = () => {
                               width: 32,
                               height: 32,
                               fontSize: '14px',
-                              backgroundColor: row.vendorName === 'Unassigned' ? '#b0bec5' : '#667eea',
+                              backgroundColor: row.vendorName === 'Unassigned' ? '#b0bec5' : '#17539C',
                             }}
                           >
                             {row.vendorAvatar}
@@ -1346,7 +1346,7 @@ const AICaseReviewPage = () => {
                             }
                           }}
                           sx={{
-                            backgroundColor: report ? '#667eea' : (rowSelected ? '#16a34a' : '#667eea'),
+                            backgroundColor: report ? '#17539C' : (rowSelected ? '#16a34a' : '#17539C'),
                             textTransform: 'none',
                             fontWeight: 600,
                             fontSize: '13px',
@@ -1731,7 +1731,7 @@ const AICaseReviewPage = () => {
               onClick={handleSaveReport}
               disabled={submitting || !editedContent.trim()}
               sx={{
-                backgroundColor: '#667eea',
+                backgroundColor: '#17539C',
                 textTransform: 'none',
                 fontWeight: 600,
                 '&:hover': { backgroundColor: '#5568d3' },
@@ -1765,8 +1765,8 @@ const AICaseReviewPage = () => {
                 sx={{
                   textTransform: 'none',
                   fontWeight: 600,
-                  borderColor: '#667eea',
-                  color: '#667eea',
+                  borderColor: '#17539C',
+                  color: '#17539C',
                   '&:hover': { backgroundColor: '#f0f4ff' },
                 }}
               >
@@ -1779,8 +1779,8 @@ const AICaseReviewPage = () => {
                 sx={{
                   textTransform: 'none',
                   fontWeight: 600,
-                  borderColor: '#667eea',
-                  color: '#667eea',
+                  borderColor: '#17539C',
+                  color: '#17539C',
                   '&:hover': { backgroundColor: '#f0f4ff' },
                 }}
               >
@@ -1791,7 +1791,7 @@ const AICaseReviewPage = () => {
                 onClick={handleAssignQC}
                 disabled={submitting || !selectedQC}
                 sx={{
-                  backgroundColor: '#667eea',
+                  backgroundColor: '#17539C',
                   textTransform: 'none',
                   fontWeight: 600,
                   '&:hover': { backgroundColor: '#5568d3' },
@@ -1819,7 +1819,7 @@ const AICaseReviewPage = () => {
             Are you sure you want to delete the AI case review report for case <strong>{activeReportCase?.case_number}</strong>?
           </Typography>
           <Typography sx={{ fontSize: '12px', color: '#999' }}>
-            This action will permanently delete the report. You can always regenerate it later from stored vendor statements.
+            This action will permanently delete the report. You can always regenerate it later from stored business partner statements.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

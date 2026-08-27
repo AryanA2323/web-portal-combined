@@ -34,7 +34,7 @@ const LoadingButton = ({
         fontWeight: 600,
         fontSize: { xs: '15px', sm: '16px' },
         background: variant === 'contained' 
-          ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+          ? 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)'
           : 'transparent',
         boxShadow: variant === 'contained' 
           ? '0 4px 14px 0 rgba(102, 126, 234, 0.4)'

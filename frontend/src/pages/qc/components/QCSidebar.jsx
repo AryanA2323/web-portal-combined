@@ -86,7 +86,7 @@ const QCSidebar = () => {
                 <ListItemIcon sx={{ minWidth: 40 }}>
                   <Icon
                     sx={{
-                      color: isActive ? '#667eea' : '#666',
+                      color: isActive ? '#17539C' : '#666',
                       fontSize: 22,
                     }}
                   />
@@ -96,7 +96,7 @@ const QCSidebar = () => {
                   primaryTypographyProps={{
                     fontSize: '14px',
                     fontWeight: isActive ? 600 : 400,
-                    color: isActive ? '#667eea' : '#333',
+                    color: isActive ? '#17539C' : '#333',
                   }}
                 />
               </ListItemButton>
@@ -114,7 +114,7 @@ const QCSidebar = () => {
             sx={{
               width: 36,
               height: 36,
-              backgroundColor: '#667eea',
+              backgroundColor: '#17539C',
               fontSize: '14px',
               fontWeight: 600,
             }}
@@ -162,9 +162,9 @@ const QCSidebar = () => {
             textTransform: 'none',
             py: 0.8,
             '&:hover': {
-              borderColor: '#667eea',
+              borderColor: '#17539C',
               backgroundColor: '#e0e7ff',
-              color: '#667eea',
+              color: '#17539C',
             },
           }}
         >

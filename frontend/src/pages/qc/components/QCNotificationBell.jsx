@@ -174,7 +174,7 @@ const QCNotificationBell = ({ iconColor = '#666', iconSx = {} }) => {
               textTransform: 'none',
               fontWeight: 600,
               fontSize: 12.5,
-              color: '#667eea',
+              color: '#17539C',
               '&:disabled': { color: '#94a3b8' },
             }}
           >

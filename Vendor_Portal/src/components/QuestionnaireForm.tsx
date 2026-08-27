@@ -489,7 +489,7 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
               <MaterialCommunityIcons name="comment-text-outline" size={20} color="#64748B" style={{ marginTop: 2, marginRight: 8 }} />
               <TextInput
                 style={[styles.input, { height: 'auto', minHeight: 70, textAlignVertical: 'top' }]}
-                placeholder="Enter vendor feedback or reason for negative status..."
+                placeholder="Enter business partner feedback or reason for negative status..."
                 placeholderTextColor="#94A3B8"
                 multiline
                 numberOfLines={4}

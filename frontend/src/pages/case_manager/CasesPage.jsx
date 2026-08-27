@@ -64,6 +64,7 @@ import {
 import CaseManagerLayout from './components/CaseManagerLayout';
 import StatCard from './components/StatCard';
 import CreateCaseDialog from './components/CreateCaseDialog';
+import CaseLogsDrawer from './components/CaseLogsDrawer';
 import api from '../../services/api';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 import { NotificationBell } from '../../components/case_manager';
@@ -88,7 +89,7 @@ const fullCaseStatusColors = {
   'Pending Additional Docs': '#ed8936',
   'Connected Pending': '#b794f4',
   'RCU Pending': '#76e4f7',
-  'Portal Upload': '#667eea',
+  'Portal Upload': '#17539C',
 };
 
 // Investigation report status colors
@@ -110,7 +111,7 @@ const checkStatusColors = {
 
 // Investigation type chip colors
 const investigationTypeColors = {
-  'Full Case': '#667eea',
+  'Full Case': '#17539C',
   'Partial Case': '#9f7aea',
   'Reassessment': '#4299e1',
   'Connected Case': '#76e4f7',
@@ -1230,7 +1231,7 @@ const CasesPage = ({ isClosedView = false }) => {
                   setPage(0);
                 }}
                 sx={{
-                  color: '#667eea',
+                  color: '#17539C',
                   textTransform: 'none',
                   fontWeight: 600,
                   '&:hover': { backgroundColor: '#f0f4ff' },
@@ -1267,7 +1268,7 @@ const CasesPage = ({ isClosedView = false }) => {
                 onClick={handleCreateCase}
                 sx={{
                   ml: selected.length > 0 ? 1 : 'auto',
-                  backgroundColor: '#667eea',
+                  backgroundColor: '#17539C',
                   textTransform: 'none',
                   fontWeight: 600,
                   borderRadius: '8px',
@@ -1282,10 +1283,10 @@ const CasesPage = ({ isClosedView = false }) => {
 
           {/* Table */}
           <TableContainer sx={{ border: '1px solid #e0e0e0', borderRadius: '8px' }}>
-            <Table sx={{ minWidth: 1200, '& .MuiTableCell-root': { borderRight: '1px solid #edf2f7', py: 1 } }}>
+            <Table sx={{ minWidth: 1200, tableLayout: 'fixed', '& .MuiTableCell-root': { borderRight: '1px solid #edf2f7', py: 1 } }}>
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#f8f9fa' }}>
-                  <TableCell padding="checkbox">
+                  <TableCell padding="checkbox" sx={{ width: 50 }}>
                     <Checkbox
                       indeterminate={selected.length > 0 && selected.length < cases.length}
                       checked={cases.length > 0 && selected.length === cases.length}
@@ -1294,14 +1295,14 @@ const CasesPage = ({ isClosedView = false }) => {
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 40 }}></TableCell>
                   <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 50 }}>#</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Case Number</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Claim Number</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Client Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Investigation Type</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Category</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>Case Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px' }}>TAT Days</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', textAlign: 'center', borderRight: 'none' }}>Logs</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 170 }}>Case Number</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 130 }}>Claim Number</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 220 }}>Client Name</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 150 }}>Investigation Type</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 120 }}>Category</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 120 }}>Case Status</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 90 }}>TAT Days</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 120, textAlign: 'center', borderRight: 'none' }}>Logs</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1311,7 +1312,7 @@ const CasesPage = ({ isClosedView = false }) => {
                   const isExpanded = expandedCases[row.id];
                   const fcColor = fullCaseStatusColors[row.full_case_status] || '#a0aec0';
                   const irColor = irStatusColors[row.investigation_report_status] || '#a0aec0';
-                  const ctColor = investigationTypeColors[row.investigation_type] || '#667eea';
+                  const ctColor = investigationTypeColors[row.investigation_type] || '#17539C';
 
                   return (
                     <React.Fragment key={row.id}>
@@ -1334,7 +1335,7 @@ const CasesPage = ({ isClosedView = false }) => {
 
                         {/* Sequential # */}
                         <TableCell>
-                          <Typography sx={{ color: '#667eea', fontWeight: 700, fontSize: '15px' }}>
+                          <Typography sx={{ color: '#17539C', fontWeight: 700, fontSize: '15px' }}>
                             {row.seq_num}
                           </Typography>
                         </TableCell>
@@ -1426,8 +1427,8 @@ const CasesPage = ({ isClosedView = false }) => {
                               borderRadius: '8px',
                               py: 0.4,
                               px: 1.5,
-                              borderColor: '#667eea',
-                              color: '#667eea',
+                              borderColor: '#17539C',
+                              color: '#17539C',
                               '&:hover': {
                                 borderColor: '#5a67d8',
                                 backgroundColor: 'rgba(102, 126, 234, 0.08)',
@@ -1447,231 +1448,144 @@ const CasesPage = ({ isClosedView = false }) => {
                       {subItems.length > 0 && (
                         <TableRow>
                           <TableCell
-                            colSpan={13}
+                            colSpan={11}
                             sx={{ py: 0, borderBottom: isExpanded ? '1px solid #e0e0e0' : 'none', p: 0 }}
                           >
                             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                              <Box sx={{ backgroundColor: '#f5f7ff', borderLeft: '4px solid #667eea', p: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <Box sx={{ backgroundColor: '#f5f7ff', borderLeft: '4px solid #17539C', p: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 {(() => {
-                                  const chargesheetItems = subItems.filter(s => s.type === 'Chargesheet');
-                                  const rtoItems = subItems.filter(s => s.type === 'RTO Check' || s.type === 'rto');
-                                  const otherItems = subItems.filter(s => s.type !== 'Chargesheet' && s.type !== 'RTO Check' && s.type !== 'rto');
+                                  const headers = ['Sub ID', 'Type', 'Subject Details', 'Location', 'Status', 'Assigned Partner', 'Action / Review'];
+                                  const colWidths = ['8%', '10%', '16%', '16%', '16%', '19%', '15%'];
 
-                                  const renderTable = (items, mode) => {
-                                    if (items.length === 0) return null;
-                                    const headers = mode === 'chargesheet'
-                                      ? ['Sub ID', 'Type', 'Court Name', 'Check Status', 'Legal Partner Status', 'Assigned Legal Partner', 'File RTI']
-                                      : mode === 'rto'
-                                        ? ['Sub ID', 'Type', 'RTO Name', 'Location', 'Check Status', 'Assigned Business Partner', 'Formats']
-                                        : ['Sub ID', 'Type', 'Name / Subject', 'Contact', 'Location', 'Check Status', 'Negative Check Status', 'Assigned Business Partner', 'Review'];
+                                  return (
+                                    <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #d0d5f5', borderRadius: '6px', mb: 2 }}>
+                                      <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+                                        <TableHead sx={{ backgroundColor: '#eef0fb' }}>
+                                          <TableRow>
+                                            {headers.map((h, i) => (
+                                              <TableCell key={h} align="center" sx={{ width: colWidths[i], fontSize: '13px', fontWeight: 700, color: '#17539C', textTransform: 'uppercase', letterSpacing: '0.4px', borderRight: '1px solid #d0d5f5', py: 2 }}>
+                                                {h}
+                                              </TableCell>
+                                            ))}
+                                          </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                          {subItems.map((sub, idx) => {
+                                            const sc = checkStatusColors[sub.check_status] || '#a0aec0';
+                                            const isVendorAssigned = Boolean(sub.assigned_vendor_name || sub.assigned_vendor_id);
+                                            const mode = sub.type === 'Chargesheet' ? 'chargesheet' : (sub.type === 'RTO Check' || sub.type === 'rto') ? 'rto' : 'other';
 
-                                    return (
-                                      <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #d0d5f5', borderRadius: '6px', mb: 2 }}>
-                                        <Table size="small">
-                                          <TableHead sx={{ backgroundColor: '#eef0fb' }}>
-                                            <TableRow>
-                                              {headers.map((h) => (
-                                                <TableCell key={h} align="center" sx={{ fontSize: '13px', fontWeight: 700, color: '#667eea', textTransform: 'uppercase', letterSpacing: '0.4px', borderRight: '1px solid #d0d5f5', py: 2 }}>
-                                                  {h}
+                                            return (
+                                              <TableRow
+                                                key={sub.sub_id}
+                                                hover
+                                                onClick={() => {
+                                                  const slug = typeToSlug[sub.type];
+                                                  if (slug) navigate(`/case_manager/cases/${row.id}/check/${slug}`);
+                                                }}
+                                                sx={{
+                                                  cursor: 'pointer',
+                                                  backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9faff',
+                                                  '& td': { borderRight: '1px solid #eceef8', py: 2, overflow: 'hidden' },
+                                                  '&:last-child td, &:last-child th': { borderBottom: 0 }
+                                                }}
+                                              >
+                                                {/* SUB ID */}
+                                                <TableCell align="center" sx={{ fontWeight: 700, fontSize: '15px', color: '#17539C' }}>{sub.sub_id}</TableCell>
+                                                
+                                                {/* TYPE */}
+                                                <TableCell align="center" sx={{ fontSize: '14px', fontWeight: 600, color: '#444' }}>{sub.type}</TableCell>
+
+                                                {/* SUBJECT DETAILS */}
+                                                <TableCell align="center" sx={{ fontSize: '14px', color: '#333' }}>
+                                                  <Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '100%', mx: 'auto' }}>
+                                                    {sub.name || '—'}
+                                                  </Typography>
+                                                  {mode === 'other' && sub.contact && (
+                                                    <Typography align="center" noWrap title={sub.contact} sx={{ fontSize: '12px', color: '#777', maxWidth: '100%', mx: 'auto', mt: 0.5 }}>
+                                                      {sub.contact}
+                                                    </Typography>
+                                                  )}
                                                 </TableCell>
-                                              ))}
-                                            </TableRow>
-                                          </TableHead>
-                                          <TableBody>
-                                            {items.map((sub, idx) => {
-                                              const sc = checkStatusColors[sub.check_status] || '#a0aec0';
-                                              const isVendorAssigned = Boolean(sub.assigned_vendor_name || sub.assigned_vendor_id);
-                                              return (
-                                                <TableRow
-                                                  key={sub.sub_id}
-                                                  hover
-                                                  onClick={() => {
-                                                    const slug = typeToSlug[sub.type];
-                                                    if (slug) navigate(`/case_manager/cases/${row.id}/check/${slug}`);
-                                                  }}
-                                                  sx={{
-                                                    cursor: 'pointer',
-                                                    backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9faff',
-                                                    '& td': { borderRight: '1px solid #eceef8', py: 2 },
-                                                    '&:last-child td, &:last-child th': { borderBottom: 0 }
-                                                  }}
-                                                >
-                                                  <TableCell align="center" sx={{ fontWeight: 700, fontSize: '15px', color: '#667eea' }}>{sub.sub_id}</TableCell>
-                                                  <TableCell align="center" sx={{ fontSize: '14px', fontWeight: 600, color: '#444' }}>{sub.type}</TableCell>
 
-                                                  {mode === 'chargesheet' ? (
-                                                    <TableCell align="center" sx={{ fontSize: '14px', color: '#333' }}><Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.name}</Typography></TableCell>
-                                                  ) : mode === 'rto' ? (
-                                                    <>
-                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#333' }}><Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.name}</Typography></TableCell>
-                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}><Typography align="center" noWrap title={sub.location} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.location}</Typography></TableCell>
-                                                    </>
-                                                  ) : (
-                                                    <>
-                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#333' }}><Typography align="center" noWrap title={sub.name} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.name}</Typography></TableCell>
-                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}><Typography align="center" noWrap title={sub.contact} sx={{ fontSize: 'inherit', maxWidth: '120px', mx: 'auto' }}>{sub.contact}</Typography></TableCell>
-                                                      <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}><Typography align="center" noWrap title={sub.location} sx={{ fontSize: 'inherit', maxWidth: '150px', mx: 'auto' }}>{sub.location}</Typography></TableCell>
-                                                    </>
-                                                  )}
+                                                {/* LOCATION */}
+                                                <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}>
+                                                  <Typography align="center" noWrap title={sub.location} sx={{ fontSize: 'inherit', maxWidth: '100%', mx: 'auto' }}>
+                                                    {sub.location || '—'}
+                                                  </Typography>
+                                                </TableCell>
 
-                                                  <TableCell align="center">
+                                                {/* STATUS & SPECIFIC STATUS */}
+                                                <TableCell align="center">
+                                                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                                                     <Chip label={sub.check_status} size="small" sx={{ backgroundColor: `${sc}22`, color: sc, fontWeight: 700, fontSize: '13px', height: '26px', borderRadius: '6px' }} />
-                                                  </TableCell>
-
-                                                  {mode === 'chargesheet' && (
-                                                    <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}>
-                                                      <Typography align="center" noWrap title={sub.advocate_status || 'N/A'} sx={{ fontSize: 'inherit', maxWidth: '120px', mx: 'auto' }}>
-                                                        {sub.advocate_status || 'N/A'}
-                                                      </Typography>
-                                                    </TableCell>
-                                                  )}
-
-                                                  {mode === 'other' && (
-                                                    <TableCell align="center" onClick={(e) => {
-                                                      if (sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable') {
-                                                        e.stopPropagation();
-                                                        handleOpenSection134(row.id);
-                                                      }
-                                                    }}>
-                                                      {sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable' ? (
-                                                        <Button
-                                                          size="small"
-                                                          variant="contained"
-                                                          sx={{
-                                                            textTransform: 'none',
-                                                            fontSize: '12px',
-                                                            fontWeight: 700,
-                                                            backgroundColor: '#ef4444',
-                                                            color: 'white',
-                                                            py: 0.2,
-                                                            px: 1,
-                                                            minWidth: 'auto',
-                                                            mx: 'auto',
-                                                            lineHeight: 1.2,
-                                                            '&:hover': { backgroundColor: '#dc2626' }
-                                                          }}
-                                                          title="Generate Section 134 Notice"
-                                                        >
-                                                          {sub.negative_status}
-                                                        </Button>
-                                                      ) : sub.negative_status === 'Shifted' ? (
-                                                        <Chip
-                                                          label="Shifted"
-                                                          size="small"
-                                                          sx={{
-                                                            fontSize: '12px',
-                                                            fontWeight: 800,
-                                                            backgroundColor: '#fee2e2',
-                                                            color: '#991b1b',
-                                                            border: '1px solid #fca5a5',
-                                                            mx: 'auto'
-                                                          }}
-                                                        />
-                                                      ) : (
-                                                        <Typography align="center" noWrap title={sub.negative_status || 'N/A'} sx={{ fontSize: '14px', color: '#555', maxWidth: '120px', mx: 'auto' }}>
-                                                          {sub.negative_status || 'N/A'}
-                                                        </Typography>
-                                                      )}
-                                                    </TableCell>
-                                                  )}
-
-                                                  <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                                                    {sub.assigned_vendor_name ? (
-                                                      <Button size="small" variant="text" startIcon={<Edit sx={{ fontSize: 14 }} />} onClick={() => openVendorModal(row.id, sub.type, sub.assigned_vendor_id)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 700, color: '#2e7d32', py: 0, px: 0.5, minWidth: 0, justifyContent: 'center', mx: 'auto' }} title={`Change vendor from ${sub.assigned_vendor_name}`}>
-                                                        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100px' }}>{sub.assigned_vendor_name}</Box>
-                                                      </Button>
-                                                    ) : (
-                                                      <Button size="small" variant="outlined" onClick={() => openVendorModal(row.id, sub.type)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 600, borderColor: '#667eea', color: '#667eea', py: 0.5, px: 1.5, minWidth: 'auto', mx: 'auto' }}>Assign</Button>
+                                                    
+                                                    {/* Mode specific sub-statuses */}
+                                                    {mode === 'chargesheet' && sub.advocate_status && (
+                                                      <Tooltip title="Legal Partner Status">
+                                                        <Chip label={sub.advocate_status} size="small" sx={{ fontSize: '11px', height: '20px', bgcolor: '#f1f5f9', color: '#475569' }} />
+                                                      </Tooltip>
                                                     )}
-                                                  </TableCell>
+                                                    {mode === 'other' && sub.negative_status && (
+                                                      <Tooltip title="Negative Check Status">
+                                                        <Chip 
+                                                          label={sub.negative_status} 
+                                                          size="small" 
+                                                          sx={{ 
+                                                            fontSize: '11px', 
+                                                            height: '20px', 
+                                                            bgcolor: (sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable') ? '#fee2e2' : '#fff7ed', 
+                                                            color: (sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable') ? '#b91c1c' : '#c2410c',
+                                                            border: '1px solid',
+                                                            borderColor: (sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable') ? '#fca5a5' : '#fed7aa'
+                                                          }} 
+                                                        />
+                                                      </Tooltip>
+                                                    )}
+                                                  </Box>
+                                                </TableCell>
 
-                                                  {mode === 'chargesheet' && (
-                                                    <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                                                      <Button
-                                                        size="small"
-                                                        variant="outlined"
-                                                        onClick={() => handleOpenFileRti(row.id, sub.sub_id)}
-                                                        sx={{
-                                                          textTransform: 'none',
-                                                          fontSize: '13px',
-                                                          fontWeight: 600,
-                                                          borderColor: '#f59e0b',
-                                                          color: '#f59e0b',
-                                                          py: 0.5,
-                                                          px: 1.5,
-                                                          minWidth: 'auto',
-                                                          mx: 'auto',
-                                                          '&:hover': {
-                                                            backgroundColor: '#fef3c7',
-                                                            borderColor: '#d97706',
-                                                          },
-                                                          '&.Mui-disabled': {
-                                                            borderColor: '#e2e8f0',
-                                                            color: '#94a3b8',
-                                                          }
-                                                        }}
-                                                      >
-                                                        File RTI
-                                                      </Button>
-                                                    </TableCell>
+                                                {/* ASSIGNED PARTNER */}
+                                                <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                                                  {sub.assigned_vendor_name ? (
+                                                    <Button size="small" variant="text" startIcon={<Edit sx={{ fontSize: 14 }} />} onClick={() => openVendorModal(row.id, sub.type, sub.assigned_vendor_id)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 700, color: '#2e7d32', py: 0, px: 0.5, minWidth: 0, justifyContent: 'center', mx: 'auto' }} title={`Change partner from ${sub.assigned_vendor_name}`}>
+                                                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>{sub.assigned_vendor_name}</Box>
+                                                    </Button>
+                                                  ) : (
+                                                    <Button size="small" variant="outlined" onClick={() => openVendorModal(row.id, sub.type)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 600, borderColor: '#17539C', color: '#17539C', py: 0.5, px: 1.5, minWidth: 'auto', mx: 'auto' }}>Assign</Button>
                                                   )}
+                                                </TableCell>
 
-                                                  {mode === 'rto' && (
-                                                    <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                                                      <Button
-                                                        size="medium"
-                                                        variant="contained"
-                                                        startIcon={<Description sx={{ fontSize: 16 }} />}
-                                                        onClick={() => handleOpenRtoDocModal(row.id)}
-                                                        sx={{
-                                                          textTransform: 'none',
-                                                          fontSize: '13.5px',
-                                                          fontWeight: 700,
-                                                          backgroundColor: '#4527a0',
-                                                          color: '#fff',
-                                                          py: 0.75,
-                                                          px: 2,
-                                                          minWidth: 0,
-                                                          boxShadow: 'none',
-                                                          mx: 'auto',
-                                                          '&:hover': {
-                                                            backgroundColor: '#311b92',
-                                                          }
-                                                        }}
-                                                      >
-                                                        Formats
-                                                      </Button>
-                                                    </TableCell>
-                                                  )}
-
-                                                  {mode === 'other' && (
-                                                    <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                                                {/* ACTION / REVIEW */}
+                                                <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                                                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
+                                                    {mode === 'other' ? (
                                                       <Tooltip title={!isVendorAssigned ? "Assign business partner to enable this button" : ""} arrow placement="top">
-                                                        <Box component="span" sx={{ display: 'inline-block', cursor: !isVendorAssigned ? 'not-allowed' : 'default' }}>
+                                                        <Box component="span" sx={{ display: 'inline-block', cursor: !isVendorAssigned ? 'not-allowed' : 'default', width: '100%' }}>
                                                           {sub.check_status === 'Verified' ? (
                                                             <Button size="small" variant="text" disabled={!isVendorAssigned} onClick={() => openReviewModal(row.id, sub.type)} sx={{ textTransform: 'none', p: 0, minWidth: 'auto', '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'not-allowed' } }}>
                                                               <Typography variant="body2" sx={{ fontWeight: 700, color: '#48bb78', fontSize: '13.5px', textDecoration: 'underline' }}>Accepted</Typography>
                                                             </Button>
                                                           ) : (
                                                             <Button
-                                                              size="medium"
+                                                              size="small"
                                                               variant="contained"
                                                               disabled={!isVendorAssigned}
                                                               startIcon={<Visibility sx={{ fontSize: 16 }} />}
                                                               onClick={() => openReviewModal(row.id, sub.type)}
                                                               sx={{
                                                                 textTransform: 'none',
-                                                                fontSize: '13.5px',
+                                                                fontSize: '12.5px',
                                                                 fontWeight: 700,
-                                                                backgroundColor: '#667eea',
+                                                                backgroundColor: '#17539C',
                                                                 color: '#fff',
-                                                                py: 0.75,
-                                                                px: 2,
+                                                                py: 0.5,
+                                                                px: 1.5,
                                                                 minWidth: 0,
                                                                 boxShadow: 'none',
                                                                 mx: 'auto',
                                                                 '&:hover': {
-                                                                  backgroundColor: '#5a67d8',
+                                                                  backgroundColor: '#0f3a70',
                                                                 }
                                                               }}
                                                             >
@@ -1680,23 +1594,82 @@ const CasesPage = ({ isClosedView = false }) => {
                                                           )}
                                                         </Box>
                                                       </Tooltip>
-                                                    </TableCell>
-                                                  )}
-                                                </TableRow>
-                                              );
-                                            })}
-                                          </TableBody>
-                                        </Table>
-                                      </TableContainer>
-                                    );
-                                  };
+                                                    ) : mode === 'chargesheet' ? (
+                                                      <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        onClick={() => handleOpenFileRti(row.id, sub.sub_id)}
+                                                        sx={{
+                                                          textTransform: 'none',
+                                                          fontSize: '12.5px',
+                                                          fontWeight: 600,
+                                                          borderColor: '#f59e0b',
+                                                          color: '#f59e0b',
+                                                          py: 0.5,
+                                                          px: 1.5,
+                                                          minWidth: 'auto',
+                                                          mx: 'auto',
+                                                          '&:hover': { backgroundColor: '#fef3c7', borderColor: '#d97706' },
+                                                        }}
+                                                      >
+                                                        File RTI
+                                                      </Button>
+                                                    ) : mode === 'rto' ? (
+                                                      <Button
+                                                        size="small"
+                                                        variant="contained"
+                                                        startIcon={<Description sx={{ fontSize: 16 }} />}
+                                                        onClick={() => handleOpenRtoDocModal(row.id)}
+                                                        sx={{
+                                                          textTransform: 'none',
+                                                          fontSize: '12.5px',
+                                                          fontWeight: 700,
+                                                          backgroundColor: '#17539C',
+                                                          color: '#fff',
+                                                          py: 0.5,
+                                                          px: 1.5,
+                                                          minWidth: 0,
+                                                          boxShadow: 'none',
+                                                          mx: 'auto',
+                                                          '&:hover': { backgroundColor: '#0f3a70' }
+                                                        }}
+                                                      >
+                                                        Formats
+                                                      </Button>
+                                                    ) : null}
 
-                                  return (
-                                    <>
-                                      {renderTable(otherItems, 'other')}
-                                      {renderTable(chargesheetItems, 'chargesheet')}
-                                      {renderTable(rtoItems, 'rto')}
-                                    </>
+                                                    {/* Section 134 for specific negative statuses */}
+                                                    {mode === 'other' && (sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable') && (
+                                                      <Button
+                                                        size="small"
+                                                        variant="contained"
+                                                        onClick={(e) => { e.stopPropagation(); handleOpenSection134(row.id); }}
+                                                        sx={{
+                                                          textTransform: 'none',
+                                                          fontSize: '11px',
+                                                          fontWeight: 700,
+                                                          backgroundColor: '#ef4444',
+                                                          color: 'white',
+                                                          py: 0.2,
+                                                          px: 1,
+                                                          minWidth: 'auto',
+                                                          mx: 'auto',
+                                                          lineHeight: 1.2,
+                                                          '&:hover': { backgroundColor: '#dc2626' }
+                                                        }}
+                                                        title="Generate Section 134 Notice"
+                                                      >
+                                                        Section 134
+                                                      </Button>
+                                                    )}
+                                                  </Box>
+                                                </TableCell>
+                                              </TableRow>
+                                            );
+                                          })}
+                                        </TableBody>
+                                      </Table>
+                                    </TableContainer>
                                   );
                                 })()}
                               </Box>
@@ -1797,7 +1770,7 @@ const CasesPage = ({ isClosedView = false }) => {
               sx={{
                 textTransform: 'none',
                 fontWeight: 600,
-                backgroundColor: '#667eea',
+                backgroundColor: '#17539C',
                 borderRadius: '8px',
                 '&:hover': { backgroundColor: '#5568d3' },
               }}
@@ -1877,7 +1850,7 @@ const CasesPage = ({ isClosedView = false }) => {
             sx: { borderRadius: '12px', overflow: 'hidden' }
           }}
         >
-          <DialogTitle sx={{ m: 0, p: 2, bgcolor: '#667eea', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <DialogTitle sx={{ m: 0, p: 2, bgcolor: '#17539C', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Typography variant="h6" fontWeight="700">
                 Check Details &amp; Evidence Review
@@ -1939,7 +1912,7 @@ const CasesPage = ({ isClosedView = false }) => {
                         <TableCell component="th" scope="row" sx={{ width: '40%', color: '#4a5568', fontWeight: 600, textTransform: 'capitalize', borderRight: '1px solid #edf2f7', py: 1.5 }}>
                           Check Type
                         </TableCell>
-                        <TableCell sx={{ color: '#667eea', fontWeight: 700, textTransform: 'capitalize', wordBreak: 'break-word', py: 1.5 }}>
+                        <TableCell sx={{ color: '#17539C', fontWeight: 700, textTransform: 'capitalize', wordBreak: 'break-word', py: 1.5 }}>
                           {reviewData.check_type || '—'}
                         </TableCell>
                       </TableRow>
@@ -1949,7 +1922,7 @@ const CasesPage = ({ isClosedView = false }) => {
 
                 {/* Check Fields Info */}
                 <Paper elevation={0} sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #e2e8f0', bgcolor: '#fff' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#667eea', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#17539C', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Check Information
                   </Typography>
                   <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
@@ -2058,7 +2031,7 @@ const CasesPage = ({ isClosedView = false }) => {
                   return (
                     <Paper elevation={0} sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #e2e8f0', bgcolor: '#fff' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#667eea', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#17539C', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           📋 Questionnaire Form
                         </Typography>
                         <Chip
@@ -2096,11 +2069,11 @@ const CasesPage = ({ isClosedView = false }) => {
                   );
                 })()}
 
-                {/* Vendor Statements */}
+                {/* Business Partner Statements */}
                 {reviewData.check_type?.toLowerCase() !== 'chargesheet' && (
                   <Paper elevation={0} sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #e2e8f0', bgcolor: '#fff' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#667eea', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Vendor Statements
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#17539C', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Business Partner Statements
                     </Typography>
 
                     {/* Main Statement */}
@@ -2143,7 +2116,7 @@ const CasesPage = ({ isClosedView = false }) => {
 
                     {!reviewData.check?.statement && !reviewData.check?.statement_mr && !reviewData.check?.statement_en && !reviewData.check?.statement_audio_url && (
                       <Typography variant="body2" sx={{ color: '#a0aec0', fontStyle: 'italic' }}>
-                        No vendor statements available for this check.
+                        No business partner statements available for this check.
                       </Typography>
                     )}
                   </Paper>
@@ -2151,7 +2124,7 @@ const CasesPage = ({ isClosedView = false }) => {
                 {/* Visit Photos Preview */}
                 {reviewData.check_type?.toLowerCase() !== 'chargesheet' && (
                   <Paper elevation={0} sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #e2e8f0', bgcolor: '#fff' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#667eea', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#17539C', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       Visit Photos ({reviewData.check?.evidence_photos?.length || 0})
                     </Typography>
 
@@ -2211,13 +2184,13 @@ const CasesPage = ({ isClosedView = false }) => {
             {reviewAction === 'reject' && (
               <Paper elevation={0} sx={{ p: 2, mb: 1.5, bgcolor: '#fff5f5', border: '1px solid #feb2b2', borderRadius: '8px', width: '100%' }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#c53030', mb: 1 }}>
-                  Provide Rejection / Reassignment Feedback for Vendor
+                  Provide Rejection / Reassignment Feedback for Business Partner
                 </Typography>
                 <TextField
                   fullWidth
                   multiline
                   rows={2}
-                  placeholder="Enter specific feedback on why this check is rejected and what the vendor needs to correct or re-verify..."
+                  placeholder="Enter specific feedback on why this check is rejected and what the business partner needs to correct or re-verify..."
                   value={reviewFeedback}
                   onChange={(e) => setReviewFeedback(e.target.value)}
                   size="small"
@@ -2791,8 +2764,8 @@ const CasesPage = ({ isClosedView = false }) => {
                                               try { val = JSON.parse(rawVal); } catch (e) { }
                                             }
 
-                                            const isPhotoField = key === 'applied_cs_photos' || key === 'cs_received_photos' || key === 'dispatched_photos';
-                                            const isDocField = key.toLowerCase().includes('document') && Array.isArray(val) && val.length > 0;
+                                            const isPhotoField = key.toLowerCase().includes('photo');
+                                            const isDocField = key.toLowerCase().includes('document') || key.toLowerCase().includes('file');
                                             const isUrlString = typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/media/'));
 
                                             // Fallback display value for non-special fields
@@ -2806,12 +2779,13 @@ const CasesPage = ({ isClosedView = false }) => {
 
                                             // Build cell content
                                             let cellContent;
-                                            if (isPhotoField && Array.isArray(val) && val.length > 0) {
+                                            if (isPhotoField && val !== null && val !== '' && val !== '[]' && val !== '{}' && val !== 'N/A') {
+                                              const photoArray = Array.isArray(val) ? val : [val];
                                               cellContent = (
                                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-                                                  {val.map((photoObj, pIdx) => {
-                                                    const pUrl = typeof photoObj === 'string' ? photoObj : (photoObj.preview_url || photoObj.url);
-                                                    if (!pUrl) return null;
+                                                  {photoArray.map((photoObj, pIdx) => {
+                                                    const pUrl = typeof photoObj === 'string' ? photoObj : (photoObj?.preview_url || photoObj?.url);
+                                                    if (!pUrl || pUrl === 'N/A') return <Typography key={pIdx}>{displayVal}</Typography>;
                                                     return (
                                                       <Box key={pIdx} sx={{ width: '140px' }}>
                                                         <Box sx={{ cursor: 'pointer', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }} onClick={() => setActivePhotoPreview(resolveMediaUrl(pUrl))}>
@@ -2825,12 +2799,14 @@ const CasesPage = ({ isClosedView = false }) => {
                                                   })}
                                                 </Box>
                                               );
-                                            } else if (isDocField) {
+                                            } else if (isDocField && val !== null && val !== '' && val !== '[]' && val !== '{}' && val !== 'N/A') {
+                                              const docArray = Array.isArray(val) ? val : [val];
                                               cellContent = (
                                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                                  {val.map((doc, dIdx) => {
-                                                    const docUrl = typeof doc === 'string' ? doc : (doc.url || doc.file_url);
-                                                    const resolved = docUrl ? resolveMediaUrl(docUrl) : '#';
+                                                  {docArray.map((doc, dIdx) => {
+                                                    const docUrl = typeof doc === 'string' ? doc : (doc?.url || doc?.file_url);
+                                                    if (!docUrl || docUrl === 'N/A') return <Typography key={dIdx}>{displayVal}</Typography>;
+                                                    const resolved = resolveMediaUrl(docUrl);
                                                     return (
                                                       <Button key={dIdx} size="small" variant="outlined" component="a" href={resolved} target="_blank" rel="noopener noreferrer" startIcon={<InsertDriveFile fontSize="small" />} sx={{ textTransform: 'none', borderRadius: '4px', p: 0.5, px: 1 }}>
                                                         Preview {(typeof doc === 'object' && doc.filename) || `Document ${dIdx + 1}`}
@@ -3310,7 +3286,7 @@ const CasesPage = ({ isClosedView = false }) => {
               variant="contained"
               onClick={handleGenerateRti}
               disabled={rtiGenerating || !rtiFormData.toAddress || !rtiFormData.accidentDate || !rtiFormData.accidentTime}
-              sx={{ backgroundColor: '#667eea', color: 'white', fontWeight: 600, '&:hover': { backgroundColor: '#5a67d8' } }}
+              sx={{ backgroundColor: '#17539C', color: 'white', fontWeight: 600, '&:hover': { backgroundColor: '#5a67d8' } }}
             >
               {rtiGenerating ? <CircularProgress size={20} color="inherit" /> : 'Generate & Download'}
             </Button>
@@ -3582,70 +3558,19 @@ const CasesPage = ({ isClosedView = false }) => {
         </Dialog>
 
         {/* Case Logs Drawer */}
-        <Drawer
-          anchor="right"
+        <CaseLogsDrawer
           open={caseLogsDrawerOpen}
           onClose={handleCloseCaseLogs}
-          PaperProps={{
-            sx: { width: { xs: '100%', sm: 450, md: 550 }, backgroundColor: '#f8fafc' }
+          target={caseLogsTarget}
+          logs={caseLogsData}
+          loading={caseLogsLoading}
+          onRefresh={() => {
+            if (caseLogsTarget?.id) {
+              handleOpenCaseLogs(caseLogsTarget.id, caseLogsTarget.case_number);
+            }
           }}
-        >
-          <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
-                <History sx={{ color: '#667eea' }} />
-                Case Logs {caseLogsTarget ? `- ${caseLogsTarget.case_number}` : ''}
-              </Typography>
-              <IconButton onClick={handleCloseCaseLogs} size="small">
-                <Close />
-              </IconButton>
-            </Box>
+        />
 
-            <Divider sx={{ mb: 3 }} />
-
-            {caseLogsLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : caseLogsData.length === 0 ? (
-              <Box sx={{ textAlign: 'center', my: 4, color: '#64748b' }}>
-                <Typography>No logs available for this case.</Typography>
-              </Box>
-            ) : (
-              <Box sx={{ flex: 1, overflowY: 'auto' }}>
-                <Stack spacing={2}>
-                  {caseLogsData.map((log) => (
-                    <Paper key={log.id} elevation={0} sx={{ p: 1.5, border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1.5, mb: log.check_type ? 0.5 : 0 }}>
-                        <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#334155', flex: 1 }}>
-                          {log.description}
-                        </Typography>
-                        <Typography sx={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap', flexShrink: 0, mt: '2px' }}>
-                          {new Date(log.event_time).toLocaleString()}
-                        </Typography>
-                      </Box>
-                      
-                      {log.check_type && (
-                        <Typography sx={{ fontSize: '12px', color: '#64748b', mb: 0 }}>
-                          <strong>Check:</strong> {log.check_type}
-                        </Typography>
-                      )}
-
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, pt: 0.75, borderTop: '1px dashed #cbd5e1' }}>
-                        <Typography sx={{ fontSize: '11px', color: '#64748b' }}>
-                          <strong>By:</strong> {log.actor} {log.actor_role ? `(${log.actor_role})` : ''}
-                        </Typography>
-                        <Typography sx={{ fontSize: '11px', color: '#64748b', ml: 'auto' }}>
-                          <strong>Source:</strong> {log.source}
-                        </Typography>
-                      </Box>
-                    </Paper>
-                  ))}
-                </Stack>
-              </Box>
-            )}
-          </Box>
-        </Drawer>
 
         {/* Snackbar for Notifications */}
         <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>

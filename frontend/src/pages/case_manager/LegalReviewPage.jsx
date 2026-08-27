@@ -578,7 +578,7 @@ const LegalReviewPage = () => {
               size="small"
               onClick={handleClearFilters}
               sx={{
-                color: '#667eea',
+                color: '#17539C',
                 textTransform: 'none',
                 fontWeight: 600,
                 '&:hover': { backgroundColor: '#f0f4ff' },
@@ -594,7 +594,7 @@ const LegalReviewPage = () => {
               onClick={() => setStatusFilter('accepted')}
               sx={{
                 ml: 'auto',
-                backgroundColor: '#667eea',
+                backgroundColor: '#17539C',
                 textTransform: 'none',
                 fontWeight: 600,
                 borderRadius: '8px',
@@ -673,7 +673,7 @@ const LegalReviewPage = () => {
                       <TableCell>
                         <Typography
                           sx={{
-                            color: '#667eea',
+                            color: '#17539C',
                             fontWeight: 600,
                             fontSize: '14px',
                           }}
@@ -699,7 +699,7 @@ const LegalReviewPage = () => {
                                 width: 28,
                                 height: 28,
                                 fontSize: '12px',
-                                backgroundColor: '#667eea',
+                                backgroundColor: '#17539C',
                               }}
                             >
                               <Gavel sx={{ fontSize: 16 }} />
@@ -744,7 +744,7 @@ const LegalReviewPage = () => {
                             size="small"
                             onClick={() => openReportDetail(row.id)}
                             sx={{
-                              backgroundColor: '#667eea',
+                              backgroundColor: '#17539C',
                               textTransform: 'none',
                               fontWeight: 600,
                               fontSize: '13px',
@@ -769,7 +769,7 @@ const LegalReviewPage = () => {
                                 fontSize: '13px',
                                 borderRadius: '6px',
                                 '&:hover': {
-                                  borderColor: '#667eea',
+                                  borderColor: '#17539C',
                                   backgroundColor: '#f0f4ff',
                                 },
                               }}
@@ -882,7 +882,7 @@ const LegalReviewPage = () => {
             sx={{
               textTransform: 'none',
               fontWeight: 600,
-              backgroundColor: '#667eea',
+              backgroundColor: '#17539C',
               borderRadius: '8px',
               '&:hover': { backgroundColor: '#5568d3' },
             }}
@@ -983,7 +983,7 @@ const LegalReviewPage = () => {
               {selectedReport.evidence_photos && selectedReport.evidence_photos.length > 0 && (
                 <Box sx={{ mt: 3 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
-                    Vendor Evidence
+                    Business Partner Evidence
                   </Typography>
                   <Box
                     sx={{
@@ -1011,7 +1011,7 @@ const LegalReviewPage = () => {
                           <Box sx={{ position: 'relative', backgroundColor: '#0f172a' }}>
                             <img
                               src={resolveEvidencePhotoUrl(photoUrl)}
-                              alt={`Vendor Evidence ${idx + 1}`}
+                              alt={`Business Partner Evidence ${idx + 1}`}
                               style={{
                                 display: 'block',
                                 width: '100%',
@@ -1059,7 +1059,7 @@ const LegalReviewPage = () => {
               {selectedReport.vendor_documents && selectedReport.vendor_documents.length > 0 && (
                 <Box sx={{ mt: 3 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>
-                    Vendor Documents
+                    Business Partner Documents
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     {selectedReport.vendor_documents.map((doc, idx) => (
@@ -1140,8 +1140,8 @@ const LegalReviewPage = () => {
                 textTransform: 'none',
                 fontWeight: 600,
                 borderRadius: '8px',
-                borderColor: '#667eea',
-                color: '#667eea',
+                borderColor: '#17539C',
+                color: '#17539C',
                 '&:hover': {
                   borderColor: '#5568d3',
                   backgroundColor: '#f0f4ff',
@@ -1159,7 +1159,7 @@ const LegalReviewPage = () => {
               sx={{
                 textTransform: 'none',
                 fontWeight: 600,
-                backgroundColor: '#667eea',
+                backgroundColor: '#17539C',
                 borderRadius: '8px',
                 '&:hover': { backgroundColor: '#5568d3' },
               }}
@@ -1177,7 +1177,7 @@ const LegalReviewPage = () => {
               sx={{
                 textTransform: 'none',
                 fontWeight: 600,
-                backgroundColor: '#667eea',
+                backgroundColor: '#17539C',
                 borderRadius: '8px',
                 '&:hover': { backgroundColor: '#5568d3' },
               }}

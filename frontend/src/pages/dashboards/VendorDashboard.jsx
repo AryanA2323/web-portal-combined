@@ -19,11 +19,11 @@ const VendorDashboard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Engineering />
-              <Typography variant="h6">Vendor Portal</Typography>
+              <Typography variant="h6">Business Partner Portal</Typography>
             </div>
             <div className="flex items-center gap-4">
               <Typography variant="body2">
-                Welcome, {user?.email || 'Vendor'}
+                Welcome, {user?.email || 'Business Partner'}
               </Typography>
               <Button
                 variant="outlined"
@@ -42,7 +42,7 @@ const VendorDashboard = () => {
       <Container maxWidth="lg" className="py-8">
         <Paper className="p-6 rounded-xl">
           <Typography variant="h4" className="mb-4 text-blue-800">
-            Vendor Dashboard
+            Business Partner Dashboard
           </Typography>
           <Typography variant="body1" className="text-gray-600">
             🔧 Manage and resolve incidents here.

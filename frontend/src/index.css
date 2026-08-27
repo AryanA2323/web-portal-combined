@@ -5,8 +5,8 @@
 
 /* Custom CSS Variables for Theme */
 :root {
-  --primary-color: #1976d2;
-  --secondary-color: #dc004e;
+  --primary-color: #17539C;
+  --secondary-color: #F36F21;
   --success-color: #2e7d32;
   --warning-color: #ed6c02;
   --error-color: #d32f2f;
@@ -24,7 +24,7 @@
 }
 
 body {
-  font-family: 'Roboto', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Montserrat', 'Roboto', 'Segoe UI', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--background-color);
@@ -38,7 +38,7 @@ body {
 
 /* Custom Utility Classes */
 .gradient-bg {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #17539C 0%, #103a6e 100%);
 }
 
 .glass-effect {

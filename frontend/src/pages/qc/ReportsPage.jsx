@@ -338,7 +338,7 @@ const ReportsPage = () => {
                       {paginatedReports.map((report) => (
                         <TableRow key={report.id} hover>
                           <TableCell>
-                            <Typography sx={{ color: '#667eea', fontWeight: 600 }}>
+                            <Typography sx={{ color: '#17539C', fontWeight: 600 }}>
                               {report.case_number}
                             </Typography>
                           </TableCell>

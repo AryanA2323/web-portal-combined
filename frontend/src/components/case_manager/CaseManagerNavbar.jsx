@@ -87,7 +87,7 @@ const CaseManagerNavbar = () => {
         >
           <Search sx={{ color: '#999', mr: 1 }} />
           <InputBase
-            placeholder="Search cases, vendors, users..."
+            placeholder="Search cases, business partners, users..."
             sx={{
               flex: 1,
               fontSize: '14px',
