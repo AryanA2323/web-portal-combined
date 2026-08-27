@@ -70,18 +70,16 @@ const resolveMediaUrl = (rawUrl) => {
   if (!rawUrl) return '';
   if (rawUrl.startsWith('data:') || rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
 
-  const path = rawUrl.startsWith('/media/')
-    ? rawUrl
-    : rawUrl.startsWith('media/')
-      ? `/${rawUrl}`
-      : `/media/${rawUrl.replace(/^\/+/, '')}`;
+  // Strip leading /media/ or media/ to get the clean path
+  const mediaPath = rawUrl.startsWith('/media/') ? rawUrl.slice(7) : rawUrl.startsWith('media/') ? rawUrl.slice(6) : rawUrl.replace(/^\/+/, '');
 
   const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
   try {
-    const origin = new URL(apiBase, window.location.origin).origin;
-    return `${origin}${path}`;
+    const baseUrl = new URL(apiBase, window.location.origin).href.replace(/\/+$/, '');
+    const cleanBase = baseUrl.endsWith('/api') ? baseUrl : baseUrl + '/api';
+    return `${cleanBase}/media/${mediaPath}`;
   } catch {
-    return `http://localhost:8001${path}`;
+    return `http://localhost:8001/api/media/${mediaPath}`;
   }
 };
 

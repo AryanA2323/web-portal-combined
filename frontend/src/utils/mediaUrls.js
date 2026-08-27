@@ -1,10 +1,11 @@
-const getApiOrigin = () => {
+const getApiBase = () => {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
 
   try {
-    return new URL(apiBaseUrl, window.location.origin).origin;
+    const url = new URL(apiBaseUrl, window.location.origin).href.replace(/\/+$/, '');
+    return url.endsWith('/api') ? url : url + '/api';
   } catch {
-    return window.location.origin;
+    return window.location.origin + '/api';
   }
 };
 
@@ -19,11 +20,8 @@ export const resolveEvidencePhotoUrl = (photoUrl) => {
   if (photoUrl.startsWith('data:')) return photoUrl;
   if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) return photoUrl;
 
-  const path = photoUrl.startsWith('/media/')
-    ? photoUrl
-    : photoUrl.startsWith('media/')
-      ? `/${photoUrl}`
-      : `/media/${photoUrl.replace(/^\/+/, '')}`;
+  // Strip leading /media/ or media/ to get the clean path
+  const mediaPath = photoUrl.startsWith('/media/') ? photoUrl.slice(7) : photoUrl.startsWith('media/') ? photoUrl.slice(6) : photoUrl.replace(/^\/+/, '');
 
-  return `${getApiOrigin()}${path}`;
+  return `${getApiBase()}/media/${mediaPath}`;
 };

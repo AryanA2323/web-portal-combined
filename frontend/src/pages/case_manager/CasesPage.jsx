@@ -73,8 +73,10 @@ const resolveMediaUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('http')) return url;
   const baseUrl = api.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api';
-  const cleanBase = baseUrl.endsWith('/api') ? baseUrl.slice(0, -4) : baseUrl;
-  return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
+  const cleanBase = baseUrl.endsWith('/api') ? baseUrl : baseUrl.replace(/\/+$/, '') + '/api';
+  // Route through /api/media/ so VPS Passenger routing picks it up
+  const mediaPath = url.startsWith('/media/') ? url.slice(7) : url.startsWith('media/') ? url.slice(6) : url.replace(/^\/+/, '');
+  return `${cleanBase}/media/${mediaPath}`;
 };
 
 // Full case status colors (incident_case_db values)
