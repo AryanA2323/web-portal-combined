@@ -430,12 +430,18 @@ def build_absolute_media_url(request: HttpRequest, raw_url: str) -> str:
         return str(raw_url)
 
     normalized_path = str(raw_url)
-    if normalized_path.startswith("media/"):
-        normalized_path = f"/{normalized_path}"
-    elif not normalized_path.startswith("/"):
-        normalized_path = f"/media/{normalized_path}"
+    # Strip any leading /media/ or media/ to get the clean relative path
+    if normalized_path.startswith("/media/"):
+        normalized_path = normalized_path[7:]
+    elif normalized_path.startswith("media/"):
+        normalized_path = normalized_path[6:]
+    elif normalized_path.startswith("/api/media/"):
+        normalized_path = normalized_path[11:]
+    elif normalized_path.startswith("/"):
+        normalized_path = normalized_path[1:]
 
-    return request.build_absolute_uri(normalized_path)
+    # Route through /api/media/ so VPS Passenger routing picks it up
+    return request.build_absolute_uri(f"/api/media/{normalized_path}")
 
 
 # =============================================================================
@@ -1346,7 +1352,7 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
                 dest.write(chunk)
 
         relative_path = f'evidence_photos/case_{case_id}/{check_type}/{filename}'
-        photo_url = f'/media/{relative_path}'
+        photo_url = f'/api/media/{relative_path}'
         address_text = f"{latitude}, {longitude}"
         try:
             from geopy.geocoders import ArcGIS, Nominatim

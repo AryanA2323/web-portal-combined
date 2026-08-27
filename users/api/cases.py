@@ -34,12 +34,16 @@ def _build_absolute_media_url(request: HttpRequest, raw_url: str) -> str:
         return str(raw_url)
 
     normalized_path = str(raw_url)
-    if normalized_path.startswith("media/"):
-        normalized_path = f"/{normalized_path}"
-    elif not normalized_path.startswith("/"):
-        normalized_path = f"/media/{normalized_path}"
+    # Strip any leading /media/ or media/ to get the clean relative path
+    if normalized_path.startswith("/media/"):
+        normalized_path = normalized_path[7:]
+    elif normalized_path.startswith("media/"):
+        normalized_path = normalized_path[6:]
+    elif normalized_path.startswith("/"):
+        normalized_path = normalized_path[1:]
 
-    return request.build_absolute_uri(normalized_path)
+    # Route through /api/media/ so VPS Passenger routing picks it up
+    return request.build_absolute_uri(f"/api/media/{normalized_path}")
 
 
 def _extract_evidence_filename(evidence_item) -> str:
@@ -3799,7 +3803,7 @@ def list_all_clients(request):
     for c in clients:
         agreement_url = None
         if c.agreement_copy and hasattr(c.agreement_copy, 'name') and c.agreement_copy.name:
-            agreement_url = f"/media/{c.agreement_copy.name}"
+            agreement_url = f"/api/media/{c.agreement_copy.name}"
         result.append(ClientDetailSchema(
             id=c.id,
             client_code=c.client_code,
@@ -4493,7 +4497,7 @@ def upload_check_media(
         for chunk in file.chunks():
             f.write(chunk)
 
-    rel_url = f"/media/{subfolder}/case_{case_id}/{check_type.lower()}/{safe_filename}"
+    rel_url = f"/api/media/{subfolder}/case_{case_id}/{check_type.lower()}/{safe_filename}"
     abs_url = _build_absolute_media_url(request, rel_url)
 
     # Prepare item payload
@@ -4913,7 +4917,7 @@ def generate_rto_rti_form(request, case_id: int, data: GenerateRTORTIRequest):
             
             doc_entry = {
                 "filename": fn,
-                "url": f"/media/{rel_path}",
+                "url": f"/api/media/{rel_path}",
                 "uploaded_at": datetime.now().isoformat(),
                 "uploaded_by": "System Generated",
                 "category": "rto_document"
