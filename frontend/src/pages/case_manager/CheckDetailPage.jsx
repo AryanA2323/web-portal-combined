@@ -61,6 +61,7 @@ import {
   InsertDriveFile,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
+import MediaPreviewModal from './components/MediaPreviewModal';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { NotificationBell } from '../../components/case_manager';
@@ -501,7 +502,7 @@ const CheckDetailPage = () => {
 
   // Media preview & upload states
   const [activeMediaTab, setActiveMediaTab] = useState(0);
-  const [activePhoto, setActivePhoto] = useState(null);
+  const [activeMediaPreview, setActiveMediaPreview] = useState(null);
 
   // Upload modal state
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -928,7 +929,7 @@ const CheckDetailPage = () => {
                               <Card elevation={0} sx={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', position: 'relative', '&:hover .overlay': { opacity: 1 } }}>
                                 <Box sx={{ position: 'relative', height: 160, bgcolor: '#0f172a' }}>
                                   <CardMedia component="img" height="160" image={photoUrl} alt={photo.filename || `Evidence ${idx + 1}`} sx={{ objectFit: 'cover' }} />
-                                  <Box className="overlay" onClick={() => setActivePhoto(photoUrl)} sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, bgcolor: 'rgba(15,23,42,0.5)', opacity: 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                  <Box className="overlay" onClick={() => setActiveMediaPreview({ url: photoUrl, type: 'photo' })} sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, bgcolor: 'rgba(15,23,42,0.5)', opacity: 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                                     <ZoomIn sx={{ color: '#fff', fontSize: 32 }} />
                                   </Box>
                                 </Box>
@@ -1047,9 +1048,7 @@ const CheckDetailPage = () => {
                                   size="small"
                                   variant="outlined"
                                   startIcon={<OpenInNew sx={{ fontSize: 14 }} />}
-                                  href={docUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                  onClick={(e) => { e.preventDefault(); setActiveMediaPreview({ url: docUrl, type: 'document', title: doc.filename }); }} href="#"
                                   sx={{ borderRadius: '6px', textTransform: 'none', fontSize: '12px', fontWeight: 600 }}
                                 >
                                   Preview / View
@@ -1137,25 +1136,7 @@ const CheckDetailPage = () => {
           </DialogActions>
         </Dialog>
 
-        {/* ─── LIGHTBOX PHOTO PREVIEW DIALOG ────────────────────────────── */}
-        <Dialog open={Boolean(activePhoto)} onClose={() => setActivePhoto(null)} maxWidth="md">
-          <Box sx={{ position: 'relative', bgcolor: '#0f172a', p: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
-            <IconButton
-              onClick={() => setActivePhoto(null)}
-              sx={{ position: 'absolute', top: 12, right: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' }, zIndex: 10 }}
-            >
-              <Close />
-            </IconButton>
-            {activePhoto && (
-              <Box
-                component="img"
-                src={activePhoto}
-                alt="Evidence Preview"
-                sx={{ maxWidth: '100%', maxHeight: '82vh', objectFit: 'contain', borderRadius: '4px' }}
-              />
-            )}
-          </Box>
-        </Dialog>
+        
 
         
 
@@ -1187,6 +1168,7 @@ const CheckDetailPage = () => {
         )}
 
       </Box>
+      <MediaPreviewModal open={Boolean(activeMediaPreview)} onClose={() => setActiveMediaPreview(null)} media={activeMediaPreview} />
     </CaseManagerLayout>
   );
 };

@@ -65,6 +65,7 @@ import CaseManagerLayout from './components/CaseManagerLayout';
 import StatCard from './components/StatCard';
 import CreateCaseDialog from './components/CreateCaseDialog';
 import CaseLogsDrawer from './components/CaseLogsDrawer';
+import MediaPreviewModal from './components/MediaPreviewModal';
 import api from '../../services/api';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 import { NotificationBell } from '../../components/case_manager';
@@ -300,7 +301,7 @@ const CasesPage = ({ isClosedView = false }) => {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewData, setReviewData] = useState(null);
-  const [activePhotoPreview, setActivePhotoPreview] = useState(null);
+  const [activeMediaPreview, setActiveMediaPreview] = useState(null);
 
   // Review action states
   const [reviewAction, setReviewAction] = useState(null);
@@ -1999,16 +2000,14 @@ const CasesPage = ({ isClosedView = false }) => {
                                         const pUrl = typeof photoObj === 'string' ? photoObj : (photoObj.preview_url || photoObj.url);
                                         return pUrl ? (
                                           <Box key={idx} sx={{ width: '150px' }}>
-                                            <Box sx={{ cursor: 'pointer' }} onClick={() => setActivePhotoPreview(resolveMediaUrl(pUrl))}>
+                                            <Box sx={{ cursor: 'pointer' }} onClick={() => setActiveMediaPreview({ url: resolveMediaUrl(pUrl), type: 'photo' })}>
                                               <img src={resolveMediaUrl(pUrl)} alt={`${key} ${idx}`} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '8px', display: 'block', border: '1px solid #e2e8f0' }} />
                                             </Box>
                                             <Button
                                               size="small"
                                               variant="outlined"
                                               component="a"
-                                              href={resolveMediaUrl(pUrl)}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
+                                              onClick={(e) => { e.preventDefault(); setActiveMediaPreview({ url: resolveMediaUrl(pUrl), type: 'document' }); }} href="#"
                                               sx={{ mt: 1, width: '100%', textTransform: 'none' }}
                                             >
                                               Preview Photo
@@ -2154,7 +2153,7 @@ const CasesPage = ({ isClosedView = false }) => {
                           <Grid item xs={6} sm={4} md={3} key={pIdx}>
                             <Paper
                               elevation={0}
-                              onClick={() => setActivePhotoPreview(resolveMediaUrl(photo.preview_url || photo.url))}
+                              onClick={() => setActiveMediaPreview({ url: resolveMediaUrl(photo.preview_url || photo.url), type: 'photo' })}
                               sx={{
                                 border: '1px solid #e2e8f0',
                                 borderRadius: '8px',
@@ -2808,10 +2807,10 @@ const CasesPage = ({ isClosedView = false }) => {
                                                     if (!pUrl || pUrl === 'N/A') return <Typography key={pIdx}>{displayVal}</Typography>;
                                                     return (
                                                       <Box key={pIdx} sx={{ width: '140px' }}>
-                                                        <Box sx={{ cursor: 'pointer', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }} onClick={() => setActivePhotoPreview(resolveMediaUrl(pUrl))}>
+                                                        <Box sx={{ cursor: 'pointer', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }} onClick={() => setActiveMediaPreview({ url: resolveMediaUrl(pUrl), type: 'photo' })}>
                                                           <img src={resolveMediaUrl(pUrl)} alt={`${key} ${pIdx + 1}`} style={{ width: '100%', height: '95px', objectFit: 'cover', display: 'block' }} />
                                                         </Box>
-                                                        <Button size="small" variant="outlined" component="a" href={resolveMediaUrl(pUrl)} target="_blank" rel="noopener noreferrer" sx={{ mt: 0.5, width: '100%', textTransform: 'none', fontSize: '11px' }}>
+                                                        <Button size="small" variant="outlined" component="a" onClick={(e) => { e.preventDefault(); setActiveMediaPreview({ url: resolveMediaUrl(pUrl), type: 'document' }); }} href="#" sx={{ mt: 0.5, width: '100%', textTransform: 'none', fontSize: '11px' }}>
                                                           Preview
                                                         </Button>
                                                       </Box>
@@ -2972,7 +2971,7 @@ const CasesPage = ({ isClosedView = false }) => {
                                         <Paper
                                           key={pIdx}
                                           elevation={0}
-                                          onClick={() => setActivePhotoPreview(photo.url)}
+                                          onClick={() => setActiveMediaPreview({ url: photo.url, type: 'photo' })}
                                           sx={{
                                             border: '1px solid #e2e8f0',
                                             borderRadius: '10px',
@@ -3048,7 +3047,7 @@ const CasesPage = ({ isClosedView = false }) => {
                                               <Button
                                                 variant="outlined"
                                                 size="small"
-                                                onClick={() => window.open(resolveMediaUrl(doc.url || doc.preview_url || doc.file_url), '_blank')}
+                                                onClick={() => setActiveMediaPreview({ url: resolveMediaUrl(doc.url || doc.preview_url || doc.file_url), type: 'document', title: doc.filename })}
                                                 sx={{ mt: 'auto', textTransform: 'none', borderRadius: '6px' }}
                                               >
                                                 View Document
@@ -3119,7 +3118,7 @@ const CasesPage = ({ isClosedView = false }) => {
                               <Paper
                                 key={i}
                                 elevation={0}
-                                onClick={() => setActivePhotoPreview(photo.url)}
+                                onClick={() => setActiveMediaPreview({ url: photo.url, type: 'photo' })}
                                 sx={{
                                   border: '1px solid #e2e8f0',
                                   borderRadius: '10px',
@@ -3432,7 +3431,7 @@ const CasesPage = ({ isClosedView = false }) => {
                               <Button
                                 variant="outlined"
                                 size="small"
-                                onClick={() => window.open(resolveMediaUrl(doc.url || doc.preview_url || doc.file_url), '_blank')}
+                                onClick={() => setActiveMediaPreview({ url: resolveMediaUrl(doc.url || doc.preview_url || doc.file_url), type: 'document', title: doc.filename })}
                                 sx={{ mt: 'auto', textTransform: 'none', borderRadius: '6px', color: '#166534', borderColor: '#166534' }}
                               >
                                 View Document
@@ -3591,6 +3590,8 @@ const CasesPage = ({ isClosedView = false }) => {
           }}
         />
 
+
+        <MediaPreviewModal open={Boolean(activeMediaPreview)} onClose={() => setActiveMediaPreview(null)} media={activeMediaPreview} />
 
         {/* Snackbar for Notifications */}
         <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>

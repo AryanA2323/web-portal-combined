@@ -32,7 +32,19 @@ def serve_media(request, path, document_root=None):
     fullpath = Path(document_root) / path
 
     if not fullpath.exists() or fullpath.is_dir():
-        raise Http404(f"'{path}' could not be found")
+        # Fallback: try replacing spaces with underscores in filename
+        # (uploads use file.name.replace(' ', '_') but URLs may retain spaces)
+        alt_name = fullpath.name.replace(' ', '_')
+        alt_path = fullpath.parent / alt_name
+        if alt_path.exists() and not alt_path.is_dir():
+            fullpath = alt_path
+        else:
+            # Also try the entire path with spaces replaced
+            alt_full = Path(document_root) / path.replace(' ', '_')
+            if alt_full.exists() and not alt_full.is_dir():
+                fullpath = alt_full
+            else:
+                raise Http404(f"'{path}' could not be found")
 
     # Resolve to absolute to prevent traversal
     fullpath = fullpath.resolve()
