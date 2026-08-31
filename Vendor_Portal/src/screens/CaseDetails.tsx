@@ -498,12 +498,26 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     }
   };
 
+  const showUploadErrorModal = (err: any, fallbackTitle = 'Upload Failed') => {
+    console.log(`${fallbackTitle}:`, err);
+    const errorMsg = err?.details?.error || err?.message || 'Failed to upload photo.';
+    const isLocationError = errorMsg.toLowerCase().includes('location') || errorMsg.toLowerCase().includes('mismatch');
+    if (isLocationError) {
+      showDialog({
+        type: 'error',
+        title: 'Location Mismatch',
+        message: errorMsg,
+        actions: [{ text: 'OK' }],
+      });
+    } else {
+      showToast({ type: 'error', title: fallbackTitle, message: errorMsg });
+    }
+  };
+
   const submitAllEvidence = async () => {
     if (pendingPhotos.length === 0 && pendingStatements.length === 0) return;
 
     setUploading(true);
-    let errorCount = 0;
-
     try {
       if (pendingPhotos.length > 0) {
         await apiService.uploadCheckEvidence(caseId, checkType, pendingPhotos);
@@ -526,17 +540,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         actions: [{ text: 'Done', onPress: () => router.back() }],
       });
     } catch (err: any) {
-      console.log('Submit failed:', err);
-      const errorMsg = err.details?.error || err.message || 'Failed to upload evidence.';
-      const isLocationError = errorMsg.toLowerCase().includes('location') || errorMsg.toLowerCase().includes('mismatch');
-      showDialog({
-        type: 'error',
-        title: isLocationError ? 'Location Mismatch' : 'Upload Rejected',
-        message: isLocationError
-          ? 'The evidence photo you uploaded does not match the check location. Try uploading the photo from the correct location.'
-          : errorMsg,
-        actions: [{ text: 'OK' }],
-      });
+      showUploadErrorModal(err, 'Submit Failed');
     } finally {
       setUploading(false);
     }
@@ -623,8 +627,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       showToast({ type: 'success', title: 'Photos Uploaded', message: 'Visit photos saved successfully.' });
       await loadData(false);
     } catch (err: any) {
-      console.error('Upload visit photos error:', err);
-      showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload visit photos.' });
+      showUploadErrorModal(err, 'Upload Failed');
     } finally {
       setUploading(false);
     }
@@ -702,8 +705,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       showToast({ type: 'success', title: 'Photo Uploaded', message: 'Visit photo saved successfully.' });
       await loadData(false);
     } catch (err: any) {
-      console.error('Upload camera photo error:', err);
-      showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload visit photo.' });
+      showUploadErrorModal(err, 'Upload Failed');
     } finally {
       setUploading(false);
     }
@@ -1178,7 +1180,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
                 await loadData(false);
               } catch (err: any) {
-                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+                showUploadErrorModal(err, 'Upload Failed');
               } finally {
                 setUploading(false);
               }
@@ -1212,7 +1214,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
                 await loadData(false);
               } catch (err: any) {
-                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+                showUploadErrorModal(err, 'Upload Failed');
               } finally {
                 setUploading(false);
               }
@@ -1306,7 +1308,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
                 await loadData(false);
               } catch (err: any) {
-                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+                showUploadErrorModal(err, 'Upload Failed');
               } finally {
                 setUploading(false);
               }
@@ -1340,7 +1342,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
                 await loadData(false);
               } catch (err: any) {
-                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+                showUploadErrorModal(err, 'Upload Failed');
               } finally {
                 setUploading(false);
               }
@@ -1434,7 +1436,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
                 await loadData(false);
               } catch (err: any) {
-                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+                showUploadErrorModal(err, 'Upload Failed');
               } finally {
                 setUploading(false);
               }
@@ -1468,7 +1470,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
                 await loadData(false);
               } catch (err: any) {
-                showToast({ type: 'error', title: 'Upload Failed', message: err?.message || 'Failed to upload photo.' });
+                showUploadErrorModal(err, 'Upload Failed');
               } finally {
                 setUploading(false);
               }

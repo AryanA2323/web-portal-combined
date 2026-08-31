@@ -52,9 +52,267 @@ def _get_cursor():
     return connections[DB_ALIAS].cursor()
 
 
+# ─── Open Location Code / Google Plus Code Decoding Constants ───────────────
+CODE_ALPHABET = "23456789CFGHJMPQRVWX"
+CODE_ALPHABET_MAP = {c: i for i, c in enumerate(CODE_ALPHABET)}
+SEPARATOR = "+"
+SEPARATOR_POSITION = 8
+
+# Reference coordinates for major Indian cities to instantly recover local plus codes
+PLUS_CODE_CITY_COORDS = {
+    'pune': (18.5204, 73.8567),
+    'mumbai': (19.0760, 72.8777),
+    'delhi': (28.6139, 77.2090),
+    'bangalore': (12.9716, 77.5946),
+    'bengaluru': (12.9716, 77.5946),
+    'hyderabad': (17.3850, 78.4867),
+    'chennai': (13.0827, 80.2707),
+    'kolkata': (22.5726, 88.3639),
+    'ahmedabad': (23.0225, 72.5714),
+    'jaipur': (26.9124, 75.7873),
+    'lucknow': (26.8467, 80.9462),
+    'nagpur': (21.1458, 79.0882),
+    'nashik': (19.9975, 73.7898),
+    'aurangabad': (19.8762, 75.3433),
+    'chhatrapati sambhajinagar': (19.8762, 75.3433),
+    'thane': (19.2183, 72.9781),
+    'solapur': (17.6599, 75.9064),
+    'kolhapur': (16.7050, 74.2433),
+    'amravati': (20.9374, 77.7796),
+    'nanded': (19.1383, 77.3210),
+    'sangli': (16.8524, 74.5815),
+    'satara': (17.6805, 74.0183),
+}
+
+
+def _parse_dms(dms_str: str):
+    """
+    Parse Degrees Minutes Seconds (DMS) string to decimal (lat, lng) with 100% precision.
+    Supports Google Maps DMS formats:
+      - 18°33'54.7"N 73°56'41.3"E
+      - 18°33'54.7\"N, 73°56'41.3\"E
+      - 18 33 54.7 N 73 56 41.3 E
+    """
+    if not dms_str:
+        return None
+    pattern = r'(?i)(\d+)[\s°º\^]+(\d+)[\s\'\′]+(?:(\d+(?:\.\d+)?)[\s\"\″\”]*)?([NS])[\s,;+]+(\d+)[\s°º\^]+(\d+)[\s\'\′]+(?:(\d+(?:\.\d+)?)[\s\"\″\”]*)?([EW])'
+    m = re.search(pattern, dms_str.strip())
+    if m:
+        lat_d, lat_m, lat_s, lat_dir, lng_d, lng_m, lng_s, lng_dir = m.groups()
+        lat = float(lat_d) + float(lat_m) / 60.0 + (float(lat_s) if lat_s else 0.0) / 3600.0
+        if lat_dir.upper() == 'S':
+            lat = -lat
+        lng = float(lng_d) + float(lng_m) / 60.0 + (float(lng_s) if lng_s else 0.0) / 3600.0
+        if lng_dir.upper() == 'W':
+            lng = -lng
+        return round(lat, 7), round(lng, 7)
+    return None
+
+
+def _parse_decimal_coords(coord_str: str):
+    """
+    Parse Decimal Degrees string to (lat, lng) with 100% precision.
+    Supports formats:
+      - 18.565194, 73.944806
+      - 18.565194 73.944806
+      - 18.565194° N, 73.944806° E
+      - Auto-fixes inverted (lng, lat) coordinates for India region.
+    """
+    if not coord_str:
+        return None
+    clean = re.sub(r'(?i)\b(lat|latitude|lng|long|longitude)[:=\s]+', '', coord_str)
+    pattern = r'(?i)\b([+-]?\d{1,2}(?:\.\d{3,8}))\s*°?\s*([NS])?[\s,;+]+([+-]?\d{1,3}(?:\.\d{3,8}))\s*°?\s*([EW])?\b'
+    m = re.search(pattern, clean.strip())
+    if m:
+        v1, dir1, v2, dir2 = m.groups()
+        f1, f2 = float(v1), float(v2)
+        if dir1 and dir1.upper() == 'S': f1 = -abs(f1)
+        if dir1 and dir1.upper() == 'N': f1 = abs(f1)
+        if dir2 and dir2.upper() == 'W': f2 = -abs(f2)
+        if dir2 and dir2.upper() == 'E': f2 = abs(f2)
+
+        # Check India bounding box and inverted coords (India lat 6-38, lng 68-98)
+        if 68 <= f1 <= 98 and 6 <= f2 <= 38 and not dir1:
+            return round(f2, 7), round(f1, 7)
+        if -90 <= f1 <= 90 and -180 <= f2 <= 180:
+            return round(f1, 7), round(f2, 7)
+        if -90 <= f2 <= 90 and -180 <= f1 <= 180:
+            return round(f2, 7), round(f1, 7)
+    return None
+
+
+def _parse_google_maps_url(url_str: str):
+    """
+    Extract coordinates from Google Maps URLs:
+      - https://www.google.com/maps/place/.../@18.565194,73.944806,17z/...
+      - https://maps.google.com/?q=18.565194,73.944806
+      - https://maps.app.goo.gl/... (follows redirect)
+    """
+    if not url_str or not ('maps.google.' in url_str or 'google.com/maps' in url_str or 'goo.gl/maps' in url_str or 'maps.app.goo.gl' in url_str):
+        return None
+    target_url = url_str.strip()
+    if 'goo.gl' in target_url or 'maps.app.goo.gl' in target_url:
+        try:
+            req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                target_url = resp.geturl()
+        except Exception:
+            pass
+
+    at_match = re.search(r'@([+-]?\d+\.\d+),([+-]?\d+\.\d+)', target_url)
+    if at_match:
+        return round(float(at_match.group(1)), 7), round(float(at_match.group(2)), 7)
+
+    q_match = re.search(r'[?&](?:q|query|ll|loc|destination)=([+-]?\d+\.\d+)[,+ ]+([+-]?\d+\.\d+)', target_url)
+    if q_match:
+        return round(float(q_match.group(1)), 7), round(float(q_match.group(2)), 7)
+
+    data_match = re.search(r'!3d([+-]?\d+\.\d+)!4d([+-]?\d+\.\d+)', target_url)
+    if data_match:
+        return round(float(data_match.group(1)), 7), round(float(data_match.group(2)), 7)
+
+    return None
+
+
+def _decode_full_plus_code(code: str):
+    """Decode a full Open Location Code (e.g. 7658HW8W+2G) to (lat, lng)."""
+    clean_code = code.upper().replace(SEPARATOR, "")
+    if len(clean_code) < 2:
+        return None
+    lat_val = 0.0
+    lng_val = 0.0
+    lat_val += CODE_ALPHABET_MAP.get(clean_code[0], 0) * 20.0
+    lng_val += CODE_ALPHABET_MAP.get(clean_code[1], 0) * 20.0
+    resolution = 20.0
+    pair_count = min(len(clean_code) // 2, 5)
+    for i in range(1, pair_count):
+        resolution /= 20.0
+        lat_val += CODE_ALPHABET_MAP.get(clean_code[i * 2], 0) * resolution
+        lng_val += CODE_ALPHABET_MAP.get(clean_code[i * 2 + 1], 0) * resolution
+    lat_val -= 90.0
+    lng_val -= 180.0
+    if len(clean_code) > 10:
+        row_res = resolution / 5.0
+        col_res = resolution / 4.0
+        for i in range(10, len(clean_code)):
+            val = CODE_ALPHABET_MAP.get(clean_code[i], 0)
+            row = val // 4
+            col = val % 4
+            lat_val += row * row_res
+            lng_val += col * col_res
+            row_res /= 5.0
+            col_res /= 4.0
+        resolution = row_res
+    center_lat = lat_val + (resolution / 2.0 if len(clean_code) <= 10 else resolution * 2.5)
+    center_lng = lng_val + (resolution / 2.0 if len(clean_code) <= 10 else resolution * 2.0)
+    return round(center_lat, 7), round(center_lng, 7)
+
+
+def _recover_nearest_plus_code(short_code: str, ref_lat: float, ref_lng: float):
+    """Recover full plus code from a short code and reference coordinates."""
+    short_code = short_code.upper().strip()
+    sep_idx = short_code.find(SEPARATOR)
+    if sep_idx < 0 or sep_idx > SEPARATOR_POSITION:
+        return None
+    digits_to_add = SEPARATOR_POSITION - sep_idx
+    if digits_to_add % 2 != 0:
+        return None
+    norm_lat = ref_lat + 90.0
+    norm_lng = ref_lng + 180.0
+    prefix = ""
+    res = 20.0
+    for _ in range(digits_to_add // 2):
+        lat_digit = int(norm_lat // res) % 20
+        lng_digit = int(norm_lng // res) % 20
+        prefix += CODE_ALPHABET[lat_digit] + CODE_ALPHABET[lng_digit]
+        res /= 20.0
+    full_code = prefix + short_code
+    decoded = _decode_full_plus_code(full_code)
+    if not decoded:
+        return None
+    lat, lng = decoded
+    res_deg = res * 20.0
+    while lat - ref_lat > res_deg / 2: lat -= res_deg
+    while lat - ref_lat < -res_deg / 2: lat += res_deg
+    while lng - ref_lng > res_deg / 2: lng -= res_deg
+    while lng - ref_lng < -res_deg / 2: lng += res_deg
+    return round(lat, 7), round(lng, 7)
+
+
+def _parse_plus_code(text: str):
+    """
+    Parse a Google Plus Code (e.g. 'HW8W+2G Pune, Maharashtra' or '8V6QHW8W+2G').
+    """
+    if not text:
+        return None
+    m = re.search(r'\b([23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3})\b', text.upper())
+    if not m:
+        return None
+    code = m.group(1)
+    if len(code.replace('+', '')) >= 8:
+        return _decode_full_plus_code(code)
+    lower_text = text.lower()
+    for city, (clat, clng) in PLUS_CODE_CITY_COORDS.items():
+        if city in lower_text:
+            return _recover_nearest_plus_code(code, clat, clng)
+    return _recover_nearest_plus_code(code, 18.5204, 73.8567)
+
+
+def _google_maps_geocode(address: str):
+    """
+    Google Maps Geocoding API (highest accuracy for Indian POIs and businesses).
+    Uses GOOGLE_MAPS_API_KEY if configured in settings/environment.
+    """
+    from django.conf import settings
+    import os
+    key = getattr(settings, 'GOOGLE_MAPS_API_KEY', '') or os.environ.get('GOOGLE_MAPS_API_KEY', '')
+    if not key or key in ('your_google_maps_api_key', 'YOUR_GOOGLE_MAPS_API_KEY', ''):
+        return None, None
+    try:
+        params = urllib.parse.urlencode({
+            'address': address.strip(),
+            'key': key.strip(),
+            'region': 'in',
+        })
+        url = f'https://maps.googleapis.com/maps/api/geocode/json?{params}'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+        if data.get('status') == 'OK' and data.get('results'):
+            loc = data['results'][0]['geometry']['location']
+            return round(float(loc['lat']), 7), round(float(loc['lng']), 7)
+    except Exception as e:
+        logger.debug(f'[geocode] Google Maps Geocode failed: {e}')
+    return None, None
+
+
+def _mapbox_geocode(address: str):
+    """
+    Mapbox Geocoding API (100k free requests/month, no credit card required).
+    Uses MAPBOX_ACCESS_TOKEN if configured in settings/environment.
+    """
+    from django.conf import settings
+    import os
+    token = getattr(settings, 'MAPBOX_ACCESS_TOKEN', '') or os.environ.get('MAPBOX_ACCESS_TOKEN', '')
+    if not token or token in ('your_mapbox_token', 'YOUR_MAPBOX_ACCESS_TOKEN', ''):
+        return None, None
+    try:
+        encoded_query = urllib.parse.quote(address.strip())
+        url = f'https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded_query}.json?access_token={token.strip()}&country=in&limit=1'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+        if data.get('features'):
+            coords = data['features'][0]['geometry']['coordinates'] # [lng, lat]
+            return round(float(coords[1]), 7), round(float(coords[0]), 7)
+    except Exception as e:
+        logger.debug(f'[geocode] Mapbox Geocode failed: {e}')
+    return None, None
+
+
 def _arcgis_query(query: str):
     """
-    Single ArcGIS API call via geopy. Returns (lat, lng) or (None, None).
+    ArcGIS API call via geopy with coordinate inversion protection for India.
     """
     if not query or not query.strip():
         return None, None
@@ -63,7 +321,11 @@ def _arcgis_query(query: str):
         geolocator = ArcGIS(timeout=10)
         location = geolocator.geocode(query.strip())
         if location:
-            return location.latitude, location.longitude
+            lat, lng = location.latitude, location.longitude
+            # Inversion fix (India latitude is 6-38, longitude is 68-98)
+            if 68 <= lat <= 98 and 6 <= lng <= 38:
+                lat, lng = lng, lat
+            return round(lat, 7), round(lng, 7)
     except Exception as e:
         logger.debug(f'[geocode] ArcGIS call failed for "{query[:60]}": {e}')
     return None, None
@@ -71,8 +333,7 @@ def _arcgis_query(query: str):
 
 def _nominatim_query(query: str):
     """
-    Single Nominatim API call. Returns (lat, lng) or (None, None).
-    Restricted to India (countrycodes=in) for better accuracy.
+    Nominatim API call restricted to India.
     """
     if not query or not query.strip():
         return None, None
@@ -88,7 +349,7 @@ def _nominatim_query(query: str):
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
         if data:
-            return float(data[0]['lat']), float(data[0]['lon'])
+            return round(float(data[0]['lat']), 7), round(float(data[0]['lon']), 7)
     except Exception as e:
         logger.debug(f'[geocode] Nominatim call failed for "{query[:60]}": {e}')
     return None, None
@@ -96,73 +357,141 @@ def _nominatim_query(query: str):
 
 def _geocode(address: str):
     """
-    Convert an address string to (latitude, longitude) using ArcGIS and
-    OpenStreetMap Nominatim API.
-
-    ArcGIS is used as the primary high-accuracy geocoder. Nominatim is used as
-    a fallback with progressive simplification to handle verbose Indian addresses.
+    Ultra-high accuracy location retriever supporting:
+      1. Direct Google Maps URLs (short & long links)
+      2. Degrees Minutes Seconds (DMS) coordinates from Google Maps (e.g. 18°33'54.7"N 73°56'41.3"E)
+      3. Decimal coordinates (e.g. 18.565194, 73.944806)
+      4. Google Plus Codes / Open Location Code (e.g. HW8W+2G Pune, Maharashtra)
+      5. Embedded coordinates/Plus Codes inside place/address text
+      6. Google Maps Geocoding API (highest accuracy building resolution)
+      7. Mapbox Geocoding API (high accuracy POI and street resolution)
+      8. ArcGIS with Indian coordinate inversion protection
+      9. Nominatim progressive fallback for Indian addresses
     """
     if not address or not address.strip():
         return None, None
 
-    # --- Strategy 0: ArcGIS High-Accuracy --------------------------------------
-    lat, lng = _arcgis_query(address)
+    raw = address.strip()
+
+    # ── Strategy 1: Direct Google Maps URL / Share Link ─────────────────────
+    coords = _parse_google_maps_url(raw)
+    if coords:
+        logger.info(f'[geocode] Strategy-GoogleMapsURL: {coords} from "{raw[:60]}"')
+        return coords
+
+    # ── Strategy 2: Direct DMS Coordinates (e.g. 18°33'54.7"N 73°56'41.3"E) ─
+    coords = _parse_dms(raw)
+    if coords:
+        logger.info(f'[geocode] Strategy-DMS: {coords} from "{raw[:60]}"')
+        return coords
+
+    # ── Strategy 3: Direct Decimal Coordinates (e.g. 18.565194, 73.944806) ──
+    coords = _parse_decimal_coords(raw)
+    if coords:
+        logger.info(f'[geocode] Strategy-DecimalCoords: {coords} from "{raw[:60]}"')
+        return coords
+
+    # ── Strategy 4: Google Plus Code / Open Location Code ───────────────────
+    coords = _parse_plus_code(raw)
+    if coords:
+        logger.info(f'[geocode] Strategy-PlusCode: {coords} from "{raw[:60]}"')
+        return coords
+
+    # ── Strategy 5: Embedded coordinates/links inside full text ─────────────
+    # Check if address contains embedded Google Maps URL
+    url_match = re.search(r'https?://[^\s,]+', raw)
+    if url_match:
+        url_coords = _parse_google_maps_url(url_match.group(0))
+        if url_coords:
+            logger.info(f'[geocode] Strategy-EmbeddedURL: {url_coords}')
+            return url_coords
+
+    # Check if address contains embedded DMS
+    dms_match = re.search(r'(\d+[\s°º\^]+\d+[\s\'\′]+(?:\d+(?:\.\d+)?[\s\"\″\”]*)?[NS][\s,;+]+\d+[\s°º\^]+\d+[\s\'\′]+(?:\d+(?:\.\d+)?[\s\"\″\”]*)?[EW])', raw)
+    if dms_match:
+        coords = _parse_dms(dms_match.group(1))
+        if coords:
+            logger.info(f'[geocode] Strategy-EmbeddedDMS: {coords}')
+            return coords
+
+    # Check if address contains embedded decimal coords
+    dec_match = re.search(r'([+-]?\d{1,2}\.\d{4,8})\s*°?\s*([NS])?[\s,;+]+([+-]?\d{1,3}\.\d{4,8})\s*°?\s*([EW])?', raw)
+    if dec_match:
+        coords = _parse_decimal_coords(dec_match.group(0))
+        if coords:
+            logger.info(f'[geocode] Strategy-EmbeddedDec: {coords}')
+            return coords
+
+    # ── Strategy 6: Google Maps Geocoding API ───────────────────────────────
+    lat, lng = _google_maps_geocode(raw)
     if lat is not None:
-        logger.info(f'[geocode] Strategy-ArcGIS success: ({lat},{lng}) for "{address[:60]}"')
+        logger.info(f'[geocode] Strategy-GoogleMapsAPI success: ({lat},{lng}) for "{raw[:60]}"')
         return lat, lng
 
-    # --- Strategy 1: Nominatim full address ------------------------------------
-    lat, lng = _nominatim_query(address)
+    # ── Strategy 7: Mapbox Geocoding API ────────────────────────────────────
+    lat, lng = _mapbox_geocode(raw)
     if lat is not None:
-        logger.info(f'[geocode] Strategy-1 (Nominatim) success: ({lat},{lng}) for "{address[:60]}"')
+        logger.info(f'[geocode] Strategy-Mapbox success: ({lat},{lng}) for "{raw[:60]}"')
         return lat, lng
 
-    # --- Strategy 2: strip Indian address noise --------------------------------
-    cleaned = address
-    # Remove "near X", "opp. X", "opposite X", "behind X" etc. (up to next comma)
+    # ── Strategy 8: ArcGIS High-Accuracy ────────────────────────────────────
+    lat, lng = _arcgis_query(raw)
+    if lat is not None:
+        logger.info(f'[geocode] Strategy-ArcGIS success: ({lat},{lng}) for "{raw[:60]}"')
+        return lat, lng
+
+    # ── Strategy 9: Nominatim full address ──────────────────────────────────
+    lat, lng = _nominatim_query(raw)
+    if lat is not None:
+        logger.info(f'[geocode] Strategy-Nominatim success: ({lat},{lng}) for "{raw[:60]}"')
+        return lat, lng
+
+    # ── Strategy 9: Strip Indian address noise words ────────────────────────
+    cleaned = raw
     cleaned = re.sub(
         r'\b(near|opp\.?|opposite|behind|beside|adj\.?|adjacent|in front of)\s+[^,]+',
         '', cleaned, flags=re.IGNORECASE
     )
-    # Remove common landmark noise words that Nominatim can't resolve
     cleaned = re.sub(
         r'\b(octroi naka|naka|chowk|bypass|flyover|overbridge|underpass|toll|signal)\b',
         '', cleaned, flags=re.IGNORECASE
     )
     cleaned = ', '.join(p.strip() for p in cleaned.split(',') if p.strip())
-    if cleaned and cleaned != address:
+    if cleaned and cleaned != raw:
+        lat, lng = _arcgis_query(cleaned)
+        if lat is not None:
+            return lat, lng
         lat, lng = _nominatim_query(cleaned)
         if lat is not None:
-            logger.info(f'[geocode] Strategy-2 (cleaned) success: ({lat},{lng})')
             return lat, lng
 
-    # --- Strategy 3 & 4: last N comma-separated parts -------------------------
-    parts = [p.strip() for p in address.split(',') if p.strip()]
+    # ── Strategy 10: Last N comma-separated parts ───────────────────────────
+    parts = [p.strip() for p in raw.split(',') if p.strip()]
     for n in (4, 3):
         if len(parts) >= n:
             candidate = ', '.join(parts[-n:])
+            lat, lng = _arcgis_query(candidate)
+            if lat is not None:
+                return lat, lng
             lat, lng = _nominatim_query(candidate)
             if lat is not None:
-                logger.info(f'[geocode] Strategy-last{n} success: ({lat},{lng}) for "{candidate}"')
                 return lat, lng
 
-    # --- Strategy 5: Indian 6-digit PIN code ----------------------------------
-    pincode_match = re.search(r'\b\d{6}\b', address)
+    # ── Strategy 11: Indian 6-digit PIN code ────────────────────────────────
+    pincode_match = re.search(r'\b\d{6}\b', raw)
     if pincode_match:
         lat, lng = _nominatim_query(f'{pincode_match.group()}, India')
         if lat is not None:
-            logger.info(f'[geocode] Strategy-pincode success: ({lat},{lng}) for pin={pincode_match.group()}')
             return lat, lng
 
-    # --- Strategy 6: last 2 parts (city + state) ------------------------------
+    # ── Strategy 12: Last 2 parts (city + state) ────────────────────────────
     if len(parts) >= 2:
         candidate = ', '.join(parts[-2:])
         lat, lng = _nominatim_query(candidate)
         if lat is not None:
-            logger.info(f'[geocode] Strategy-last2 success: ({lat},{lng}) for "{candidate}"')
             return lat, lng
 
-    logger.warning(f'[geocode] All strategies failed for: "{address[:80]}"')
+    logger.warning(f'[geocode] All strategies failed for: "{raw[:80]}"')
     return None, None
 
 

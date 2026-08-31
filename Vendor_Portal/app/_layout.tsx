@@ -5,7 +5,7 @@ import { restoreToken } from '@/store/authSlice';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, LogBox } from 'react-native';
 import { theme } from '@/config/theme';
 import * as SplashScreen from 'expo-splash-screen';
 import * as ScreenCapture from 'expo-screen-capture';
@@ -13,6 +13,8 @@ import { addNotificationResponseListener, registerForPushNotifications } from '@
 import 'react-native-reanimated';
 import { ToastProvider } from '@/components/Toast';
 import { DailyDisclaimerModal } from '@/components/DailyDisclaimerModal';
+
+LogBox.ignoreAllLogs(true);
 
 SplashScreen.preventAutoHideAsync();
 

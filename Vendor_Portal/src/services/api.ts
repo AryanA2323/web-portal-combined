@@ -128,8 +128,12 @@ class ApiService {
       apiError.message = resData.error || resData.detail || resData.message || error.message;
     }
 
-    // Trigger global popup for any API error
-    showToast({ type: 'error', title: 'Error', message: apiError.message });
+    // Trigger global popup for any API error (except location mismatch which displays a dedicated centered modal dialog)
+    const isLocationMismatch = (apiError.message || '').toLowerCase().includes('location') && 
+                               (apiError.message || '').toLowerCase().includes('mismatch');
+    if (!isLocationMismatch) {
+      showToast({ type: 'error', title: 'Error', message: apiError.message });
+    }
 
     return apiError;
   }

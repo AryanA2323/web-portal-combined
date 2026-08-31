@@ -905,7 +905,7 @@ const CheckDetailPage = () => {
                             size="medium"
                             variant="outlined"
                             startIcon={<LocationOn sx={{ fontSize: 16 }} />}
-                            href={`https://maps.google.com/?q=${checkData[latKey]},${checkData[lngKey]}`}
+                            href={`https://www.google.com/maps/search/?api=1&query=${checkData[latKey]},${checkData[lngKey]}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             sx={{ textTransform: 'none', fontSize: '12px', fontWeight: 700, color: '#06b6d4', borderColor: '#06b6d4', borderRadius: '8px', py: 1 }}

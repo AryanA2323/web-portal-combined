@@ -1321,15 +1321,38 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
             check_id = check_row[0]
             existing_evidence = check_row[1]
 
-            # Fetch case location for validation
+            # Fetch check location for validation using proper table columns
             case_location = None
-            if check_type.lower() != 'chargesheet':
-                lat_col = f"{check_type.lower()}_lat"
-                lng_col = f"{check_type.lower()}_lng"
-                cursor.execute(f"SELECT {lat_col}, {lng_col} FROM {table} WHERE id = %s", [check_id])
-                loc_row = cursor.fetchone()
-                if loc_row and loc_row[0] is not None and loc_row[1] is not None:
-                    case_location = {'latitude': float(loc_row[0]), 'longitude': float(loc_row[1])}
+            loc_config = {
+                'claimant_checks': ('claimant_lat', 'claimant_lng', 'claimant_address'),
+                'insured_checks':  ('insured_lat', 'insured_lng', 'insured_address'),
+                'driver_checks':   ('driver_lat', 'driver_lng', 'driver_address'),
+                'spot_checks':     ('spot_lat', 'spot_lng', 'place_of_accident'),
+                'chargesheets':    ('chargesheet_lat', 'chargesheet_lng', 'court_name'),
+                'rto_checks':      ('rto_lat', 'rto_lng', 'rto_address'),
+            }.get(table)
+
+            if loc_config:
+                lat_col, lng_col, addr_col = loc_config
+                try:
+                    cursor.execute(f"SELECT {lat_col}, {lng_col}, {addr_col} FROM {table} WHERE id = %s", [check_id])
+                    loc_row = cursor.fetchone()
+                    if loc_row:
+                        c_lat, c_lng, c_addr = loc_row[0], loc_row[1], loc_row[2]
+                        if c_lat is not None and c_lng is not None:
+                            case_location = {'latitude': float(c_lat), 'longitude': float(c_lng)}
+                        elif c_addr and str(c_addr).strip():
+                            # Geocode address on the fly if DB coordinates were NULL
+                            from users.incident_case_db import _geocode
+                            geo_lat, geo_lng = _geocode(str(c_addr).strip())
+                            if geo_lat is not None and geo_lng is not None:
+                                case_location = {'latitude': float(geo_lat), 'longitude': float(geo_lng)}
+                                try:
+                                    cursor.execute(f"UPDATE {table} SET {lat_col} = %s, {lng_col} = %s WHERE id = %s", [geo_lat, geo_lng, check_id])
+                                except Exception:
+                                    pass
+                except Exception as loc_e:
+                    logger.warning(f"Could not load location for {table} id={check_id}: {loc_e}")
                 
     except Exception as e:
         logger.error(f"Failed to verify check assignment: {e}")
@@ -1378,8 +1401,8 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
             case_coords = (case_location['latitude'], case_location['longitude'])
             distance_meters = geodesic(case_coords, photo_location).meters
             
-            if distance_meters > 100 and table not in ['rto_checks', 'rti_checks', 'chargesheet_checks', 'chargesheets']:
-                errors.append("The evidence photo you uploaded does not match the check location. Try uploading the photo from the correct location.")
+            if distance_meters > 1000 and table not in ['rto_checks', 'rti_checks', 'chargesheet_checks', 'chargesheets']:
+                errors.append(f"Location mismatch: The uploaded photo was taken {distance_meters:.0f}m away from the check location (maximum allowed is 1000m). Please upload from the correct location.")
                 continue
                 
         # If valid, proceed to save
@@ -1426,11 +1449,7 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
         logger.info(f"[Evidence] Saved {filename} for case={case_id} check={check_type}")
         
     if errors:
-        # If any of the errors is our custom location mismatch message, return just that
-        mismatch_msg = "The evidence photo you uploaded does not match the check location. Try uploading the photo from the correct location."
-        if any(mismatch_msg in e for e in errors):
-            return 400, {"error": mismatch_msg}
-        return 400, {"error": "Validation failed: " + "; ".join(errors)}
+        return 400, {"error": "; ".join(errors)}
 
     # Update the check table's evidence column
     try:
@@ -2325,7 +2344,7 @@ def upload_evidence(
                 errors.append(f"{file.name}: Missing GPS coordinates")
                 continue
             
-            # Validate location match with case location (within 100 meters)
+            # Validate location match with case location (within 700 meters)
             if case_location is not None:
                 from geopy.distance import geodesic
                 
@@ -2340,11 +2359,10 @@ def upload_evidence(
                     f"Distance = {distance_meters:.2f} meters"
                 )
                 
-                # Reject if distance > 100 meters
-                if distance_meters > 100 and table not in ['rto_checks', 'rti_checks', 'chargesheet_checks', 'chargesheets']:
+                # Reject if distance > 1000 meters
+                if distance_meters > 1000:
                     errors.append(
-                        f"{file.name}: Location mismatch. Photo taken {distance_meters:.0f}m away from case location. "
-                        f"Maximum allowed distance is 100m."
+                        f"Location mismatch: The uploaded photo {file.name} was taken {distance_meters:.0f}m away from the check location (maximum allowed distance is 1000m)."
                     )
                     logger.warning(
                         f"[Evidence Upload] Photo {file.name} rejected: "
@@ -2354,7 +2372,7 @@ def upload_evidence(
                 else:
                     logger.info(
                         f"[Evidence Upload] Photo {file.name} location validated: "
-                        f"{distance_meters:.2f}m from case location (within 100m tolerance)"
+                        f"{distance_meters:.2f}m from case location (within 1000m tolerance)"
                     )
             else:
                 logger.warning(f"[Evidence Upload] Case has no location set, skipping location validation")
