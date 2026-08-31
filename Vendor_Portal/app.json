@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "in.shovelsolutions.claimverify.vendor",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -43,14 +43,15 @@
       ],
       "expo-notifications",
       "@react-native-community/datetimepicker",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-updates"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "updates": {
-      "enabled": false,
+      "enabled": true,
       "url": "https://u.expo.dev/0c9954ca-ac4a-4923-860b-1f28b7542ce7"
     },
     "extra": {
