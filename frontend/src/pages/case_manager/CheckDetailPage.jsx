@@ -191,6 +191,8 @@ const AudioBlobPlayer = ({ rawUrl }) => {
 const CHECK_META = {
   claimant: { label: 'Claimant Check', color: '#e53935', bg: '#fce4ec', gradient: 'linear-gradient(135deg,#f5576c 0%,#e53935 100%)', icon: <Person /> },
   insured: { label: 'Insured Check', color: '#1565c0', bg: '#e3f2fd', gradient: 'linear-gradient(135deg,#4facfe 0%,#1565c0 100%)', icon: <AssignmentInd /> },
+  'insured-cum-driver': { label: 'Insured cum driver Check', color: '#1565c0', bg: '#e3f2fd', gradient: 'linear-gradient(135deg,#4facfe 0%,#1565c0 100%)', icon: <AssignmentInd /> },
+  'insured_cum_driver': { label: 'Insured cum driver Check', color: '#1565c0', bg: '#e3f2fd', gradient: 'linear-gradient(135deg,#4facfe 0%,#1565c0 100%)', icon: <AssignmentInd /> },
   driver: { label: 'Driver Check', color: '#2e7d32', bg: '#e8f5e9', gradient: 'linear-gradient(135deg,#43e97b 0%,#2e7d32 100%)', icon: <DirectionsCar /> },
   spot: { label: 'Spot Check', color: '#e65100', bg: '#fff3e0', gradient: 'linear-gradient(135deg,#fa709a 0%,#e65100 100%)', icon: <LocationOn /> },
   chargesheet: { label: 'Chargesheet', color: '#6a1b9a', bg: '#f3e5f5', gradient: 'linear-gradient(135deg,#a18cd1 0%,#6a1b9a 100%)', icon: <Gavel /> },
@@ -277,6 +279,36 @@ const CHECK_FIELDS_DEF = {
     { name: 'rc', label: 'RC' },
     { name: 'permit', label: 'Permit' },
     { name: 'driver_and_insured_same', label: 'Insured Same as Driver', type: 'boolean' },
+    { name: 'insured_cum_driver', label: 'Insured Same as Driver', type: 'boolean' },
+    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
+    { name: 'statement', label: 'Statement' },
+    { name: 'triggers', label: 'Triggers' },
+  ],
+  'insured-cum-driver': [
+    { name: 'insured_name', label: 'Insured / Driver Name' },
+    { name: 'insured_contact', label: 'Contact' },
+    { name: 'insured_address', label: 'Address' },
+    { name: 'policy_number', label: 'Policy Number' },
+    { name: 'policy_period', label: 'Policy Period' },
+    { name: 'rc', label: 'RC' },
+    { name: 'dl', label: 'Driving Licence (DL)' },
+    { name: 'permit', label: 'Permit' },
+    { name: 'occupation', label: 'Occupation' },
+    { name: 'insured_cum_driver', label: 'Insured Same as Driver', type: 'boolean' },
+    { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
+    { name: 'statement', label: 'Statement' },
+    { name: 'triggers', label: 'Triggers' },
+  ],
+  'insured_cum_driver': [
+    { name: 'insured_name', label: 'Insured / Driver Name' },
+    { name: 'insured_contact', label: 'Contact' },
+    { name: 'insured_address', label: 'Address' },
+    { name: 'policy_number', label: 'Policy Number' },
+    { name: 'policy_period', label: 'Policy Period' },
+    { name: 'rc', label: 'RC' },
+    { name: 'dl', label: 'Driving Licence (DL)' },
+    { name: 'permit', label: 'Permit' },
+    { name: 'occupation', label: 'Occupation' },
     { name: 'insured_cum_driver', label: 'Insured Same as Driver', type: 'boolean' },
     { name: 'check_status', label: 'Check Status', options: ['Pending', 'WIP', 'Closed', 'Verified', 'Reassigned'] },
     { name: 'statement', label: 'Statement' },
@@ -498,6 +530,32 @@ const CheckDetailPage = () => {
   const [checkData, setCheckData] = useState({});
   const [caseDraft, setCaseDraft] = useState({});
   const [checkDraft, setCheckDraft] = useState({});
+  const [markingVerified, setMarkingVerified] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+
+  const isChargesheet = checkType === 'chargesheet' || checkType === 'chargesheet_checks';
+  const isDispatchedStatus =
+    (checkData.check_status || '').trim().toLowerCase() === 'dispatched' ||
+    (checkData.advocate_status || '').trim().toLowerCase() === 'dispatched';
+  const isChargesheetDispatched = isChargesheet && isDispatchedStatus;
+
+  const handleMarkChargesheetReceived = async () => {
+    setMarkingVerified(true);
+    setError('');
+    setSuccess('');
+    try {
+      await api.post(`/cases/incident-db/${caseId}/check/${checkType}/review`, {
+        action: 'accept',
+      });
+      setSuccess('Chargesheet check marked as Verified successfully.');
+      await fetchDetail();
+    } catch (err) {
+      console.error('Failed to mark chargesheet as verified:', err);
+      setError(err.response?.data?.error || 'Failed to mark chargesheet as verified.');
+    } finally {
+      setMarkingVerified(false);
+    }
+  };
 
 
   // Media preview & upload states
@@ -599,7 +657,18 @@ const CheckDetailPage = () => {
   const documents = checkData.documents || [];
 
   // Combine audio recordings from statement_entries + main statement_audio_url if missing
-  let statementEntries = checkData.statement_entries || [];
+  let statementEntries = (checkData.statement_entries || []).map(entry => {
+    const rawAudio = entry.url || entry.audio_url || entry.statement_audio_path || entry.audio_path || checkData.statement_audio_url || checkData.statement_audio_path || '';
+    return {
+      ...entry,
+      url: rawAudio,
+      audio_url: rawAudio,
+      statement_text: entry.statement_text || entry.translation_en || entry.transcript_en || checkData.statement || '',
+      transcript_en: entry.transcript_en || entry.translation_en || checkData.statement_transcript_en || checkData.statement_en || '',
+      transcript_mr: entry.transcript_mr || checkData.statement_transcript_mr || checkData.statement_mr || '',
+    };
+  });
+
   if (statementEntries.length === 0 && (checkData.statement_audio_url || checkData.statement_audio_path)) {
     const rawAudioPath = checkData.statement_audio_url || checkData.statement_audio_path;
     statementEntries = [{
@@ -607,6 +676,8 @@ const CheckDetailPage = () => {
       audio_url: rawAudioPath,
       filename: 'Vendor Statement Recording',
       statement_text: checkData.statement || '',
+      transcript_en: checkData.statement_transcript_en || checkData.statement_en || '',
+      transcript_mr: checkData.statement_transcript_mr || checkData.statement_mr || '',
       created_at: checkData.updated_at,
     }];
   }
@@ -665,6 +736,27 @@ const CheckDetailPage = () => {
 
             {/* Action buttons */}
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              {!loading && !editing && isChargesheetDispatched && (
+                <Button
+                  variant="contained"
+                  startIcon={markingVerified ? <CircularProgress size={14} color="inherit" /> : <CheckCircleOutline sx={{ fontSize: 16 }} />}
+                  onClick={() => setConfirmDialogOpen(true)}
+                  disabled={markingVerified}
+                  sx={{
+                    background: '#48bb78',
+                    color: '#fff',
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    borderRadius: '10px',
+                    px: 2.5,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                    '&:hover': { background: '#38a169' },
+                  }}
+                >
+                  Chargesheet Received
+                </Button>
+              )}
               {!loading && !editing && isSuperAdmin && (
                 <Button
                   variant="contained"
@@ -924,16 +1016,38 @@ const CheckDetailPage = () => {
                         {evidencePhotos.map((photo, idx) => {
                           const rawPhotoUrl = photo.url || photo.preview_url || photo.photo_url;
                           const photoUrl = resolveMediaUrl(rawPhotoUrl);
+                          const getPhotoCaption = (p) => {
+                            if (p.caption) return p.caption;
+                            if (p.category) return p.category;
+                            if (p.source_field === 'applied_cs_photos') return 'Applied for CS';
+                            if (p.source_field === 'cs_received_photos') return 'CS Received';
+                            if (p.source_field === 'dispatched_photos') return 'Dispatched';
+                            if (p.source_field === 'vendor_evidence') return 'Vendor Evidence';
+                            return 'Visit Photo';
+                          };
+                          const getCaptionColor = (caption) => {
+                            const cap = (caption || '').toLowerCase();
+                            if (cap.includes('applied')) return { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe', badgeBg: 'rgba(29, 78, 216, 0.92)' };
+                            if (cap.includes('received')) return { bg: '#ecfdf5', color: '#047857', border: '#a7f3d0', badgeBg: 'rgba(4, 120, 87, 0.92)' };
+                            if (cap.includes('dispatch')) return { bg: '#fdf4ff', color: '#7e22ce', border: '#f0abfc', badgeBg: 'rgba(126, 34, 206, 0.92)' };
+                            return { bg: '#f1f5f9', color: '#334155', border: '#cbd5e1', badgeBg: 'rgba(51, 65, 85, 0.92)' };
+                          };
+                          const caption = isChargesheet ? getPhotoCaption(photo) : '';
+                          const colors = caption ? getCaptionColor(caption) : null;
                           return (
                             <Grid size={{ xs: 12, sm: 6, md: 3 }} key={`photo-${idx}`}>
                               <Card elevation={0} sx={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', position: 'relative', '&:hover .overlay': { opacity: 1 } }}>
                                 <Box sx={{ position: 'relative', height: 160, bgcolor: '#0f172a' }}>
                                   <CardMedia component="img" height="160" image={photoUrl} alt={photo.filename || `Evidence ${idx + 1}`} sx={{ objectFit: 'cover' }} />
-                                  <Box className="overlay" onClick={() => setActiveMediaPreview({ url: photoUrl, type: 'photo' })} sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, bgcolor: 'rgba(15,23,42,0.5)', opacity: 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                  {caption && (
+                                    <Chip label={caption} size="small" sx={{ position: 'absolute', top: 8, left: 8, zIndex: 2, backgroundColor: colors.badgeBg, color: '#fff', fontWeight: 700, fontSize: '10px', height: '20px', borderRadius: '4px', backdropFilter: 'blur(2px)' }} />
+                                  )}
+                                  <Box className="overlay" onClick={() => setActiveMediaPreview({ url: photoUrl, type: 'photo', title: caption ? `${caption} - ${photo.filename || `Photo ${idx + 1}`}` : (photo.filename || `Photo ${idx + 1}`) })} sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, bgcolor: 'rgba(15,23,42,0.5)', opacity: 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                                     <ZoomIn sx={{ color: '#fff', fontSize: 32 }} />
                                   </Box>
                                 </Box>
                                 <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                  {caption && <Chip label={caption} size="small" sx={{ mb: 1, backgroundColor: colors.bg, color: colors.color, border: `1px solid ${colors.border}`, fontWeight: 700, fontSize: '10px', height: '18px', borderRadius: '4px' }} />}
                                   <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={photo.filename || `Evidence ${idx + 1}`}>
                                     {photo.filename || `Evidence_${idx + 1}.jpg`}
                                   </Typography>
@@ -1027,6 +1141,7 @@ const CheckDetailPage = () => {
                       <Stack spacing={1.5}>
                         {documents.map((doc, idx) => {
                           const docUrl = resolveMediaUrl(doc.url || doc.file_url);
+                          const isPdf = docUrl?.toLowerCase().split('?')[0].endsWith('.pdf') || (doc.filename && doc.filename.toLowerCase().endsWith('.pdf'));
                           return (
                             <Paper key={`doc-${idx}`} elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, '&:hover': { borderColor: '#cbd5e1', bgcolor: '#f8fafc' } }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
@@ -1048,7 +1163,18 @@ const CheckDetailPage = () => {
                                   size="small"
                                   variant="outlined"
                                   startIcon={<OpenInNew sx={{ fontSize: 14 }} />}
-                                  onClick={(e) => { e.preventDefault(); setActiveMediaPreview({ url: docUrl, type: 'document', title: doc.filename }); }} href="#"
+                                  onClick={(e) => {
+                                    if (isPdf) {
+                                      e.preventDefault();
+                                      window.open(docUrl, '_blank', 'noopener,noreferrer');
+                                    } else {
+                                      e.preventDefault();
+                                      setActiveMediaPreview({ url: docUrl, type: 'document', title: doc.filename });
+                                    }
+                                  }}
+                                  href={isPdf ? docUrl : '#'}
+                                  target={isPdf ? '_blank' : undefined}
+                                  rel={isPdf ? 'noopener noreferrer' : undefined}
                                   sx={{ borderRadius: '6px', textTransform: 'none', fontSize: '12px', fontWeight: 600 }}
                                 >
                                   Preview / View
@@ -1136,9 +1262,61 @@ const CheckDetailPage = () => {
           </DialogActions>
         </Dialog>
 
-        
-
-        
+        {/* Chargesheet Received Confirmation Dialog */}
+        <Dialog
+          open={confirmDialogOpen}
+          onClose={() => !markingVerified && setConfirmDialogOpen(false)}
+          maxWidth="xs"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: '16px',
+              p: 1,
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+            }
+          }}
+        >
+          <DialogTitle sx={{ fontWeight: 800, fontSize: '18px', color: '#1e293b', pb: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ p: 1, borderRadius: '50%', bgcolor: '#dcfce7', color: '#15803d', display: 'flex' }}>
+              <CheckCircleOutline sx={{ fontSize: 24 }} />
+            </Box>
+            Confirm Verification
+          </DialogTitle>
+          <DialogContent sx={{ pt: 1 }}>
+            <Typography sx={{ color: '#475569', fontSize: '14.5px', lineHeight: 1.6 }}>
+              Are you sure you want to mark this <strong>Chargesheet Check</strong> as <strong>Verified</strong>?
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, pt: 1, gap: 1 }}>
+            <Button
+              onClick={() => setConfirmDialogOpen(false)}
+              disabled={markingVerified}
+              sx={{ textTransform: 'none', color: '#64748b', fontWeight: 600, px: 2 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={async () => {
+                setConfirmDialogOpen(false);
+                await handleMarkChargesheetReceived();
+              }}
+              disabled={markingVerified}
+              startIcon={markingVerified ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutline sx={{ fontSize: 18 }} />}
+              sx={{
+                backgroundColor: '#48bb78',
+                '&:hover': { backgroundColor: '#38a169' },
+                textTransform: 'none',
+                fontWeight: 700,
+                borderRadius: '8px',
+                px: 2.5,
+                py: 0.8
+              }}
+            >
+              Confirm & Verify
+            </Button>
+          </DialogActions>
+        </Dialog>
 
 {/* ── STICKY SAVE BAR ───────────────────────────────────────────── */}
         {editing && !loading && (

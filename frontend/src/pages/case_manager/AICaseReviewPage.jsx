@@ -272,23 +272,20 @@ const AICaseReviewPage = () => {
       const fetchedCases = response.data.cases || [];
       const backendReports = reportsResponse.data || [];
 
-      setReportsByCase((prev) => {
-        const next = { ...prev };
-        backendReports.forEach((r) => {
-          const matchedCase = fetchedCases.find((c) => c.case_number === r.case_number);
-          if (matchedCase) {
-            next[matchedCase.id] = {
-              ...(next[matchedCase.id] || {}),
-              id: r.id,
-              caseId: matchedCase.id,
-              caseNumber: r.case_number,
-              generatedAt: r.created_at,
-              reportText: next[matchedCase.id]?.reportText || r.report_content || '',
-            };
-          }
-        });
-        return next;
+      const next = {};
+      backendReports.forEach((r) => {
+        const matchedCase = fetchedCases.find((c) => c.case_number === r.case_number);
+        if (matchedCase) {
+          next[matchedCase.id] = {
+            id: r.id,
+            caseId: matchedCase.id,
+            caseNumber: r.case_number,
+            generatedAt: r.created_at,
+            reportText: r.report_content || '',
+          };
+        }
       });
+      setReportsByCase(next);
 
       setCases(fetchedCases);
       setTotalCases(response.data.total || 0);
@@ -460,17 +457,18 @@ const AICaseReviewPage = () => {
 
       const response = await api.post(`/cases/incident-db/${selectedCase.id}/ai-case-review-report`);
 
-      // Save report to database for legal review
-      let reportId = null;
-      try {
-        const saveResponse = await api.post('/reports', {
-          case_id: selectedCase.id,
-          report_content: response.data.report_text,
-        });
-        reportId = saveResponse.data.id;
-      } catch (saveErr) {
-        console.error('Failed to save report to database:', saveErr);
-        // Continue even if save fails - report is still in localStorage
+      // Report is saved in database by the backend generator endpoint
+      let reportId = response.data.report_id || null;
+      if (!reportId) {
+        try {
+          const saveResponse = await api.post('/reports', {
+            case_id: selectedCase.id,
+            report_content: response.data.report_text,
+          });
+          reportId = saveResponse.data.id;
+        } catch (saveErr) {
+          console.error('Failed to save report to database:', saveErr);
+        }
       }
 
       const reportRecord = {

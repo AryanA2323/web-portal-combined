@@ -868,6 +868,7 @@ class Report(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
         ASSIGNED = 'ASSIGNED', 'Assigned'
+        REASSIGNED = 'REASSIGNED', 'Reassigned'
         ACCEPTED = 'ACCEPTED', 'Accepted'
         REJECTED = 'REJECTED', 'Rejected'
 

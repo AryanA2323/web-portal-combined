@@ -671,32 +671,23 @@ def insert_rto_check(case_id,
 
 def delete_case(case_id):
     """
-    Delete a case and all its related verification checks from incident_case_db.
-    
-    This will delete:
-    - The case record from cases table
-    - All claimant_checks related to this case
-    - All insured_checks related to this case
-    - All driver_checks related to this case
-    - All spot_checks related to this case
-    - All rti_checks related to this case
-    - All rto_checks related to this case
-    - All chargesheets related to this case
-    
-    Args:
-        case_id (int): The ID of the case to delete
-        
-    Returns:
-        dict: Success status and message
-        
-    Raises:
-        Exception: If the case doesn't exist or deletion fails
+    Delete a case, its AI generated reports, and all its related verification checks from incident_case_db.
     """
     try:
         with _get_cursor() as cursor:
-            # First check if case exists
-            cursor.execute("SELECT id FROM cases WHERE id = %s", [case_id])
-            if not cursor.fetchone():
+            # First check if case exists and retrieve case_number
+            case_number = None
+            cursor.execute("SELECT case_number FROM cases WHERE id = %s", [case_id])
+            row = cursor.fetchone()
+            if row:
+                case_number = row[0]
+            else:
+                cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+                row = cursor.fetchone()
+                if row:
+                    case_number = row[0]
+
+            if not row:
                 raise ValueError(f"Case with id {case_id} not found")
             
             # Delete all related verification checks first (due to foreign key constraints)
@@ -707,12 +698,24 @@ def delete_case(case_id):
             cursor.execute("DELETE FROM rti_checks WHERE case_id = %s", [case_id])
             cursor.execute("DELETE FROM rto_checks WHERE case_id = %s", [case_id])
             cursor.execute("DELETE FROM chargesheets WHERE case_id = %s", [case_id])
+
+            # Delete AI generated report(s) associated with this case
+            if case_number:
+                cursor.execute(
+                    "DELETE FROM reports WHERE case_id IN (SELECT id FROM insurance_case WHERE case_number = %s)",
+                    [case_number]
+                )
+            cursor.execute("DELETE FROM reports WHERE case_id = %s", [case_id])
             
-            # Delete the case itself
+            # Delete the case itself from cases and insurance_case tables
             cursor.execute("DELETE FROM cases WHERE id = %s", [case_id])
+            if case_number:
+                cursor.execute("DELETE FROM cases WHERE case_number = %s", [case_number])
+                cursor.execute("DELETE FROM insurance_case WHERE case_number = %s", [case_number])
+            cursor.execute("DELETE FROM insurance_case WHERE id = %s", [case_id])
             
-        logger.info(f"[incident_case_db] Deleted case id={case_id} and all related verification checks")
-        return {"success": True, "message": f"Case {case_id} and all related verification checks deleted successfully"}
+        logger.info(f"[incident_case_db] Deleted case id={case_id} ({case_number}) and all related AI reports & verification checks")
+        return {"success": True, "message": f"Case {case_id} and all related AI reports & verification checks deleted successfully"}
     except ValueError as e:
         logger.warning(f"[incident_case_db] Case not found: {e}")
         raise

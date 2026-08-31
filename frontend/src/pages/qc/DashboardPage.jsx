@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Card, CardContent, Divider, CircularProgress } from '@mui/material';
-import { Assessment, CheckCircle, Pending, Cancel, Description, CheckCircleOutline, CancelOutlined } from '@mui/icons-material';
+import { Assessment, CheckCircle, Pending, Cancel, Description, CheckCircleOutline, CancelOutlined, Replay } from '@mui/icons-material';
 import QCLayout from './components/QCLayout';
 import QCNotificationBell from './components/QCNotificationBell';
 import api from '../../services/api';
@@ -86,6 +86,8 @@ const DashboardPage = () => {
         return <CheckCircleOutline sx={{ color: '#27ae60', fontSize: 20 }} />;
       case 'REJECTED':
         return <CancelOutlined sx={{ color: '#e74c3c', fontSize: 20 }} />;
+      case 'REASSIGNED':
+        return <Replay sx={{ color: '#845ef7', fontSize: 20 }} />;
       default:
         return <Description sx={{ color: '#3498db', fontSize: 20 }} />;
     }
@@ -97,6 +99,8 @@ const DashboardPage = () => {
         return `You approved the report for "${report.case_title}"`;
       case 'REJECTED':
         return `You rejected the report for "${report.case_title}"`;
+      case 'REASSIGNED':
+        return `Report reassigned for "${report.case_title}" - pending review`;
       case 'ASSIGNED':
         return `Report assigned for "${report.case_title}" - pending review`;
       default:

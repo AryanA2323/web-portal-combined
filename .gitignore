@@ -85,3 +85,10 @@ gmail_token.pickle
 *.pickle
 token.json
 credentials.json
+
+# Deployment artifacts
+*.zip
+
+# Scratch files
+scratch_*.js
+scratch_*.py

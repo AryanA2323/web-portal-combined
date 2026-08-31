@@ -993,13 +993,27 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets={true}
         >
-          {normalizedCheckType !== 'chargesheet' && checkInfo.is_reassigned && (
+          {(checkInfo.is_reassigned || checkInfo.admin_feedback || checkInfo.check_status === 'Reassigned') && (
             <View style={[styles.section, { backgroundColor: '#fff5f5', borderColor: '#feb2b2', borderWidth: 1 }]}>
               <Text style={[styles.sectionEyebrow, { color: '#e53e3e' }]}>Attention Required</Text>
-              <Text style={[styles.sectionTitle, { color: '#c53030' }]}>This check was reassigned</Text>
+              <Text style={[styles.sectionTitle, { color: '#c53030' }]}>Rejection & Reassignment Remark</Text>
               <Text style={{ fontSize: 15, color: '#2d3748', marginTop: 8, lineHeight: 22 }}>
-                <Text style={{ fontWeight: 'bold' }}>Admin Feedback: </Text>
-                {checkInfo.admin_feedback || 'No feedback provided.'}
+                <Text style={{ fontWeight: 'bold' }}>Case Manager Remark: </Text>
+                {checkInfo.admin_feedback || 'No specific remark provided.'}
+              </Text>
+            </View>
+          )}
+
+          {Boolean(checkInfo.triggers) && (
+            <View style={[styles.section, { backgroundColor: '#fffbe6', borderColor: '#ffe58f', borderWidth: 1 }]}>
+              <Text style={[styles.sectionEyebrow, { color: '#d48806' }]}>Investigation Focus</Text>
+              <Text style={[styles.sectionTitle, { color: '#ad6800' }]}>Triggers / Red Flags</Text>
+              <Text style={{ fontSize: 15, color: '#2d3748', marginTop: 8, lineHeight: 22 }}>
+                {typeof checkInfo.triggers === 'string' 
+                  ? checkInfo.triggers 
+                  : Array.isArray(checkInfo.triggers) 
+                    ? checkInfo.triggers.join(', ') 
+                    : JSON.stringify(checkInfo.triggers)}
               </Text>
             </View>
           )}

@@ -21,35 +21,64 @@ from django.utils.http import http_date
 from django.views.static import was_modified_since
 
 
+def _resolve_media_file(document_root, path):
+    """
+    Resolve a relative media path against document_root, handling URL-decoding,
+    literal %20 or space differences, underscore replacements, and directory traversals safely.
+    """
+    from urllib.parse import unquote
+    root = Path(document_root).resolve()
+
+    raw_clean = posixpath.normpath(str(path)).lstrip("/")
+    unquoted = posixpath.normpath(unquote(str(path))).lstrip("/")
+
+    candidates = [
+        unquoted,
+        raw_clean,
+        unquoted.replace(" ", "_"),
+        raw_clean.replace(" ", "_"),
+        unquoted.replace(" ", "%20"),
+        raw_clean.replace(" ", "%20"),
+        unquoted.replace("_", " "),
+        unquoted.replace("_", "%20"),
+    ]
+
+    for cand in candidates:
+        cand_path = (root / cand).resolve()
+        if str(cand_path).startswith(str(root)) and cand_path.is_file():
+            return cand_path
+
+    # Check parent directory for match (handling spaces/encoded chars)
+    parent_cand = (root / posixpath.dirname(unquoted)).resolve()
+    if str(parent_cand).startswith(str(root)) and parent_cand.is_dir():
+        target_name_lower = posixpath.basename(unquoted).lower()
+        target_raw_lower = posixpath.basename(raw_clean).lower()
+        target_variants = {
+            target_name_lower,
+            target_raw_lower,
+            target_name_lower.replace(" ", "_"),
+            target_raw_lower.replace(" ", "_"),
+            target_name_lower.replace(" ", "%20"),
+            target_raw_lower.replace(" ", "%20"),
+            target_raw_lower.replace("%20", " "),
+            target_raw_lower.replace("%20", "_"),
+        }
+        for entry in parent_cand.iterdir():
+            if entry.is_file() and entry.name.lower() in target_variants:
+                return entry.resolve()
+
+    return None
+
+
 def serve_media(request, path, document_root=None):
     """
     Serve media files with support for HTTP Range requests (partial content).
     This is essential for audio/video playback in browsers.
     """
-    # Normalise path (prevent directory traversal) and URL decode it
-    from urllib.parse import unquote
-    path = posixpath.normpath(unquote(path)).lstrip("/")
-    fullpath = Path(document_root) / path
+    fullpath = _resolve_media_file(document_root, path)
 
-    if not fullpath.exists() or fullpath.is_dir():
-        # Fallback: try replacing spaces with underscores in filename
-        # (uploads use file.name.replace(' ', '_') but URLs may retain spaces)
-        alt_name = fullpath.name.replace(' ', '_')
-        alt_path = fullpath.parent / alt_name
-        if alt_path.exists() and not alt_path.is_dir():
-            fullpath = alt_path
-        else:
-            # Also try the entire path with spaces replaced
-            alt_full = Path(document_root) / path.replace(' ', '_')
-            if alt_full.exists() and not alt_full.is_dir():
-                fullpath = alt_full
-            else:
-                raise Http404(f"'{path}' could not be found")
-
-    # Resolve to absolute to prevent traversal
-    fullpath = fullpath.resolve()
-    if not str(fullpath).startswith(str(Path(document_root).resolve())):
-        raise Http404("Access denied")
+    if not fullpath:
+        raise Http404(f"'{path}' could not be found")
 
     statobj = fullpath.stat()
     content_type, _ = mimetypes.guess_type(str(fullpath))
@@ -146,15 +175,9 @@ def download_file(request):
     elif path.startswith("media/"):
         path = path[6:]
     
-    path = posixpath.normpath(unquote(path)).lstrip("/")
-    fullpath = Path(settings.MEDIA_ROOT) / path
-
-    if not fullpath.exists() or fullpath.is_dir():
+    fullpath = _resolve_media_file(settings.MEDIA_ROOT, path)
+    if not fullpath:
         raise Http404("File not found")
-
-    fullpath = fullpath.resolve()
-    if not str(fullpath).startswith(str(Path(settings.MEDIA_ROOT).resolve())):
-        raise Http404("Access denied")
 
     content_type, _ = mimetypes.guess_type(str(fullpath))
     content_type = content_type or "application/octet-stream"

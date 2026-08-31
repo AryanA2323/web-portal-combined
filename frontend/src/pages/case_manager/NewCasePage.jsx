@@ -324,6 +324,13 @@ const NewCasePage = () => {
     }));
   };
 
+  const toggleVerification = (key) => {
+    setSelectedVerifications(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
   const handleInsuredSameAsDriverChange = (e) => {
     const isChecked = e.target.checked;
     if (isChecked) {
@@ -582,6 +589,15 @@ const NewCasePage = () => {
         }
 
       }
+      
+      // Ensure at least one check is selected before submitting
+      const hasSelectedChecks = Object.values(selectedVerifications).some(val => val === true);
+      if (!hasSelectedChecks) {
+        setSnackbar({ open: true, message: 'At least one verification check must be selected.', severity: 'error' });
+        return;
+      }
+
+      setLoading(true);
 
       // Build the case payload from common fields
       const payload = {
@@ -615,6 +631,15 @@ const NewCasePage = () => {
         incident_country: 'India',
         source: 'MANUAL',
         workflow_type: 'STANDARD',
+        
+        // Verification Checklists
+        chk_claimant: selectedVerifications.claimant,
+        chk_insured: selectedVerifications.insured,
+        chk_driver: selectedVerifications.driver,
+        chk_spot: selectedVerifications.spot,
+        chk_chargesheet: selectedVerifications.chargesheet,
+        chk_rto: selectedVerifications.rto,
+        chk_rti: selectedVerifications.rti,
       };
 
       // Create the case
@@ -1332,28 +1357,24 @@ const NewCasePage = () => {
                   justifyContent: 'center',
                   width: '100%',
                   boxSizing: 'border-box',
+                  userSelect: 'none',
                   '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
                 }}
-                onClick={() => setSelectedVerifications(prev => ({ ...prev, claimant: !prev.claimant }))}
+                onClick={() => toggleVerification('claimant')}
               >
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      name="claimant"
-                      checked={selectedVerifications.claimant}
-                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, claimant: e.target.checked }))}
-                      color="primary"
-                      size="small"
-                      sx={{ p: 0.5 }}
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.claimant ? '#1565c0' : '#334155' }}>
-                      Claimant
-                    </Typography>
-                  }
-                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', width: '100%' }}>
+                  <Checkbox
+                    name="claimant"
+                    checked={selectedVerifications.claimant}
+                    color="primary"
+                    size="small"
+                    tabIndex={-1}
+                    sx={{ p: 0.5 }}
+                  />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.claimant ? '#1565c0' : '#334155' }}>
+                    Claimant
+                  </Typography>
+                </Box>
               </Card>
 
               {/* Insured */}
@@ -1371,28 +1392,24 @@ const NewCasePage = () => {
                   justifyContent: 'center',
                   width: '100%',
                   boxSizing: 'border-box',
+                  userSelect: 'none',
                   '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
                 }}
-                onClick={() => setSelectedVerifications(prev => ({ ...prev, insured: !prev.insured }))}
+                onClick={() => toggleVerification('insured')}
               >
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      name="insured"
-                      checked={selectedVerifications.insured}
-                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, insured: e.target.checked }))}
-                      color="success"
-                      size="small"
-                      sx={{ p: 0.5 }}
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.insured ? '#166534' : '#334155' }}>
-                      Insured
-                    </Typography>
-                  }
-                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', width: '100%' }}>
+                  <Checkbox
+                    name="insured"
+                    checked={selectedVerifications.insured}
+                    color="success"
+                    size="small"
+                    tabIndex={-1}
+                    sx={{ p: 0.5 }}
+                  />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.insured ? '#166534' : '#334155' }}>
+                    Insured
+                  </Typography>
+                </Box>
               </Card>
 
               {/* Driver */}
@@ -1410,28 +1427,24 @@ const NewCasePage = () => {
                   justifyContent: 'center',
                   width: '100%',
                   boxSizing: 'border-box',
+                  userSelect: 'none',
                   '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
                 }}
-                onClick={() => setSelectedVerifications(prev => ({ ...prev, driver: !prev.driver }))}
+                onClick={() => toggleVerification('driver')}
               >
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      name="driver"
-                      checked={selectedVerifications.driver}
-                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, driver: e.target.checked }))}
-                      color="warning"
-                      size="small"
-                      sx={{ p: 0.5 }}
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.driver ? '#b45309' : '#334155' }}>
-                      Driver
-                    </Typography>
-                  }
-                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', width: '100%' }}>
+                  <Checkbox
+                    name="driver"
+                    checked={selectedVerifications.driver}
+                    color="warning"
+                    size="small"
+                    tabIndex={-1}
+                    sx={{ p: 0.5 }}
+                  />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.driver ? '#b45309' : '#334155' }}>
+                    Driver
+                  </Typography>
+                </Box>
               </Card>
 
               {/* Spot */}
@@ -1449,28 +1462,24 @@ const NewCasePage = () => {
                   justifyContent: 'center',
                   width: '100%',
                   boxSizing: 'border-box',
+                  userSelect: 'none',
                   '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
                 }}
-                onClick={() => setSelectedVerifications(prev => ({ ...prev, spot: !prev.spot }))}
+                onClick={() => toggleVerification('spot')}
               >
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      name="spot"
-                      checked={selectedVerifications.spot}
-                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, spot: e.target.checked }))}
-                      color="secondary"
-                      size="small"
-                      sx={{ p: 0.5 }}
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.spot ? '#7e22ce' : '#334155' }}>
-                      Spot
-                    </Typography>
-                  }
-                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', width: '100%' }}>
+                  <Checkbox
+                    name="spot"
+                    checked={selectedVerifications.spot}
+                    color="secondary"
+                    size="small"
+                    tabIndex={-1}
+                    sx={{ p: 0.5 }}
+                  />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.spot ? '#7e22ce' : '#334155' }}>
+                    Spot
+                  </Typography>
+                </Box>
               </Card>
 
               {/* Chargesheet */}
@@ -1488,28 +1497,24 @@ const NewCasePage = () => {
                   justifyContent: 'center',
                   width: '100%',
                   boxSizing: 'border-box',
+                  userSelect: 'none',
                   '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
                 }}
-                onClick={() => setSelectedVerifications(prev => ({ ...prev, chargesheet: !prev.chargesheet }))}
+                onClick={() => toggleVerification('chargesheet')}
               >
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      name="chargesheet"
-                      checked={selectedVerifications.chargesheet}
-                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, chargesheet: e.target.checked }))}
-                      color="error"
-                      size="small"
-                      sx={{ p: 0.5 }}
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.chargesheet ? '#b91c1c' : '#334155' }}>
-                      Chargesheet
-                    </Typography>
-                  }
-                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', width: '100%' }}>
+                  <Checkbox
+                    name="chargesheet"
+                    checked={selectedVerifications.chargesheet}
+                    color="error"
+                    size="small"
+                    tabIndex={-1}
+                    sx={{ p: 0.5 }}
+                  />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.chargesheet ? '#b91c1c' : '#334155' }}>
+                    Chargesheet
+                  </Typography>
+                </Box>
               </Card>
 
               {/* RTO */}
@@ -1527,27 +1532,23 @@ const NewCasePage = () => {
                   justifyContent: 'center',
                   width: '100%',
                   boxSizing: 'border-box',
+                  userSelect: 'none',
                   '&:hover': { elevation: 3, transform: 'translateY(-2px)' }
                 }}
-                onClick={() => setSelectedVerifications(prev => ({ ...prev, rto: !prev.rto }))}
+                onClick={() => toggleVerification('rto')}
               >
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      name="rto"
-                      checked={selectedVerifications.rto}
-                      onChange={(e) => setSelectedVerifications(prev => ({ ...prev, rto: e.target.checked }))}
-                      sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' }, p: 0.5 }}
-                      size="small"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.rto ? '#4527a0' : '#334155' }}>
-                      RTO
-                    </Typography>
-                  }
-                  sx={{ m: 0, width: '100%', userSelect: 'none', justifyContent: 'center' }}
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', width: '100%' }}>
+                  <Checkbox
+                    name="rto"
+                    checked={selectedVerifications.rto}
+                    size="small"
+                    tabIndex={-1}
+                    sx={{ color: '#4527a0', '&.Mui-checked': { color: '#4527a0' }, p: 0.5 }}
+                  />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: selectedVerifications.rto ? '#4527a0' : '#334155' }}>
+                    RTO
+                  </Typography>
+                </Box>
               </Card>
             </Box>
 

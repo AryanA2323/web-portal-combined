@@ -126,6 +126,10 @@ const irStatusColors = {
 const checkStatusColors = {
   'Not Initiated': '#a0aec0',
   'WIP': '#f6ad55',
+  'Under Verification': '#0284c7',
+  'Verified': '#2e7d32',
+  'Accepted': '#2e7d32',
+  'Reassigned': '#e11d48',
   'Closed': '#48bb78',
   'Stop': '#f56565',
 };
@@ -194,6 +198,24 @@ const CHECK_SPECIFIC_Q_KEYS = {
     'driver_name', 'driver_address', 'driver_contact', 'driver_relation',
     'insured_name', 'insured_contact', 'vehicle_number', 'vehicle_type',
     'dl', 'dl_expiry', 'insurance_holder_name', 'different_owner_reason',
+    'date_of_accident', 'time_of_accident', 'description_of_accident', 'investigation_datetime'
+  ],
+  'insured_cum_driver': [
+    'insured_name', 'insured_address', 'insured_contact', 'vehicle_number', 'vehicle_type',
+    'rc', 'rc_expiry', 'dl', 'dl_expiry',
+    'insurance_holder_name', 'policy_expiry_date', 'different_owner_reason',
+    'date_of_accident', 'time_of_accident', 'description_of_accident', 'investigation_datetime'
+  ],
+  'insured-cum-driver': [
+    'insured_name', 'insured_address', 'insured_contact', 'vehicle_number', 'vehicle_type',
+    'rc', 'rc_expiry', 'dl', 'dl_expiry',
+    'insurance_holder_name', 'policy_expiry_date', 'different_owner_reason',
+    'date_of_accident', 'time_of_accident', 'description_of_accident', 'investigation_datetime'
+  ],
+  'insured cum driver': [
+    'insured_name', 'insured_address', 'insured_contact', 'vehicle_number', 'vehicle_type',
+    'rc', 'rc_expiry', 'dl', 'dl_expiry',
+    'insurance_holder_name', 'policy_expiry_date', 'different_owner_reason',
     'date_of_accident', 'time_of_accident', 'description_of_accident', 'investigation_datetime'
   ],
 };
@@ -834,6 +856,8 @@ const CasesPage = ({ isClosedView = false }) => {
     'Claimant Check': 'claimant',
     'Insured Check': 'insured',
     'Driver Check': 'driver',
+    'Insured cum driver': 'insured-cum-driver',
+    'Insured cum driver Check': 'insured-cum-driver',
     'Spot Check': 'spot',
     'Chargesheet': 'chargesheet',
     'RTI Check': 'rti',
@@ -1495,6 +1519,14 @@ const CasesPage = ({ isClosedView = false }) => {
                                             const sc = checkStatusColors[sub.check_status] || '#a0aec0';
                                             const isVendorAssigned = Boolean(sub.assigned_vendor_name || sub.assigned_vendor_id);
                                             const mode = sub.type === 'Chargesheet' ? 'chargesheet' : (sub.type === 'RTO Check' || sub.type === 'rto') ? 'rto' : 'other';
+                                            
+                                            const isUnderVerification = sub.check_status?.trim().toLowerCase() === 'under verification';
+                                            const isReviewEnabled = isVendorAssigned && isUnderVerification;
+                                            const reviewTooltipTitle = !isVendorAssigned
+                                              ? "Assign business partner to enable this button"
+                                              : !isUnderVerification
+                                                ? "Review button is enabled only when check status is 'Under Verification'"
+                                                : "";
 
                                             return (
                                               <TableRow
@@ -1569,11 +1601,15 @@ const CasesPage = ({ isClosedView = false }) => {
                                                 {/* ASSIGNED PARTNER */}
                                                 <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                                                   {sub.assigned_vendor_name ? (
-                                                    <Button size="small" variant="text" startIcon={<Edit sx={{ fontSize: 14 }} />} onClick={() => openVendorModal(row.id, sub.type, sub.assigned_vendor_id)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 700, color: '#2e7d32', py: 0, px: 0.5, minWidth: 0, justifyContent: 'center', mx: 'auto' }} title={`Change partner from ${sub.assigned_vendor_name}`}>
+                                                    <Button size="small" variant="text" disabled={mode === 'rto' && !sub.rto_formats_generated} startIcon={<Edit sx={{ fontSize: 14 }} />} onClick={() => openVendorModal(row.id, sub.type, sub.assigned_vendor_id)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 700, color: '#2e7d32', py: 0, px: 0.5, minWidth: 0, justifyContent: 'center', mx: 'auto', '&.Mui-disabled': { opacity: 0.5, cursor: 'not-allowed' } }} title={mode === 'rto' && !sub.rto_formats_generated ? 'Generate RTO Formats First' : `Change partner from ${sub.assigned_vendor_name}`}>
                                                       <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>{sub.assigned_vendor_name}</Box>
                                                     </Button>
                                                   ) : (
-                                                    <Button size="small" variant="outlined" onClick={() => openVendorModal(row.id, sub.type)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 600, borderColor: '#17539C', color: '#17539C', py: 0.5, px: 1.5, minWidth: 'auto', mx: 'auto' }}>Assign</Button>
+                                                    <Tooltip title={mode === 'rto' && !sub.rto_formats_generated ? "Generate RTO Formats First" : ""} arrow placement="top">
+                                                      <Box component="span" sx={{ display: 'inline-block', cursor: mode === 'rto' && !sub.rto_formats_generated ? 'not-allowed' : 'default' }}>
+                                                        <Button size="small" variant="outlined" disabled={mode === 'rto' && !sub.rto_formats_generated} onClick={() => openVendorModal(row.id, sub.type)} sx={{ textTransform: 'none', fontSize: '13px', fontWeight: 600, borderColor: '#17539C', color: '#17539C', py: 0.5, px: 1.5, minWidth: 'auto', mx: 'auto', '&.Mui-disabled': { pointerEvents: 'none', borderColor: '#ccc', color: '#999' } }}>Assign</Button>
+                                                      </Box>
+                                                    </Tooltip>
                                                   )}
                                                 </TableCell>
 
@@ -1581,17 +1617,17 @@ const CasesPage = ({ isClosedView = false }) => {
                                                 <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                                                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
                                                     {mode === 'other' ? (
-                                                      <Tooltip title={!isVendorAssigned ? "Assign business partner to enable this button" : ""} arrow placement="top">
-                                                        <Box component="span" sx={{ display: 'inline-block', cursor: !isVendorAssigned ? 'not-allowed' : 'default', width: '100%' }}>
+                                                      <Tooltip title={reviewTooltipTitle} arrow placement="top">
+                                                        <Box component="span" sx={{ display: 'inline-block', cursor: !isReviewEnabled ? 'not-allowed' : 'default', width: '100%' }}>
                                                           {sub.check_status === 'Verified' ? (
-                                                            <Button size="small" variant="text" disabled={!isVendorAssigned} onClick={() => openReviewModal(row.id, sub.type)} sx={{ textTransform: 'none', p: 0, minWidth: 'auto', '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'not-allowed' } }}>
+                                                            <Button size="small" variant="text" disabled={!isReviewEnabled} onClick={() => openReviewModal(row.id, sub.type)} sx={{ textTransform: 'none', p: 0, minWidth: 'auto', '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'not-allowed' } }}>
                                                               <Typography variant="body2" sx={{ fontWeight: 700, color: '#48bb78', fontSize: '13.5px', textDecoration: 'underline' }}>Accepted</Typography>
                                                             </Button>
                                                           ) : (
                                                             <Button
                                                               size="small"
                                                               variant="contained"
-                                                              disabled={!isVendorAssigned}
+                                                              disabled={!isReviewEnabled}
                                                               startIcon={<Visibility sx={{ fontSize: 16 }} />}
                                                               onClick={() => openReviewModal(row.id, sub.type)}
                                                               sx={{
@@ -2126,14 +2162,24 @@ const CasesPage = ({ isClosedView = false }) => {
                     )}
 
                     {/* Audio Recording */}
-                    {reviewData.check?.statement_audio_url && (
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="caption" sx={{ color: '#718096', fontWeight: 600, display: 'block', mb: 0.5 }}>AUDIO RECORDING</Typography>
-                        <audio controls src={reviewData.check.statement_audio_url} style={{ width: '100%', borderRadius: '8px' }} />
-                      </Box>
-                    )}
+                    {(() => {
+                      const rawAudio =
+                        reviewData.check?.statement_audio_url ||
+                        reviewData.check?.statement_audio_path ||
+                        reviewData.check?.statement_entries?.find(e => e.url || e.audio_url || e.statement_audio_path || e.audio_path)?.url ||
+                        reviewData.check?.statement_entries?.find(e => e.url || e.audio_url || e.statement_audio_path || e.audio_path)?.audio_url;
+                      if (!rawAudio) return null;
+                      const audioSrc = resolveMediaUrl(rawAudio);
+                      if (!audioSrc || audioSrc === '#') return null;
+                      return (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" sx={{ color: '#718096', fontWeight: 600, display: 'block', mb: 0.5 }}>AUDIO RECORDING</Typography>
+                          <audio controls src={audioSrc} style={{ width: '100%', borderRadius: '8px' }} />
+                        </Box>
+                      );
+                    })()}
 
-                    {!reviewData.check?.statement && !reviewData.check?.statement_mr && !reviewData.check?.statement_en && !reviewData.check?.statement_audio_url && (
+                    {!reviewData.check?.statement && !reviewData.check?.statement_mr && !reviewData.check?.statement_en && !reviewData.check?.statement_audio_url && !(reviewData.check?.statement_entries && reviewData.check.statement_entries.length > 0) && (
                       <Typography variant="body2" sx={{ color: '#a0aec0', fontStyle: 'italic' }}>
                         No business partner statements available for this check.
                       </Typography>
@@ -2719,6 +2765,7 @@ const CasesPage = ({ isClosedView = false }) => {
                             const currentCheckObj = dedupedChecks[selectedCheckTab];
                             if (!currentCheckObj) return null;
                             const checkData = currentCheckObj.check || {};
+                            const isChargesheetCheck = (currentCheckObj.check_type_label || '').toLowerCase().includes('chargesheet') || (currentCheckObj.check_type || '').toLowerCase().includes('chargesheet');
                             return (
                               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                 {/* Check Status & Vendor Header */}
@@ -2774,9 +2821,43 @@ const CasesPage = ({ isClosedView = false }) => {
                                   <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
                                     <Table size="small">
                                       <TableBody>
-                                        {Object.entries(checkData)
-                                          .filter(([k]) => !['id', 'case_id', 'created_at', 'updated_at', 'vendor_evidence', 'evidence', 'evidence_photos', 'statement_audio', 'statement_audio_url', 'statement', 'statement_mr', 'statement_en', 'statement_entries', 'vendor_documents', 'documents', 'assigned_vendor_name', 'questionnaire'].includes(k))
-                                          .map(([key, rawVal], idx) => {
+                                        {(() => {
+                                          const isChargesheetCheck = (currentCheckObj.check_type_label || '').toLowerCase().includes('chargesheet') || (currentCheckObj.check_type || '').toLowerCase().includes('chargesheet');
+                                          const chargesheetFieldsOrder = [
+                                            'applied_cs_photos',
+                                            'cs_received_photos',
+                                            'dispatched_photos',
+                                            'advocate_remark',
+                                          ];
+                                          const chargesheetLabels = {
+                                            applied_cs_photos: 'Applied CS photos',
+                                            cs_received_photos: 'cs received photos',
+                                            dispatched_photos: 'dispatched photos',
+                                            advocate_remark: 'advocate remark',
+                                          };
+                                          const chargesheetExcludedFields = [
+                                            'case_documents',
+                                            'statement_audio_path',
+                                            'statement_transcript_mr',
+                                            'statement_transcript_en',
+                                            'statement_transcript_provider',
+                                            'statement_transcript_confidence',
+                                            'statement_transcript_updated_at',
+                                          ];
+
+                                          const allEntries = Object.entries(checkData).filter(([k]) => !['id', 'case_id', 'created_at', 'updated_at', 'vendor_evidence', 'evidence', 'evidence_photos', 'statement_audio', 'statement_audio_url', 'statement', 'statement_mr', 'statement_en', 'statement_entries', 'vendor_documents', 'documents', 'assigned_vendor_name', 'questionnaire'].includes(k));
+
+                                          let checkEntries;
+                                          if (isChargesheetCheck) {
+                                            const filteredAll = allEntries.filter(([k]) => !chargesheetExcludedFields.includes(k));
+                                            const priorityEntries = chargesheetFieldsOrder.map(key => [key, checkData[key]]);
+                                            const remainingEntries = filteredAll.filter(([k]) => !chargesheetFieldsOrder.includes(k));
+                                            checkEntries = [...remainingEntries, ...priorityEntries];
+                                          } else {
+                                            checkEntries = allEntries;
+                                          }
+
+                                          return checkEntries.map(([key, rawVal], idx) => {
                                             // Parse JSON strings into arrays/objects
                                             let val = rawVal;
                                             if (typeof rawVal === 'string' && rawVal.startsWith('[') && rawVal.endsWith(']')) {
@@ -2844,17 +2925,20 @@ const CasesPage = ({ isClosedView = false }) => {
                                               cellContent = displayVal;
                                             }
 
+                                            const fieldLabel = isChargesheetCheck && chargesheetLabels[key] ? chargesheetLabels[key] : key.replace(/_/g, ' ');
+
                                             return (
                                               <TableRow key={key} sx={{ bgcolor: idx % 2 === 0 ? '#f8fafc' : '#ffffff' }}>
-                                                <TableCell component="th" sx={{ width: '35%', fontWeight: 600, color: '#475569', textTransform: 'capitalize', borderRight: '1px solid #e2e8f0', py: 1.2 }}>
-                                                  {key.replace(/_/g, ' ')}
+                                                <TableCell component="th" sx={{ width: '35%', fontWeight: 600, color: '#475569', textTransform: isChargesheetCheck ? 'none' : 'capitalize', borderRight: '1px solid #e2e8f0', py: 1.2 }}>
+                                                  {fieldLabel}
                                                 </TableCell>
                                                 <TableCell sx={{ color: '#0f172a', fontWeight: 500, py: 1.2, wordBreak: 'break-word' }}>
                                                   {cellContent}
                                                 </TableCell>
                                               </TableRow>
                                             );
-                                          })}
+                                          });
+                                        })()}
                                       </TableBody>
                                     </Table>
                                   </Box>
@@ -2908,47 +2992,49 @@ const CasesPage = ({ isClosedView = false }) => {
                                 })()}
 
                                 {/* Statements & Audio Recordings */}
-                                <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)' }}>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#2563eb', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.75rem' }}>
-                                    🎙️ Statements &amp; Audio Recordings
-                                  </Typography>
-                                  {checkData.statement_entries && checkData.statement_entries.length > 0 ? (
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                      {checkData.statement_entries.map((st, sIdx) => (
-                                        <Paper key={sIdx} elevation={0} sx={{ p: 2, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>
-                                            Statement {st.index || sIdx + 1}
-                                          </Typography>
-                                          {st.audio_url && (
-                                            <Box sx={{ mb: 1 }}>
-                                              <audio controls src={st.audio_url} style={{ width: '100%', height: '36px' }} />
-                                            </Box>
-                                          )}
-                                          <Typography variant="body2" sx={{ color: '#334155', whiteSpace: 'pre-line' }}>
-                                            {st.translation_en || st.statement_text || 'No statement text.'}
-                                          </Typography>
-                                        </Paper>
-                                      ))}
-                                    </Box>
-                                  ) : (
-                                    <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
-                                      No statement audio recordings stored.
-                                    </Typography>
-                                  )}
+                                 {!isChargesheetCheck && (
+                                   <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)' }}>
+                                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#2563eb', mb: 2, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.75rem' }}>
+                                       🎙️ Statements &amp; Audio Recordings
+                                     </Typography>
+                                     {checkData.statement_entries && checkData.statement_entries.length > 0 ? (
+                                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                         {checkData.statement_entries.map((st, sIdx) => (
+                                           <Paper key={sIdx} elevation={0} sx={{ p: 2, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>
+                                               Statement {st.index || sIdx + 1}
+                                             </Typography>
+                                             {st.audio_url && (
+                                               <Box sx={{ mb: 1 }}>
+                                                 <audio controls src={st.audio_url} style={{ width: '100%', height: '36px' }} />
+                                               </Box>
+                                             )}
+                                             <Typography variant="body2" sx={{ color: '#334155', whiteSpace: 'pre-line' }}>
+                                               {st.translation_en || st.statement_text || 'No statement text.'}
+                                             </Typography>
+                                           </Paper>
+                                         ))}
+                                       </Box>
+                                     ) : (
+                                       <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                                         No statement audio recordings stored.
+                                       </Typography>
+                                     )}
 
-                                  {checkData.statement_en && (
-                                    <Box sx={{ mt: 2 }}>
-                                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>
-                                        Additional Statement Details:
-                                      </Typography>
-                                      <Paper elevation={0} sx={{ p: 2, mt: 0.5, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                        <Typography variant="body2" sx={{ color: '#1e293b', whiteSpace: 'pre-line' }}>
-                                          {checkData.statement_en}
-                                        </Typography>
-                                      </Paper>
-                                    </Box>
-                                  )}
-                                </Paper>
+                                     {checkData.statement_en && (
+                                       <Box sx={{ mt: 2 }}>
+                                         <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>
+                                           Additional Statement Details:
+                                         </Typography>
+                                         <Paper elevation={0} sx={{ p: 2, mt: 0.5, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                           <Typography variant="body2" sx={{ color: '#1e293b', whiteSpace: 'pre-line' }}>
+                                             {checkData.statement_en}
+                                           </Typography>
+                                         </Paper>
+                                       </Box>
+                                     )}
+                                   </Paper>
+                                 )}
 
                                 {/* Visit Photos */}
                                 <Paper elevation={0} sx={{ p: 2.5, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 6px -1px rgba(0,0,0,0.05)' }}>
@@ -3047,7 +3133,15 @@ const CasesPage = ({ isClosedView = false }) => {
                                               <Button
                                                 variant="outlined"
                                                 size="small"
-                                                onClick={() => setActiveMediaPreview({ url: resolveMediaUrl(doc.url || doc.preview_url || doc.file_url), type: 'document', title: doc.filename })}
+                                                onClick={() => {
+                                                  const url = resolveMediaUrl(doc.url || doc.preview_url || doc.file_url);
+                                                  const isPdf = url?.toLowerCase().split('?')[0].endsWith('.pdf') || (doc.filename && doc.filename.toLowerCase().endsWith('.pdf'));
+                                                  if (isPdf) {
+                                                    window.open(url, '_blank', 'noopener,noreferrer');
+                                                  } else {
+                                                    setActiveMediaPreview({ url, type: 'document', title: doc.filename });
+                                                  }
+                                                }}
                                                 sx={{ mt: 'auto', textTransform: 'none', borderRadius: '6px' }}
                                               >
                                                 View Document
@@ -3431,7 +3525,15 @@ const CasesPage = ({ isClosedView = false }) => {
                               <Button
                                 variant="outlined"
                                 size="small"
-                                onClick={() => setActiveMediaPreview({ url: resolveMediaUrl(doc.url || doc.preview_url || doc.file_url), type: 'document', title: doc.filename })}
+                                onClick={() => {
+                                  const url = resolveMediaUrl(doc.url || doc.preview_url || doc.file_url);
+                                  const isPdf = url?.toLowerCase().split('?')[0].endsWith('.pdf') || (doc.filename && doc.filename.toLowerCase().endsWith('.pdf'));
+                                  if (isPdf) {
+                                    window.open(url, '_blank', 'noopener,noreferrer');
+                                  } else {
+                                    setActiveMediaPreview({ url, type: 'document', title: doc.filename });
+                                  }
+                                }}
                                 sx={{ mt: 'auto', textTransform: 'none', borderRadius: '6px', color: '#166534', borderColor: '#166534' }}
                               >
                                 View Document

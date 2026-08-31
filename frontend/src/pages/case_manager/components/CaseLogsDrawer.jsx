@@ -45,9 +45,17 @@ import {
 
 // --- Formatting Helpers ---
 
+// Safely parse date strings (which come from DB in UTC but might lack the 'Z' suffix)
+const parseUTCDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  // If the string doesn't end in Z or have an offset (+/-), append Z to force UTC parsing
+  const str = dateStr.endsWith('Z') || dateStr.match(/[+-]\d{2}:?\d{2}$/) ? dateStr : `${dateStr}Z`;
+  return new Date(str);
+};
+
 const formatRelativeTime = (dateStr) => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
+  const date = parseUTCDate(dateStr);
   const now = new Date();
   const diffMs = now - date;
   const diffSec = Math.floor(diffMs / 1000);
@@ -69,7 +77,7 @@ const formatRelativeTime = (dateStr) => {
 
 const formatExactTime = (dateStr) => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
+  const date = parseUTCDate(dateStr);
   return date.toLocaleString('en-IN', {
     day: '2-digit',
     month: 'short',
@@ -83,7 +91,7 @@ const formatExactTime = (dateStr) => {
 
 const getDateGroupKey = (dateStr) => {
   if (!dateStr) return 'Other';
-  const date = new Date(dateStr);
+  const date = parseUTCDate(dateStr);
   const now = new Date();
   
   const isToday =
@@ -273,6 +281,20 @@ const getEventConfig = (eventType, description = '') => {
       badgeBorder: '#C7D2FE',
       accentColor: '#4F46E5',
       category: 'status',
+    };
+  }
+
+  if (type === 'RTO_DOCS_GENERATED' || desc.includes('rto format') || desc.includes('rto document') || desc.includes('rto_rti')) {
+    return {
+      title: 'RTO Formats Generated',
+      icon: <Article sx={{ fontSize: 16, color: '#0284C7' }} />,
+      dotBg: '#E0F2FE',
+      dotBorder: '#7DD3FC',
+      badgeBg: '#F0F9FF',
+      badgeColor: '#0369A1',
+      badgeBorder: '#BAE6FD',
+      accentColor: '#0284C7',
+      category: 'document',
     };
   }
 

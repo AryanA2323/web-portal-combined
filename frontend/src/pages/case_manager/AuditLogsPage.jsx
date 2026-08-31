@@ -28,6 +28,8 @@ import { NotificationBell } from '../../components/case_manager';
 
 const eventTypeColor = {
   CASE_CREATED: '#4c6ef5',
+  CASE_DELETED: '#e03131',
+  CASE_DELETION_REQUESTED: '#d97706',
   USER_CREATED: '#0ca678',
   VENDOR_ASSIGNED: '#ff922b',
   QC_ASSIGNED: '#9c36b5',

@@ -30,6 +30,7 @@ import {
   Schedule,
   Assignment,
   InsertDriveFile,
+  Replay,
 } from '@mui/icons-material';
 import QCLayout from './components/QCLayout';
 import QCNotificationBell from './components/QCNotificationBell';
@@ -191,6 +192,8 @@ const ReportsPage = () => {
         return '#ff922b';
       case 'ASSIGNED':
         return '#4dabf7';
+      case 'REASSIGNED':
+        return '#845ef7';
       case 'ACCEPTED':
         return '#51cf66';
       case 'REJECTED':
@@ -206,6 +209,8 @@ const ReportsPage = () => {
         return <Schedule sx={{ fontSize: 16 }} />;
       case 'ASSIGNED':
         return <Assignment sx={{ fontSize: 16 }} />;
+      case 'REASSIGNED':
+        return <Replay sx={{ fontSize: 16 }} />;
       case 'ACCEPTED':
         return <CheckCircle sx={{ fontSize: 16 }} />;
       case 'REJECTED':
@@ -231,7 +236,7 @@ const ReportsPage = () => {
       report.case_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.client_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const isPending = report.status === 'ASSIGNED' || report.status === 'PENDING';
+    const isPending = report.status === 'ASSIGNED' || report.status === 'PENDING' || report.status === 'REASSIGNED';
     const isReviewed = report.status === 'ACCEPTED' || report.status === 'REJECTED';
 
     const matchesTab = activeTab === 0 ? isPending : isReviewed;
@@ -375,7 +380,7 @@ const ReportsPage = () => {
                                 '&:hover': { backgroundColor: '#2c3e50' },
                               }}
                             >
-                              {report.status === 'ASSIGNED' ? 'Review' : 'View'}
+                              {report.status === 'ASSIGNED' || report.status === 'REASSIGNED' ? 'Review' : 'View'}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -425,18 +430,30 @@ const ReportsPage = () => {
             {selectedReport && (
               <Box>
                 {/* Report info */}
-                <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
                   <Chip
+                    icon={getStatusIcon(selectedReport.status)}
                     label={`Status: ${getStatusDisplayLabel(selectedReport.status)}`}
                     sx={{
                       backgroundColor: `${getStatusColor(selectedReport.status)}15`,
                       color: getStatusColor(selectedReport.status),
-                      fontWeight: 600,
+                      fontWeight: 700,
+                      '& .MuiChip-icon': {
+                        color: getStatusColor(selectedReport.status),
+                      },
                     }}
                   />
+                  {selectedReport.status === 'REASSIGNED' && (
+                    <Chip
+                      icon={<Replay sx={{ fontSize: 14, color: '#845ef7 !important' }} />}
+                      label="Reassigned After Corrections"
+                      size="small"
+                      sx={{ backgroundColor: '#f3f0ff', color: '#845ef7', fontWeight: 700, border: '1px solid #d0bfff' }}
+                    />
+                  )}
                   <Chip
                     label={`Category: ${selectedReport.category}`}
-                    sx={{ backgroundColor: '#e3f2fd', color: '#1976d2' }}
+                    sx={{ backgroundColor: '#e3f2fd', color: '#1976d2', fontWeight: 600 }}
                   />
                 </Box>
 
@@ -598,8 +615,8 @@ const ReportsPage = () => {
                   </Box>
                 )}
 
-                {/* Review notes input (only for pending reports) */}
-                {selectedReport.status === 'ASSIGNED' && (
+                {/* Review notes input (only for pending/reassigned reports) */}
+                {(selectedReport.status === 'ASSIGNED' || selectedReport.status === 'REASSIGNED') && (
                   <TextField
                     fullWidth
                     multiline
@@ -654,7 +671,7 @@ const ReportsPage = () => {
             <Button onClick={handleCloseDialog} variant="outlined" disabled={submitting}>
               Cancel
             </Button>
-            {selectedReport?.status === 'ASSIGNED' && (
+            {(selectedReport?.status === 'ASSIGNED' || selectedReport?.status === 'REASSIGNED') && (
               <>
                 <Button
                   onClick={handleReject}

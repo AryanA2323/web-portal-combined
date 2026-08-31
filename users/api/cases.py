@@ -613,6 +613,7 @@ class AuditLogEntrySchema(Schema):
 
 class AICaseReviewReportResponse(Schema):
     """AI case review generation response."""
+    report_id: Optional[int] = None
     case_id: int
     case_number: str
     report_text: str
@@ -972,7 +973,8 @@ def get_cases_incident_db(
                         "negative_status": r[10] or "",
                     })
 
-            # ─── insured_checks ────────────────────────────────────────────
+            # ─── insured_checks & driver_checks ─────────────────────────────
+            insured_by_case = {}
             cursor.execute(f"""
                 SELECT ic.case_id, ic.check_status,
                        ic.insured_name AS name,
@@ -986,30 +988,31 @@ def get_cases_incident_db(
                        ic.triggers AS triggers,
                        ic.assigned_vendor_id,
                        v.company_name AS assigned_vendor_name,
-                       ic.negative_status
+                       ic.negative_status,
+                       ic.insured_cum_driver
                 FROM insured_checks ic
                 LEFT JOIN users_vendor v ON v.id = ic.assigned_vendor_id
                 WHERE ic.case_id IN ({ph})
             """, case_ids)
             for r in cursor.fetchall():
-                cid = r[0]
-                if cid in checks_by_case:
-                    policy = " / ".join(filter(None, [r[5], r[6]])) or "—"
-                    rc_permit = " | ".join(filter(None, [r[7] and f"RC:{r[7]}", r[8] and f"Permit:{r[8]}"])) or "—"
-                    checks_by_case[cid].append({
-                        "type": "Insured Check",
-                        "check_status": "Not Initiated" if not r[11] else (r[1] or "WIP"),
-                        "name": r[2] or "—",
-                        "contact": r[3] or "—",
-                        "location": r[4] or "—",
-                        "key_info": f"Policy: {policy} | {rc_permit}",
-                        "statement": (r[9] or r[10] or "")[:120],
-                        "assigned_vendor_id": r[11],
-                        "assigned_vendor_name": r[12],
-                        "negative_status": r[13] or "",
-                    })
+                insured_by_case[r[0]] = {
+                    "case_id": r[0],
+                    "check_status": "Not Initiated" if not r[11] else (r[1] or "WIP"),
+                    "name": r[2] or "—",
+                    "contact": r[3] or "—",
+                    "location": r[4] or "—",
+                    "policy_number": r[5],
+                    "policy_period": r[6],
+                    "rc": r[7],
+                    "permit": r[8],
+                    "statement": (r[9] or r[10] or "")[:120],
+                    "assigned_vendor_id": r[11],
+                    "assigned_vendor_name": r[12],
+                    "negative_status": r[13] or "",
+                    "insured_cum_driver": bool(r[14]),
+                }
 
-            # ─── driver_checks ─────────────────────────────────────────────
+            driver_by_case = {}
             cursor.execute(f"""
                 SELECT dc.case_id, dc.check_status,
                        dc.driver_name AS name,
@@ -1022,27 +1025,98 @@ def get_cases_incident_db(
                        dc.triggers AS triggers,
                        dc.assigned_vendor_id,
                        v.company_name AS assigned_vendor_name,
-                       dc.negative_status
+                       dc.negative_status,
+                       dc.insured_cum_driver
                 FROM driver_checks dc
                 LEFT JOIN users_vendor v ON v.id = dc.assigned_vendor_id
                 WHERE dc.case_id IN ({ph})
             """, case_ids)
             for r in cursor.fetchall():
-                cid = r[0]
-                if cid in checks_by_case:
-                    dl_info = " | ".join(filter(None, [r[5] and f"DL:{r[5]}", r[6] and f"Permit:{r[6]}", r[7] and f"Occ:{r[7]}"])) or "—"
+                driver_by_case[r[0]] = {
+                    "case_id": r[0],
+                    "check_status": "Not Initiated" if not r[10] else (r[1] or "WIP"),
+                    "name": r[2] or "—",
+                    "contact": r[3] or "—",
+                    "location": r[4] or "—",
+                    "dl": r[5],
+                    "permit": r[6],
+                    "occupation": r[7],
+                    "statement": (r[8] or r[9] or "")[:120],
+                    "assigned_vendor_id": r[10],
+                    "assigned_vendor_name": r[11],
+                    "negative_status": r[12] or "",
+                    "insured_cum_driver": bool(r[13]),
+                }
+
+            for cid in case_ids:
+                if cid not in checks_by_case:
+                    continue
+                ic = insured_by_case.get(cid)
+                dc = driver_by_case.get(cid)
+
+                is_same = bool((ic and ic.get("insured_cum_driver")) or (dc and dc.get("insured_cum_driver")))
+
+                if is_same and (ic or dc):
+                    # Combine into a single "Insured cum driver" check
+                    policy = " / ".join(filter(None, [ic and ic.get("policy_number"), ic and ic.get("policy_period")])) or "—"
+                    rc_permit = " | ".join(filter(None, [ic and ic.get("rc") and f"RC:{ic['rc']}", ic and ic.get("permit") and f"Permit:{ic['permit']}"])) or ""
+                    dl_info = " | ".join(filter(None, [dc and dc.get("dl") and f"DL:{dc['dl']}", dc and dc.get("permit") and f"Permit:{dc['permit']}", dc and dc.get("occupation") and f"Occ:{dc['occupation']}"])) or ""
+                    
+                    key_parts = [f"Policy: {policy}"]
+                    if rc_permit: key_parts.append(rc_permit)
+                    if dl_info: key_parts.append(dl_info)
+                    combined_key_info = " | ".join(key_parts)
+
+                    status_priority = {'Verified': 4, 'Under Verification': 3, 'WIP': 2, 'Reassigned': 1, 'Not Initiated': 0}
+                    ic_stat = ic["check_status"] if ic else "Not Initiated"
+                    dc_stat = dc["check_status"] if dc else "Not Initiated"
+                    combined_status = ic_stat if status_priority.get(ic_stat, 0) >= status_priority.get(dc_stat, 0) else dc_stat
+
                     checks_by_case[cid].append({
-                        "type": "Driver Check",
-                        "check_status": "Not Initiated" if not r[10] else (r[1] or "WIP"),
-                        "name": r[2] or "—",
-                        "contact": r[3] or "—",
-                        "location": r[4] or "—",
-                        "key_info": dl_info,
-                        "statement": (r[8] or r[9] or "")[:120],
-                        "assigned_vendor_id": r[10],
-                        "assigned_vendor_name": r[11],
-                        "negative_status": r[12] or "",
+                        "type": "Insured cum driver",
+                        "check_status": combined_status,
+                        "name": (ic and ic["name"] != "—" and ic["name"]) or (dc and dc["name"]) or "—",
+                        "contact": (ic and ic["contact"] != "—" and ic["contact"]) or (dc and dc["contact"]) or "—",
+                        "location": (ic and ic["location"] != "—" and ic["location"]) or (dc and dc["location"]) or "—",
+                        "key_info": combined_key_info,
+                        "statement": (ic and ic["statement"]) or (dc and dc["statement"]) or "",
+                        "assigned_vendor_id": (ic and ic["assigned_vendor_id"]) or (dc and dc["assigned_vendor_id"]),
+                        "assigned_vendor_name": (ic and ic["assigned_vendor_name"]) or (dc and dc["assigned_vendor_name"]) or "",
+                        "negative_status": (ic and ic["negative_status"]) or (dc and dc["negative_status"]) or "",
+                        "insured_cum_driver": True,
                     })
+                else:
+                    if ic:
+                        policy = " / ".join(filter(None, [ic["policy_number"], ic["policy_period"]])) or "—"
+                        rc_permit = " | ".join(filter(None, [ic["rc"] and f"RC:{ic['rc']}", ic["permit"] and f"Permit:{ic['permit']}"])) or "—"
+                        checks_by_case[cid].append({
+                            "type": "Insured Check",
+                            "check_status": ic["check_status"],
+                            "name": ic["name"],
+                            "contact": ic["contact"],
+                            "location": ic["location"],
+                            "key_info": f"Policy: {policy} | {rc_permit}",
+                            "statement": ic["statement"],
+                            "assigned_vendor_id": ic["assigned_vendor_id"],
+                            "assigned_vendor_name": ic["assigned_vendor_name"],
+                            "negative_status": ic["negative_status"],
+                            "insured_cum_driver": False,
+                        })
+                    if dc:
+                        dl_info = " | ".join(filter(None, [dc["dl"] and f"DL:{dc['dl']}", dc["permit"] and f"Permit:{dc['permit']}", dc["occupation"] and f"Occ:{dc['occupation']}"])) or "—"
+                        checks_by_case[cid].append({
+                            "type": "Driver Check",
+                            "check_status": dc["check_status"],
+                            "name": dc["name"],
+                            "contact": dc["contact"],
+                            "location": dc["location"],
+                            "key_info": dl_info,
+                            "statement": dc["statement"],
+                            "assigned_vendor_id": dc["assigned_vendor_id"],
+                            "assigned_vendor_name": dc["assigned_vendor_name"],
+                            "negative_status": dc["negative_status"],
+                            "insured_cum_driver": False,
+                        })
 
             # ─── spot_checks ───────────────────────────────────────────────
             cursor.execute(f"""
@@ -1176,7 +1250,8 @@ def get_cases_incident_db(
                        ro.remarks,
                        ro.assigned_vendor_id,
                        v.company_name AS assigned_vendor_name,
-                       ro.negative_status
+                       ro.negative_status,
+                       ro.case_documents
                 FROM rto_checks ro
                 LEFT JOIN users_vendor v ON v.id = ro.assigned_vendor_id
                 WHERE ro.case_id IN ({ph})
@@ -1189,6 +1264,17 @@ def get_cases_incident_db(
                     if r[8]: items.append(f"Permit:{r[5]}" if r[5] else "Permit")
                     if r[9]: items.append(f"RC:{r[6]}" if r[6] else "RC")
                     key_info = " | ".join(items) or "—"
+                    
+                    case_docs_val = r[14]
+                    has_rto_formats = False
+                    if case_docs_val:
+                        try:
+                            import json
+                            parsed_docs = json.loads(case_docs_val) if isinstance(case_docs_val, str) else case_docs_val
+                            has_rto_formats = isinstance(parsed_docs, list) and len(parsed_docs) > 0
+                        except Exception:
+                            has_rto_formats = False
+                            
                     checks_by_case[cid].append({
                         "type": "RTO Check",
                         "check_status": "Not Initiated" if not r[11] else (r[1] or "WIP"),
@@ -1199,6 +1285,7 @@ def get_cases_incident_db(
                         "statement": (r[10] or "")[:120],
                         "assigned_vendor_id": r[11],
                         "assigned_vendor_name": r[12],
+                        "rto_formats_generated": has_rto_formats,
                     })
 
             # ── Build final result ───────────────────────────────────────────
@@ -1220,6 +1307,7 @@ def get_cases_incident_db(
                         "assigned_vendor_id": c.get("assigned_vendor_id"),
                         "assigned_vendor_name": c.get("assigned_vendor_name", ""),
                         "advocate_status": c.get("advocate_status", ""),
+                        "rto_formats_generated": c.get("rto_formats_generated", False),
                     })
                 row["sub_items"] = sub_items
                 row["seq_num"] = int(row["seq_num"])
@@ -1563,7 +1651,38 @@ def generate_ai_case_review_report(
                         "url": _build_absolute_media_url(request, str(raw_val))
                     })
         
+        # Directly save/update the Report in the database for persistence
+        created_report_id = None
+        try:
+            from users.models import InsuranceCase, Report
+            c_num = case_context["case_number"]
+            c_claim = case_context.get("claim_number") or ""
+            c_client = case_context.get("client_name") or ""
+            ic, _ = InsuranceCase.objects.update_or_create(
+                case_number=c_num,
+                defaults={
+                    'title': f"Case {c_claim or c_num} - {c_client}".strip(),
+                    'claim_number': c_claim,
+                    'client_name': c_client,
+                    'category': case_context.get("category") or "General",
+                    'status': "New",
+                }
+            )
+            # Create or update report
+            Report.objects.filter(case=ic).delete()
+            saved_report = Report.objects.create(
+                case=ic,
+                report_content=result["report_text"],
+                status=Report.Status.PENDING,
+                created_by=request.user,
+            )
+            created_report_id = saved_report.id
+            logger.info(f"AI Report {saved_report.id} saved for case {c_num}")
+        except Exception as save_err:
+            logger.error(f"Error saving AI Report in generate_ai_case_review_report: {save_err}")
+
         return {
+            "report_id": created_report_id,
             "case_id": case_context["case_id"],
             "case_number": case_context["case_number"] or "",
             "report_text": result["report_text"],
@@ -1594,7 +1713,7 @@ def delete_case_from_incident_db(request: HttpRequest, case_id: int):
         raise HttpError(403, "Admin access required")
 
     try:
-        from users.models import InsuranceCase, Report
+        from users.models import InsuranceCase, Report, ActivityLog
         from users.incident_case_db import delete_case
 
         case_number = None
@@ -1603,6 +1722,11 @@ def delete_case_from_incident_db(request: HttpRequest, case_id: int):
             row = cursor.fetchone()
             if row:
                 case_number = row[0]
+            else:
+                cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+                row = cursor.fetchone()
+                if row:
+                    case_number = row[0]
 
         result = delete_case(case_id)
         if case_number:
@@ -1612,7 +1736,21 @@ def delete_case_from_incident_db(request: HttpRequest, case_id: int):
             logger.info(
                 f"[API] Deleted {deleted_reports} report row(s) and {deleted_cases} ORM case row(s) for {case_number}"
             )
-        logger.info(f"[API] Case {case_id} deleted by user {request.user.username}")
+        
+        # Clean up any leftover report rows for this case_id
+        Report.objects.filter(case_id=case_id).delete()
+
+        # Create ActivityLog entry for case deletion
+        c_num_str = case_number or f"ID {case_id}"
+        actor_user = getattr(request, 'user', None)
+        if actor_user and actor_user.is_authenticated:
+            ActivityLog.objects.create(
+                user=actor_user,
+                action='CASE_DELETED',
+                details=f"Case {c_num_str} deleted along with all associated checks and AI reports",
+            )
+
+        logger.info(f"[API] Case {case_id} ({c_num_str}) deleted by user {request.user.username}")
         return result
     except ValueError as exc:
         logger.warning(f"[API] Case {case_id} not found: {exc}")
@@ -1722,13 +1860,15 @@ def update_case_status(request: HttpRequest, case_id: int, payload: UpdateCaseSt
 # ---------------------------------------------------------------------------
 
 _CHECK_TABLE_MAP = {
-    'claimant':    'claimant_checks',
-    'insured':     'insured_checks',
-    'driver':      'driver_checks',
-    'spot':        'spot_checks',
-    'chargesheet': 'chargesheets',
-    'rti':         'rti_checks',
-    'rto':         'rto_checks',
+    'claimant':           'claimant_checks',
+    'insured':            'insured_checks',
+    'driver':             'driver_checks',
+    'insured_cum_driver': 'insured_checks',
+    'insured-cum-driver': 'insured_checks',
+    'spot':               'spot_checks',
+    'chargesheet':        'chargesheets',
+    'rti':                'rti_checks',
+    'rto':                'rto_checks',
 }
 
 
@@ -1771,14 +1911,64 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
                     if hasattr(v, 'isoformat'):
                         check_data[k] = v.isoformat()
 
+                # If this is an Insured cum driver check, merge driver-specific fields from driver_checks
+                is_icd = bool(check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or check_data.get('insured_cum_driver'))
+                if is_icd:
+                    cursor.execute("SELECT * FROM driver_checks WHERE case_id = %s", [case_id])
+                    col_names_dc = [d[0] for d in cursor.description]
+                    dc_row = cursor.fetchone()
+                    if dc_row:
+                        dc_data = dict(zip(col_names_dc, dc_row))
+                        for k, v in list(dc_data.items()):
+                            if hasattr(v, 'isoformat'):
+                                dc_data[k] = v.isoformat()
+
+                        # Merge driver scalar fields
+                        for k in ['dl', 'occupation', 'driver_name', 'driver_contact', 'driver_address']:
+                            if dc_data.get(k) and not check_data.get(k):
+                                check_data[k] = dc_data[k]
+
+                        # Merge statement, statement_audio_path, and transcripts
+                        for k in ['statement_audio_path', 'statement_audio', 'statement', 'statement_transcript_mr', 'statement_transcript_en']:
+                            if dc_data.get(k) and not check_data.get(k):
+                                check_data[k] = dc_data[k]
+
+                        # Fallback for statement transcripts
+                        if not check_data.get('statement_transcript_mr') and dc_data.get('statement_transcript_mr'):
+                            check_data['statement_transcript_mr'] = dc_data['statement_transcript_mr']
+                        if not check_data.get('statement_transcript_en') and dc_data.get('statement_transcript_en'):
+                            check_data['statement_transcript_en'] = dc_data['statement_transcript_en']
+                        check_data['statement_mr'] = check_data.get('statement_transcript_mr') or dc_data.get('statement_transcript_mr') or ''
+                        check_data['statement_en'] = check_data.get('statement_transcript_en') or dc_data.get('statement_transcript_en') or ''
+
+                        # Merge statement_entries if empty on check_data
+                        if not check_data.get('statement_entries') and dc_data.get('statement_entries'):
+                            check_data['statement_entries'] = dc_data['statement_entries']
+
+                        # Merge vendor_evidence
+                        if not check_data.get('vendor_evidence') and dc_data.get('vendor_evidence'):
+                            check_data['vendor_evidence'] = dc_data['vendor_evidence']
+
+                        # Merge vendor_documents
+                        if not check_data.get('vendor_documents') and dc_data.get('vendor_documents'):
+                            check_data['vendor_documents'] = dc_data['vendor_documents']
+
+                    check_data['insured_cum_driver'] = True
+
                 # Normalize evidence photos
                 import json as _json
                 
                 # We will gather photos from multiple possible columns (especially for chargesheets)
-                photo_columns = ['vendor_evidence', 'evidence', 'applied_cs_photos', 'cs_received_photos', 'dispatched_photos']
+                photo_columns = [
+                    ('applied_cs_photos', 'Applied for CS'),
+                    ('cs_received_photos', 'CS Received'),
+                    ('dispatched_photos', 'Dispatched'),
+                    ('vendor_evidence', 'Vendor Evidence'),
+                    ('evidence', 'Evidence Photo'),
+                ]
                 
                 all_raw_photos = []
-                for p_col in photo_columns:
+                for p_col, cat_caption in photo_columns:
                     raw_val = check_data.get(p_col)
                     parsed_list = []
                     if raw_val:
@@ -1789,6 +1979,15 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
                                 parsed_list = []
                         elif isinstance(raw_val, list):
                             parsed_list = raw_val
+                            
+                        # Tag each photo item with caption/category
+                        for p in parsed_list:
+                            if isinstance(p, dict):
+                                if not p.get('caption'):
+                                    p['caption'] = cat_caption
+                                if not p.get('category'):
+                                    p['category'] = cat_caption
+                                p['source_field'] = p_col
                             
                         # Replace the string in the dictionary with the parsed list for individual rendering
                         check_data[p_col] = parsed_list
@@ -1869,7 +2068,19 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
                         item["audio_url"] = abs_url
                         if not item.get("filename"):
                             item["filename"] = os.path.basename(str(raw_url)) or "audio_recording"
-                        normalized_entries.append(item)
+                    elif sa_url:
+                        item["url"] = sa_url
+                        item["audio_url"] = sa_url
+                        item["filename"] = os.path.basename(str(sa)) or "audio_recording"
+
+                    if not item.get("statement_text"):
+                        item["statement_text"] = item.get("translation_en") or item.get("transcript_en") or check_data.get("statement") or ""
+                    if not item.get("transcript_en"):
+                        item["transcript_en"] = item.get("translation_en") or check_data.get("statement_transcript_en") or check_data.get("statement_en") or ""
+                    if not item.get("transcript_mr"):
+                        item["transcript_mr"] = check_data.get("statement_transcript_mr") or check_data.get("statement_mr") or ""
+
+                    normalized_entries.append(item)
 
                 if not normalized_entries and sa_url:
                     normalized_entries = [{
@@ -1877,12 +2088,15 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
                         "audio_url": sa_url,
                         "filename": os.path.basename(str(sa)) or "Vendor Statement Recording",
                         "statement_text": check_data.get("statement") or "",
+                        "transcript_en": check_data.get("statement_transcript_en") or check_data.get("statement_en") or "",
+                        "transcript_mr": check_data.get("statement_transcript_mr") or check_data.get("statement_mr") or "",
                         "created_at": check_data.get("updated_at")
                     }]
 
                 check_data['statement_entries'] = normalized_entries
 
-            return {"case": case_data, "check": check_data, "check_type": check_type.lower()}
+            final_type = "insured-cum-driver" if (check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or check_data.get('insured_cum_driver')) else check_type.lower()
+            return {"case": case_data, "check": check_data, "check_type": final_type}
 
     except HttpError:
         raise
@@ -1981,10 +2195,20 @@ def get_full_case_details(request: HttpRequest, case_id: int):
                     case_data[f"{doc_key}_url"] = None
 
             # 2. Fetch all check tables
+            distinct_tables = [
+                ('claimant', 'claimant_checks'),
+                ('insured', 'insured_checks'),
+                ('driver', 'driver_checks'),
+                ('spot', 'spot_checks'),
+                ('chargesheet', 'chargesheets'),
+                ('rti', 'rti_checks'),
+                ('rto', 'rto_checks'),
+            ]
             check_label_map = {
                 'claimant': 'Claimant Check',
                 'insured': 'Insured Check',
                 'driver': 'Driver Check',
+                'insured-cum-driver': 'Insured cum driver Check',
                 'spot': 'Spot Check',
                 'chargesheet': 'Chargesheet',
                 'rti': 'RTI Check',
@@ -1992,7 +2216,22 @@ def get_full_case_details(request: HttpRequest, case_id: int):
             }
 
             all_checks = []
-            for slug, table_name in _CHECK_TABLE_MAP.items():
+            skip_driver = False
+
+            # Check if case has insured_cum_driver
+            cursor.execute("SELECT insured_cum_driver FROM insured_checks WHERE case_id = %s", [case_id])
+            icd_row = cursor.fetchone()
+            if not icd_row or not icd_row[0]:
+                cursor.execute("SELECT insured_cum_driver FROM driver_checks WHERE case_id = %s", [case_id])
+                d_icd_row = cursor.fetchone()
+                case_is_icd = bool(d_icd_row and d_icd_row[0])
+            else:
+                case_is_icd = bool(icd_row[0])
+
+            for slug, table_name in distinct_tables:
+                if slug == 'driver' and skip_driver:
+                    continue
+
                 cursor.execute(f"SELECT * FROM {table_name} WHERE case_id = %s", [case_id])
                 col_names_ch = [d[0] for d in cursor.description]
                 ch_row = cursor.fetchone()
@@ -2003,6 +2242,51 @@ def get_full_case_details(request: HttpRequest, case_id: int):
                 for k, v in list(ch_data.items()):
                     if hasattr(v, 'isoformat'):
                         ch_data[k] = v.isoformat()
+
+                if slug == 'insured' and case_is_icd:
+                    # Merge driver fields into insured check
+                    cursor.execute("SELECT * FROM driver_checks WHERE case_id = %s", [case_id])
+                    col_names_dc = [d[0] for d in cursor.description]
+                    dc_row = cursor.fetchone()
+                    if dc_row:
+                        dc_data = dict(zip(col_names_dc, dc_row))
+                        for k, v in list(dc_data.items()):
+                            if hasattr(v, 'isoformat'):
+                                dc_data[k] = v.isoformat()
+
+                        # Merge driver scalar fields
+                        for k in ['dl', 'occupation', 'driver_name', 'driver_contact', 'driver_address']:
+                            if dc_data.get(k) and not ch_data.get(k):
+                                ch_data[k] = dc_data[k]
+
+                        # Merge statement, statement_audio_path, and transcripts
+                        for k in ['statement_audio_path', 'statement_audio', 'statement', 'statement_transcript_mr', 'statement_transcript_en']:
+                            if dc_data.get(k) and not ch_data.get(k):
+                                ch_data[k] = dc_data[k]
+
+                        # Fallback for statement transcripts
+                        if not ch_data.get('statement_transcript_mr') and dc_data.get('statement_transcript_mr'):
+                            ch_data['statement_transcript_mr'] = dc_data['statement_transcript_mr']
+                        if not ch_data.get('statement_transcript_en') and dc_data.get('statement_transcript_en'):
+                            ch_data['statement_transcript_en'] = dc_data['statement_transcript_en']
+                        ch_data['statement_mr'] = ch_data.get('statement_transcript_mr') or dc_data.get('statement_transcript_mr') or ''
+                        ch_data['statement_en'] = ch_data.get('statement_transcript_en') or dc_data.get('statement_transcript_en') or ''
+
+                        # Merge statement_entries if empty on ch_data
+                        if not ch_data.get('statement_entries') and dc_data.get('statement_entries'):
+                            ch_data['statement_entries'] = dc_data['statement_entries']
+
+                        # Merge vendor_evidence
+                        if not ch_data.get('vendor_evidence') and dc_data.get('vendor_evidence'):
+                            ch_data['vendor_evidence'] = dc_data['vendor_evidence']
+
+                        # Merge vendor_documents
+                        if not ch_data.get('vendor_documents') and dc_data.get('vendor_documents'):
+                            ch_data['vendor_documents'] = dc_data['vendor_documents']
+
+                    ch_data['insured_cum_driver'] = True
+                    slug = 'insured-cum-driver'
+                    skip_driver = True
 
                 # Get vendor name
                 vendor_id = ch_data.get('assigned_vendor_id') or ch_data.get('vendor_id')
@@ -2018,10 +2302,16 @@ def get_full_case_details(request: HttpRequest, case_id: int):
                 import json as _json
                 
                 # We will gather photos from multiple possible columns (especially for chargesheets)
-                photo_columns = ['vendor_evidence', 'evidence', 'applied_cs_photos', 'cs_received_photos', 'dispatched_photos']
+                photo_columns = [
+                    ('applied_cs_photos', 'Applied for CS'),
+                    ('cs_received_photos', 'CS Received'),
+                    ('dispatched_photos', 'Dispatched'),
+                    ('vendor_evidence', 'Vendor Evidence'),
+                    ('evidence', 'Evidence Photo'),
+                ]
                 
                 all_raw_photos = []
-                for p_col in photo_columns:
+                for p_col, cat_caption in photo_columns:
                     raw_val = ch_data.get(p_col)
                     parsed_list = []
                     if raw_val:
@@ -2032,6 +2322,15 @@ def get_full_case_details(request: HttpRequest, case_id: int):
                                 parsed_list = []
                         elif isinstance(raw_val, list):
                             parsed_list = raw_val
+                            
+                        # Tag each photo item with caption/category
+                        for p in parsed_list:
+                            if isinstance(p, dict):
+                                if not p.get('caption'):
+                                    p['caption'] = cat_caption
+                                if not p.get('category'):
+                                    p['category'] = cat_caption
+                                p['source_field'] = p_col
                             
                         # Replace the string in the dictionary with the parsed list for individual rendering
                         ch_data[p_col] = parsed_list
@@ -2109,8 +2408,20 @@ def get_full_case_details(request: HttpRequest, case_id: int):
                         item["url"] = abs_url
                         item["audio_url"] = abs_url
                         if not item.get("filename"):
-                            item["filename"] = os.path.basename(str(raw_url)) or "Vendor Statement Recording"
-                        normalized_entries.append(item)
+                            item["filename"] = os.path.basename(str(raw_url)) or "audio_recording"
+                    elif sa_url:
+                        item["url"] = sa_url
+                        item["audio_url"] = sa_url
+                        item["filename"] = os.path.basename(str(sa)) or "audio_recording"
+
+                    if not item.get("statement_text"):
+                        item["statement_text"] = item.get("translation_en") or item.get("transcript_en") or ch_data.get("statement") or ""
+                    if not item.get("transcript_en"):
+                        item["transcript_en"] = item.get("translation_en") or ch_data.get("statement_transcript_en") or ch_data.get("statement_en") or ""
+                    if not item.get("transcript_mr"):
+                        item["transcript_mr"] = ch_data.get("statement_transcript_mr") or ch_data.get("statement_mr") or ""
+
+                    normalized_entries.append(item)
 
                 if not normalized_entries and sa_url:
                     normalized_entries = [{
@@ -2118,6 +2429,8 @@ def get_full_case_details(request: HttpRequest, case_id: int):
                         "audio_url": sa_url,
                         "filename": os.path.basename(str(sa)) or "Vendor Statement Recording",
                         "statement_text": ch_data.get("statement") or "",
+                        "transcript_en": ch_data.get("statement_transcript_en") or ch_data.get("statement_en") or "",
+                        "transcript_mr": ch_data.get("statement_transcript_mr") or ch_data.get("statement_mr") or "",
                         "created_at": ch_data.get("updated_at")
                     }]
 
@@ -2317,6 +2630,26 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
                     )
                     check_row_id = existing[0]
 
+                    # If insured_cum_driver, sync driver fields to driver_checks as well
+                    if check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or safe_check.get('insured_cum_driver'):
+                        driver_fields = {
+                            'driver_name': check_updates.get('driver_name') or check_updates.get('insured_name'),
+                            'driver_contact': check_updates.get('driver_contact') or check_updates.get('insured_contact'),
+                            'driver_address': check_updates.get('driver_address') or check_updates.get('insured_address'),
+                            'dl': check_updates.get('dl'),
+                            'permit': check_updates.get('permit'),
+                            'occupation': check_updates.get('occupation'),
+                            'check_status': safe_check.get('check_status'),
+                            'statement': safe_check.get('statement'),
+                            'triggers': safe_check.get('triggers'),
+                            'negative_status': safe_check.get('negative_status'),
+                        }
+                        safe_driver = {k: v for k, v in driver_fields.items() if v is not None}
+                        if safe_driver:
+                            d_set = ', '.join(f'{k} = %s' for k in safe_driver)
+                            d_vals = list(safe_driver.values()) + [case_id]
+                            cursor.execute(f"UPDATE driver_checks SET {d_set}, updated_at = NOW() WHERE case_id = %s", d_vals)
+
                     actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
                     for k, new_v in safe_check.items():
                         old_v = old_check_vals.get(k)
@@ -2431,6 +2764,15 @@ def assign_vendor_to_check(request: HttpRequest, case_id: int, check_type: str):
                     f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
                     [vendor_id if vendor_id else None, new_status, case_id]
                 )
+                # If insured cum driver, sync to driver_checks as well
+                if check_type.lower() in ('insured_cum_driver', 'insured-cum-driver', 'insured'):
+                    cursor.execute("SELECT insured_cum_driver FROM insured_checks WHERE case_id = %s", [case_id])
+                    icd_r = cursor.fetchone()
+                    if check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or (icd_r and icd_r[0]):
+                        cursor.execute(
+                            "UPDATE driver_checks SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
+                            [vendor_id if vendor_id else None, new_status, case_id]
+                        )
 
             cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
             case_row = cursor.fetchone()
@@ -2605,6 +2947,19 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
         import re
         from datetime import datetime as dt
 
+        # ── Verification Check Validation ────────────────────────────────────
+        # Ensure at least one check is selected
+        has_checks = any([
+            payload.chk_spot, payload.chk_hospital, payload.chk_claimant,
+            payload.chk_insured, payload.chk_witness, payload.chk_driver,
+            payload.chk_dl, payload.chk_rc, payload.chk_permit,
+            payload.chk_court, payload.chk_notice, payload.chk_134_notice,
+            payload.chk_rti, payload.chk_medical_verification, payload.chk_income
+        ])
+        
+        if not has_checks:
+            return 400, {"error": "At least one verification check must be selected to create a case."}
+
         # ── Duplicate claim_number guard ─────────────────────────────────────
         # The cases table has a UNIQUE constraint on claim_number.  Check first
         # so we can return a helpful error instead of a silent failure.
@@ -2732,69 +3087,87 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
         # Kept for admin/ORM compatibility. Non-fatal if it fails.
         orm_case_id = None
         try:
-            case = InsuranceCase.objects.create(
+            from users.models import Report
+            case, _ = InsuranceCase.objects.update_or_create(
                 case_number=case_number,
-                title=title,
-                description=payload.description,
-                category=payload.category,
-                priority=payload.priority,
-                status=payload.status,
-                # Common fields
-                claim_number=payload.claim_number,
-                client_name=payload.client_name,
-                client_code=payload.client_code,
-                case_receive_date=case_receive_date,
-                receive_month=receive_month,
-                closure_date=closure_date_val,
-                closure_month=closure_month,
-                case_due_date=case_due_date_val,
-                tat_days=tat_days,
-                sla_status=sla_status,
-                investigation_type=payload.investigation_type,
-                investigation_report_status=payload.investigation_report_status,
-                full_case_status=payload.full_case_status,
-                special_instructions=payload.special_instructions,
-                # People
-                insured_name=payload.insured_name,
-                claimant_name=payload.claimant_name,
-                # Location
-                incident_address=payload.incident_address,
-                incident_city=payload.incident_city,
-                incident_state=payload.incident_state,
-                incident_postal_code=payload.incident_postal_code,
-                incident_country=payload.incident_country,
-                latitude=payload.latitude,
-                longitude=payload.longitude,
-                formatted_address=formatted_address,
-                # Assignment
-                created_by=request.user,
-                client_id=payload.client_id,
-                vendor_id=payload.vendor_id,
-                source=payload.source,
-                workflow_type=payload.workflow_type,
-                investigation_progress=0,
-                # Checklist
-                chk_spot=payload.chk_spot,
-                chk_hospital=payload.chk_hospital,
-                chk_claimant=payload.chk_claimant,
-                chk_insured=payload.chk_insured,
-                chk_witness=payload.chk_witness,
-                chk_driver=payload.chk_driver,
-                chk_dl=payload.chk_dl,
-                chk_rc=payload.chk_rc,
-                chk_permit=payload.chk_permit,
-                chk_court=payload.chk_court,
-                chk_notice=payload.chk_notice,
-                chk_134_notice=payload.chk_134_notice,
-                chk_rti=payload.chk_rti,
-                chk_medical_verification=payload.chk_medical_verification,
-                chk_income=payload.chk_income,
+                defaults={
+                    'title': title,
+                    'description': payload.description,
+                    'category': payload.category,
+                    'priority': payload.priority,
+                    'status': payload.status,
+                    # Common fields
+                    'claim_number': payload.claim_number,
+                    'client_name': payload.client_name,
+                    'client_code': payload.client_code,
+                    'case_receive_date': case_receive_date,
+                    'receive_month': receive_month,
+                    'closure_date': closure_date_val,
+                    'closure_month': closure_month,
+                    'case_due_date': case_due_date_val,
+                    'tat_days': tat_days,
+                    'sla_status': sla_status,
+                    'investigation_type': payload.investigation_type,
+                    'investigation_report_status': payload.investigation_report_status,
+                    'full_case_status': payload.full_case_status,
+                    'special_instructions': payload.special_instructions,
+                    # People
+                    'insured_name': payload.insured_name,
+                    'claimant_name': payload.claimant_name,
+                    # Location
+                    'incident_address': payload.incident_address,
+                    'incident_city': payload.incident_city,
+                    'incident_state': payload.incident_state,
+                    'incident_postal_code': payload.incident_postal_code,
+                    'incident_country': payload.incident_country,
+                    'latitude': payload.latitude,
+                    'longitude': payload.longitude,
+                    'formatted_address': formatted_address,
+                    # Assignment
+                    'created_by': request.user,
+                    'client_id': payload.client_id,
+                    'vendor_id': payload.vendor_id,
+                    'source': payload.source,
+                    'workflow_type': payload.workflow_type,
+                    'investigation_progress': 0,
+                    # Checklist
+                    'chk_spot': payload.chk_spot,
+                    'chk_hospital': payload.chk_hospital,
+                    'chk_claimant': payload.chk_claimant,
+                    'chk_insured': payload.chk_insured,
+                    'chk_witness': payload.chk_witness,
+                    'chk_driver': payload.chk_driver,
+                    'chk_dl': payload.chk_dl,
+                    'chk_rc': payload.chk_rc,
+                    'chk_permit': payload.chk_permit,
+                    'chk_court': payload.chk_court,
+                    'chk_notice': payload.chk_notice,
+                    'chk_134_notice': payload.chk_134_notice,
+                    'chk_rti': payload.chk_rti,
+                    'chk_medical_verification': payload.chk_medical_verification,
+                    'chk_income': payload.chk_income,
+                }
             )
+            # Ensure fresh new cases do not inherit any stale pre-existing reports
+            Report.objects.filter(case=case).delete()
             orm_case_id = case.id
-            logger.info(f"[ORM] InsuranceCase created case_number={case_number} id={orm_case_id}")
+            logger.info(f"[ORM] InsuranceCase synced case_number={case_number} id={orm_case_id}")
         except Exception as orm_err:
-            logger.error(f"[ORM] InsuranceCase.objects.create() failed (non-fatal): {orm_err}")
+            logger.error(f"[ORM] InsuranceCase sync failed (non-fatal): {orm_err}")
             orm_case_id = incident_case_db_id   # fallback so frontend gets a valid id
+        
+        # ── Record Creation Log ──────────────────────────────────────────────
+        admin_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+        _record_case_log(
+            case_id=incident_case_db_id,
+            case_number=case_number,
+            event_type='CASE_CREATED',
+            description=f"Case created manually.",
+            actor_id=request.user.id,
+            actor_name=admin_name,
+            actor_role=getattr(request.user, 'role', ''),
+            source='Cases'
+        )
         
         return 200, {
             "id": orm_case_id or incident_case_db_id,
@@ -3262,48 +3635,36 @@ def get_audit_logs(
                     )
 
             # Activity Log events (e.g. deletions)
-            if cm_user_id:
-                cursor.execute(
-                    """
-                    SELECT
-                        al.created_at,
-                        al.action,
-                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
-                        al.details
-                    FROM users_activitylog al
-                    LEFT JOIN users_customuser cu ON cu.id = al.user_id
-                    WHERE al.created_at IS NOT NULL
-                      AND al.user_id = %s
-                      AND al.action NOT IN ('LOGIN', 'LOGOUT', 'FORCE_LOGOUT')
-                    ORDER BY al.created_at DESC
-                    LIMIT %s
-                    """,
-                    [cm_user_id, safe_limit],
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT
-                        al.created_at,
-                        al.action,
-                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
-                        al.details
-                    FROM users_activitylog al
-                    LEFT JOIN users_customuser cu ON cu.id = al.user_id
-                    WHERE al.created_at IS NOT NULL
-                    ORDER BY al.created_at DESC
-                    LIMIT %s
-                    """,
-                    [safe_limit],
-                )
+            cursor.execute(
+                """
+                SELECT
+                    al.created_at,
+                    al.action,
+                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
+                    al.details
+                FROM users_activitylog al
+                LEFT JOIN users_customuser cu ON cu.id = al.user_id
+                WHERE al.created_at IS NOT NULL
+                  AND al.action NOT IN ('LOGIN', 'LOGOUT', 'FORCE_LOGOUT')
+                ORDER BY al.created_at DESC
+                LIMIT %s
+                """,
+                [safe_limit],
+            )
             for created_at, action, actor_name, details in cursor.fetchall():
+                cn = ""
+                if details:
+                    import re
+                    match = re.search(r'Case\s+([A-Za-z0-9_\-]+)', details)
+                    if match:
+                        cn = match.group(1)
                 _add_event(
                     created_at,
                     action,
                     actor_name,
                     details,
-                    "",
-                    "Activity Logs",
+                    cn,
+                    "Cases" if "CASE" in action else "Activity Logs",
                 )
 
             # Vendor assignment events from check tables
@@ -4235,6 +4596,8 @@ _REASSIGN_CHECK_TABLE_MAP: dict = {
     "claimant": "claimant_checks",
     "insured": "insured_checks",
     "driver": "driver_checks",
+    "insured_cum_driver": "insured_checks",
+    "insured-cum-driver": "insured_checks",
     "spot": "spot_checks",
     "chargesheet": "chargesheets",
     "rti": "rti_checks",
@@ -4322,6 +4685,14 @@ def reassign_check_vendor(
                 f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
                 [new_vendor_id, new_status, case_id],
             )
+            # If insured cum driver, sync to driver_checks
+            cursor.execute("SELECT insured_cum_driver FROM insured_checks WHERE case_id = %s", [case_id])
+            icd_r = cursor.fetchone()
+            if check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or (table == 'insured_checks' and icd_r and icd_r[0]):
+                cursor.execute(
+                    "UPDATE driver_checks SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
+                    [new_vendor_id, new_status, case_id],
+                )
 
     # 7. Fire-and-forget notifications (errors are swallowed inside notify_reassignment)
     if previous_vendor_id != new_vendor_id:
@@ -4381,11 +4752,21 @@ def review_check(request: HttpRequest, case_id: int, check_type: str, payload: A
     
     try:
         with connections['default'].cursor() as cursor:
+            # Check if this check is Insured cum driver
+            cursor.execute("SELECT insured_cum_driver FROM insured_checks WHERE case_id = %s", [case_id])
+            icd_row = cursor.fetchone()
+            is_icd = bool(check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or (table == 'insured_checks' and icd_row and icd_row[0]))
+
             if action == 'accept':
-                cursor.execute(f"UPDATE {table} SET check_status = 'Verified' WHERE case_id = %s", [case_id])
+                if table == 'chargesheets':
+                    cursor.execute("UPDATE chargesheets SET check_status = 'Verified', advocate_status = 'Verified' WHERE case_id = %s", [case_id])
+                else:
+                    cursor.execute(f"UPDATE {table} SET check_status = 'Verified' WHERE case_id = %s", [case_id])
+                    if is_icd:
+                        cursor.execute("UPDATE driver_checks SET check_status = 'Verified' WHERE case_id = %s", [case_id])
                 
                 actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
-                cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+                cursor.execute("SELECT case_number FROM cases WHERE id = %s", [case_id])
                 case_row = cursor.fetchone()
                 case_number = case_row[0] if case_row and case_row[0] else str(case_id)
                 _record_case_log(
@@ -4427,8 +4808,23 @@ def review_check(request: HttpRequest, case_id: int, check_type: str, payload: A
                 params.append(case_id)
                 
                 cursor.execute(update_sql, params)
+
+                if is_icd:
+                    driver_update_sql = f"""
+                        UPDATE driver_checks 
+                        SET check_status = 'Reassigned', 
+                            admin_feedback = %s,
+                            is_reassigned = TRUE
+                    """
+                    d_params = [feedback]
+                    if new_vendor_id:
+                        driver_update_sql += ", assigned_vendor_id = %s"
+                        d_params.append(new_vendor_id)
+                    driver_update_sql += " WHERE case_id = %s"
+                    d_params.append(case_id)
+                    cursor.execute(driver_update_sql, d_params)
                 
-                cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+                cursor.execute("SELECT case_number FROM cases WHERE id = %s", [case_id])
                 case_row = cursor.fetchone()
                 case_number = case_row[0] if case_row and case_row[0] else str(case_id)
                 _record_case_log(
@@ -4509,7 +4905,9 @@ def upload_check_media(
     dir_path = os.path.join(settings.MEDIA_ROOT, subfolder, f"case_{case_id}", check_type.lower())
     os.makedirs(dir_path, exist_ok=True)
 
-    safe_filename = f"{int(time.time())}_{file.name.replace(' ', '_')}"
+    from urllib.parse import unquote
+    clean_name = unquote(file.name).replace(' ', '_')
+    safe_filename = f"{int(time.time())}_{clean_name}"
     full_file_path = os.path.join(dir_path, safe_filename)
     
     with open(full_file_path, "wb") as f:
@@ -4570,12 +4968,26 @@ def upload_check_media(
             [updated_json, case_id]
         )
 
+        # Check if insured cum driver to sync media to driver_checks
+        cursor.execute("SELECT insured_cum_driver FROM insured_checks WHERE case_id = %s", [case_id])
+        icd_r = cursor.fetchone()
+        if check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or (table == 'insured_checks' and icd_r and icd_r[0]):
+            cursor.execute(
+                f"UPDATE driver_checks SET {col_name} = %s WHERE case_id = %s",
+                [updated_json, case_id]
+            )
+
         # If statement audio, also update statement_audio_path if empty
         if cat_clean in {"statement", "statement_audio"}:
             cursor.execute(
                 f"UPDATE {table} SET statement_audio_path = %s WHERE case_id = %s AND (statement_audio_path IS NULL OR statement_audio_path = '')",
                 [rel_url, case_id]
             )
+            if check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or (table == 'insured_checks' and icd_r and icd_r[0]):
+                cursor.execute(
+                    f"UPDATE driver_checks SET statement_audio_path = %s WHERE case_id = %s AND (statement_audio_path IS NULL OR statement_audio_path = '')",
+                    [rel_url, case_id]
+                )
             
         actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
         cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
@@ -4957,6 +5369,36 @@ def generate_rto_rti_form(request, case_id: int, data: GenerateRTORTIRequest):
                     case_docs.append(doc_entry)
                     cursor.execute("UPDATE rto_checks SET case_documents = %s WHERE id = %s", [json.dumps(case_docs), rto_check_id])
 
+        # ── Record Activity Log ──────────────────────────────────────────────
+        try:
+            actor_name = f"{request.user.first_name} {request.user.last_name}".strip() if (hasattr(request, 'user') and request.user.is_authenticated) else "System"
+            if not actor_name or actor_name == "AnonymousUser":
+                actor_name = cm_name or "System"
+
+            actor_id = request.user.id if (hasattr(request, 'user') and request.user.is_authenticated) else None
+            actor_role = getattr(request.user, 'role', '') if (hasattr(request, 'user') and request.user.is_authenticated) else ''
+
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT case_number FROM cases WHERE id = %s", [case_id])
+                c_row = cursor.fetchone()
+                case_num = c_row[0] if c_row and c_row[0] else str(case_id)
+
+            doc_type_label = data.doc_type or 'All'
+            _record_case_log(
+                case_id=case_id,
+                case_number=case_num,
+                event_type='RTO_DOCS_GENERATED',
+                check_type='RTO Check',
+                field_name='case_documents',
+                description=f"RTO Formats ({doc_type_label}) generated",
+                actor_id=actor_id,
+                actor_name=actor_name,
+                actor_role=actor_role,
+                source='Cases'
+            )
+        except Exception as log_err:
+            logger.error(f"Failed to record RTO_DOCS_GENERATED log: {log_err}")
+
         if doc_type_clean == "all":
             zip_buffer = io.BytesIO()
             dl_content = populate_doc("DL RTI.docx")
@@ -5056,6 +5498,13 @@ def create_bulk_case_deletion_request(request, data: BulkCaseDeletionRequestSche
         )
         created_requests.append(req.id)
 
+        from users.models import ActivityLog
+        ActivityLog.objects.create(
+            user=request.user,
+            action='CASE_DELETION_REQUESTED',
+            details=f"Case {case_number} deletion requested by {request.user.username}: {data.reason}",
+        )
+
     if not created_requests and data.case_ids:
         return {"success": False, "message": "No requests created. Cases might not exist or already have pending deletion requests."}
 
@@ -5118,8 +5567,33 @@ def review_deletion_request(request, request_id: int, data: ChangeRequestReviewS
     del_req.save()
 
     if action == 'APPROVE':
-        # Actually delete the case
+        from users.models import InsuranceCase, Report, ActivityLog
+        case_number = None
+        with connections['default'].cursor() as cursor:
+            cursor.execute("SELECT case_number FROM cases WHERE id = %s", [del_req.case_id])
+            row = cursor.fetchone()
+            if row:
+                case_number = row[0]
+            else:
+                cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [del_req.case_id])
+                row = cursor.fetchone()
+                if row:
+                    case_number = row[0]
+
+        if case_number:
+            orm_cases = InsuranceCase.objects.filter(case_number=case_number)
+            Report.objects.filter(case__in=orm_cases).delete()
+            orm_cases.delete()
+
+        Report.objects.filter(case_id=del_req.case_id).delete()
         delete_case(del_req.case_id)
+
+        c_num_str = case_number or f"ID {del_req.case_id}"
+        ActivityLog.objects.create(
+            user=request.user,
+            action='CASE_DELETED',
+            details=f"Case {c_num_str} deletion request accepted and deleted along with all associated checks and AI reports",
+        )
 
     action_past = "APPROVED" if action == "APPROVE" else "REJECTED"
     return {"success": True, "message": f"Deletion request {action_past.lower()} successfully"}

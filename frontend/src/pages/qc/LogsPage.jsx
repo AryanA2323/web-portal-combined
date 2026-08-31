@@ -67,6 +67,8 @@ const LogsPage = () => {
         return { bg: '#27ae60', color: '#fff' };
       case 'rejected':
         return { bg: '#e74c3c', color: '#fff' };
+      case 'reassigned':
+        return { bg: '#845ef7', color: '#fff' };
       case 'pending review':
         return { bg: '#f39c12', color: '#fff' };
       default:

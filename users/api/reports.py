@@ -121,6 +121,7 @@ class ReportStatsSchema(Schema):
     total: int
     pending: int
     assigned: int
+    reassigned: Optional[int] = 0
     accepted: int
     rejected: int
 
@@ -450,19 +451,34 @@ def report_to_list_schema(report: Report) -> dict:
 
 
 def _latest_reports_per_case_queryset():
-    """Return queryset with only the latest report for each case."""
-    active_case_numbers = _verified_incident_case_numbers()
-    if not active_case_numbers:
+    """Return queryset with only the latest report for each verified incident case."""
+    active_case_info = _verified_incident_case_info()
+    if not active_case_info:
         return Report.objects.none()
+
+    active_case_numbers = list(active_case_info.keys())
 
     latest_report_ids = Report.objects.values('case_id').annotate(
         latest_id=Max('id')
     ).values('latest_id')
 
-    return Report.objects.select_related('case', 'assigned_qc').filter(
+    reports = Report.objects.select_related('case', 'assigned_qc').filter(
         id__in=Subquery(latest_report_ids),
         case__case_number__in=active_case_numbers,
     )
+
+    valid_ids = []
+    for r in reports:
+        case_num = r.case.case_number if r.case else None
+        case_created_at = active_case_info.get(case_num)
+        if case_created_at and r.created_at:
+            if timezone.is_naive(case_created_at):
+                case_created_at = timezone.make_aware(case_created_at)
+            if r.created_at < case_created_at:
+                continue
+        valid_ids.append(r.id)
+
+    return Report.objects.select_related('case', 'assigned_qc').filter(id__in=valid_ids)
 
 
 def _active_incident_case_numbers() -> List[str]:
@@ -476,12 +492,8 @@ def _active_incident_case_numbers() -> List[str]:
         return []
 
 
-def _verified_incident_case_numbers() -> List[str]:
-    """Case numbers where ALL vendor checks have status 'Verified'.
-
-    This mirrors the AI Case Review page filter so that the Legal Review page
-    only displays cases whose AI reports are genuinely generated.
-    """
+def _verified_incident_case_info() -> dict:
+    """Map case_number -> created_at for incident cases where ALL vendor checks are Verified."""
     check_tables = [
         'claimant_checks',
         'insured_checks',
@@ -491,12 +503,13 @@ def _verified_incident_case_numbers() -> List[str]:
 
     try:
         with connections['default'].cursor() as cursor:
-            # Get all case ids and their case_numbers
-            cursor.execute("SELECT id, case_number FROM cases")
-            all_cases = {row[0]: row[1] for row in cursor.fetchall() if row and row[0]}
+            # Get all case ids, case_numbers, and created_at
+            cursor.execute("SELECT id, case_number, created_at FROM cases")
+            rows = cursor.fetchall()
+            all_cases = {row[0]: (row[1], row[2]) for row in rows if row and row[0]}
 
             if not all_cases:
-                return []
+                return {}
 
             case_ids = list(all_cases.keys())
             ph = ",".join(["%s"] * len(case_ids))
@@ -536,11 +549,20 @@ def _verified_incident_case_numbers() -> List[str]:
 
             verified_case_ids &= cases_with_checks
 
-            return [all_cases[cid] for cid in verified_case_ids if cid in all_cases]
+            return {all_cases[cid][0]: all_cases[cid][1] for cid in verified_case_ids if cid in all_cases}
 
     except Exception as exc:
-        logger.error(f"Failed to fetch verified incident case numbers: {exc}")
-        return []
+        logger.error(f"Failed to fetch verified incident case info: {exc}")
+        return {}
+
+
+def _verified_incident_case_numbers() -> List[str]:
+    """Case numbers where ALL vendor checks have status 'Verified'.
+
+    This mirrors the AI Case Review page filter so that the Legal Review page
+    only displays cases whose AI reports are genuinely generated.
+    """
+    return list(_verified_incident_case_info().keys())
 
 
 
@@ -590,6 +612,7 @@ def get_report_stats(request: HttpRequest):
     total = base_queryset.count()
     pending = base_queryset.filter(status=Report.Status.PENDING).count()
     assigned = base_queryset.filter(status=Report.Status.ASSIGNED).count()
+    reassigned = base_queryset.filter(status=Report.Status.REASSIGNED).count()
     accepted = base_queryset.filter(status=Report.Status.ACCEPTED).count()
     rejected = base_queryset.filter(status=Report.Status.REJECTED).count()
 
@@ -597,6 +620,7 @@ def get_report_stats(request: HttpRequest):
         'total': total,
         'pending': pending,
         'assigned': assigned,
+        'reassigned': reassigned,
         'accepted': accepted,
         'rejected': rejected,
     }
@@ -631,18 +655,42 @@ def get_report(request: HttpRequest, report_id: int):
 
 def _get_insurance_case_by_incident_case_id(incident_case_id: int) -> Optional[InsuranceCase]:
     """
-    Find InsuranceCase for a given incident-db cases table ID.
+    Find or sync InsuranceCase for a given incident-db cases table ID.
     Always maps via case_number in cases table first to avoid ID collision between tables.
     """
     case_number = None
+    row_data = None
     try:
         with connections['default'].cursor() as cursor:
-            cursor.execute("SELECT case_number FROM cases WHERE id = %s", [incident_case_id])
-            res = cursor.fetchone()
-            if res and res[0]:
-                case_number = res[0]
+            cursor.execute(
+                """
+                SELECT case_number, claim_number, client_name, category, full_case_status
+                FROM cases WHERE id = %s
+                """,
+                [incident_case_id]
+            )
+            row_data = cursor.fetchone()
+            if row_data and row_data[0]:
+                case_number = row_data[0]
     except Exception as e:
         logger.warning(f"Error querying cases table for ID {incident_case_id}: {e}")
+
+    if case_number and row_data:
+        try:
+            c_num, c_claim, c_cname, c_cat, c_stat = row_data
+            ic, _ = InsuranceCase.objects.update_or_create(
+                case_number=case_number,
+                defaults={
+                    'title': f"Case {c_claim or c_num} - {c_cname or ''}".strip(),
+                    'claim_number': c_claim or '',
+                    'client_name': c_cname or '',
+                    'category': c_cat or 'General',
+                    'status': c_stat or 'New',
+                }
+            )
+            return ic
+        except Exception as e:
+            logger.warning(f"Error updating or creating InsuranceCase for case_number {case_number}: {e}")
 
     if case_number:
         try:
@@ -674,6 +722,9 @@ def create_report(request: HttpRequest, payload: CreateReportSchema):
 
     if not case:
         raise HttpError(404, "Case not found")
+
+    # Clean up any existing report for this case before creating the latest one
+    Report.objects.filter(case=case).delete()
 
     # Create report
     report = Report.objects.create(
@@ -827,8 +878,8 @@ def update_report_content(request: HttpRequest, report_id: int, payload: UpdateR
     except Report.DoesNotExist:
         raise HttpError(404, "Report not found")
 
-    # Allow editing if report is PENDING, REJECTED, or has not been reviewed yet
-    if report.status not in [Report.Status.PENDING, Report.Status.REJECTED]:
+    # Allow editing if report is PENDING, REJECTED, REASSIGNED, or has not been reviewed yet
+    if report.status not in [Report.Status.PENDING, Report.Status.REJECTED, Report.Status.REASSIGNED]:
         # Allow editing ASSIGNED reports too before qc reviews them
         pass
 
@@ -845,10 +896,10 @@ def update_report_content(request: HttpRequest, report_id: int, payload: UpdateR
     "/reports/{report_id}/reassign",
     response=ReportSchema,
     summary="Reassign rejected report",
-    description="Reassign a rejected report to a different qc (CaseManager only)."
+    description="Reassign a rejected report to a qc (CaseManager only)."
 )
 def reassign_report(request: HttpRequest, report_id: int, payload: ReassignReportSchema):
-    """Reassign a rejected report to a different qc."""
+    """Reassign a rejected report to a qc."""
     user = request.auth
 
     if user.role not in [CustomUser.Role.CASE_MANAGER, CustomUser.Role.SUPER_ADMIN]:
@@ -859,8 +910,8 @@ def reassign_report(request: HttpRequest, report_id: int, payload: ReassignRepor
     except Report.DoesNotExist:
         raise HttpError(404, "Report not found")
 
-    # Can only reassign rejected reports
-    if report.status != Report.Status.REJECTED:
+    # Can only reassign rejected or already reassigned reports
+    if report.status not in [Report.Status.REJECTED, Report.Status.REASSIGNED]:
         raise HttpError(400, "Can only reassign rejected reports")
 
     # Check if qc exists and has qc role
@@ -878,7 +929,7 @@ def reassign_report(request: HttpRequest, report_id: int, payload: ReassignRepor
     report.assigned_at = timezone.now()
     report.reviewed_at = None  # Reset review timestamp
     report.review_notes = ''  # Clear previous review notes
-    report.status = Report.Status.ASSIGNED
+    report.status = Report.Status.REASSIGNED
     report.save()
 
     logger.info(f"Report {report.id} reassigned from {previous_qc.username if previous_qc else 'None'} to {qc.username} by {user.username}")
@@ -940,13 +991,15 @@ def get_qc_report_stats(request: HttpRequest):
     total = base_queryset.count()
     pending = base_queryset.filter(status=Report.Status.PENDING).count()
     assigned = base_queryset.filter(status=Report.Status.ASSIGNED).count()
+    reassigned = base_queryset.filter(status=Report.Status.REASSIGNED).count()
     accepted = base_queryset.filter(status=Report.Status.ACCEPTED).count()
     rejected = base_queryset.filter(status=Report.Status.REJECTED).count()
 
     return {
         'total': total,
-        'pending': pending + assigned,  # Combine pending and assigned for "pending review"
+        'pending': pending + assigned + reassigned,  # Combine pending, assigned, and reassigned for "pending review"
         'assigned': assigned,
+        'reassigned': reassigned,
         'accepted': accepted,
         'rejected': rejected,
     }
@@ -1032,6 +1085,8 @@ def get_qc_logs(request: HttpRequest):
             action = 'Approved'
         elif report.status == Report.Status.REJECTED:
             action = 'Rejected'
+        elif report.status == Report.Status.REASSIGNED:
+            action = 'Reassigned'
         elif report.status == Report.Status.ASSIGNED:
             action = 'Pending Review'
         else:

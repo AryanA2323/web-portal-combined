@@ -619,11 +619,13 @@ _CHECK_DETAIL_COLUMNS = {
                      cc.claimant_name, cc.claimant_contact, cc.claimant_address,
                      cc.claimant_income, cc.statement, cc.triggers, cc.vendor_evidence AS evidence,
                      cc.vendor_documents AS vendor_documents, cc.case_documents AS case_documents,
-                     cc.questionnaire, cc.vendor_feedback, cc.negative_status''',
+                     cc.questionnaire, cc.vendor_feedback, cc.negative_status,
+                     cc.admin_feedback, cc.is_reassigned''',
         'alias': 'cc',
         'fields': ['id','case_id','check_status','claimant_name','claimant_contact',
                     'claimant_address','claimant_income','statement','triggers','evidence',
-                    'vendor_documents','case_documents','questionnaire','vendor_feedback','negative_status'],
+                    'vendor_documents','case_documents','questionnaire','vendor_feedback','negative_status',
+                    'admin_feedback','is_reassigned'],
     },
     'insured_checks': {
         'select': '''ic.id, ic.case_id, ic.check_status,
@@ -631,12 +633,14 @@ _CHECK_DETAIL_COLUMNS = {
                      ic.policy_number, ic.policy_period, ic.rc, ic.permit,
                      ic.statement, ic.triggers, ic.vendor_evidence AS evidence,
                      ic.vendor_documents AS vendor_documents, ic.case_documents AS case_documents,
-                     ic.questionnaire, ic.vendor_feedback, ic.negative_status''',
+                     ic.questionnaire, ic.vendor_feedback, ic.negative_status,
+                     ic.admin_feedback, ic.is_reassigned''',
         'alias': 'ic',
         'fields': ['id','case_id','check_status','insured_name','insured_contact',
                     'insured_address','policy_number','policy_period','rc','permit',
                     'statement','triggers','evidence','vendor_documents','case_documents',
-                    'questionnaire','vendor_feedback','negative_status'],
+                    'questionnaire','vendor_feedback','negative_status',
+                    'admin_feedback','is_reassigned'],
     },
     'driver_checks': {
         'select': '''dc.id, dc.case_id, dc.check_status,
@@ -644,12 +648,14 @@ _CHECK_DETAIL_COLUMNS = {
                      dc.dl, dc.permit, dc.occupation,
                      dc.statement, dc.triggers, dc.vendor_evidence AS evidence,
                      dc.vendor_documents AS vendor_documents, dc.case_documents AS case_documents,
-                     dc.questionnaire, dc.vendor_feedback, dc.negative_status''',
+                     dc.questionnaire, dc.vendor_feedback, dc.negative_status,
+                     dc.admin_feedback, dc.is_reassigned''',
         'alias': 'dc',
         'fields': ['id','case_id','check_status','driver_name','driver_contact',
                     'driver_address','dl','permit','occupation',
                     'statement','triggers','evidence','vendor_documents','case_documents',
-                    'questionnaire','vendor_feedback','negative_status'],
+                    'questionnaire','vendor_feedback','negative_status',
+                    'admin_feedback','is_reassigned'],
     },
     'spot_checks': {
         'select': '''sc.id, sc.case_id, sc.check_status,
@@ -657,12 +663,14 @@ _CHECK_DETAIL_COLUMNS = {
                      sc.fir_number, sc.time_of_accident, sc.accident_brief,
                      sc.triggers, sc.vendor_evidence AS evidence,
                      sc.vendor_documents AS vendor_documents, sc.case_documents AS case_documents,
-                     sc.questionnaire, sc.vendor_feedback, sc.negative_status''',
+                     sc.questionnaire, sc.vendor_feedback, sc.negative_status,
+                     sc.admin_feedback, sc.is_reassigned''',
         'alias': 'sc',
         'fields': ['id','case_id','check_status','place_of_accident','police_station',
                     'district','fir_number','time_of_accident','accident_brief',
                     'triggers','evidence','vendor_documents','case_documents',
-                    'questionnaire','vendor_feedback','negative_status'],
+                    'questionnaire','vendor_feedback','negative_status',
+                    'admin_feedback','is_reassigned'],
     },
     'chargesheets': {
         'select': '''cs.id, cs.case_id, cs.check_status, cs.advocate_status,
@@ -672,14 +680,16 @@ _CHECK_DETAIL_COLUMNS = {
                      cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
                      cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
                      cs.questionnaire, cs.vendor_feedback, cs.negative_status,
-                     cs.applied_cs_photos, cs.cs_received_photos, cs.dispatched_photos, cs.advocate_remark''',
+                     cs.applied_cs_photos, cs.cs_received_photos, cs.dispatched_photos, cs.advocate_remark,
+                     cs.admin_feedback, cs.is_reassigned''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','advocate_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
                     'police_station_name','court_district','court_case_no',
                     'statement','triggers','evidence','vendor_documents','case_documents',
                     'questionnaire','vendor_feedback','negative_status',
-                    'applied_cs_photos','cs_received_photos','dispatched_photos','advocate_remark'],
+                    'applied_cs_photos','cs_received_photos','dispatched_photos','advocate_remark',
+                    'admin_feedback','is_reassigned'],
     },
     'chargesheet_checks': {
         'select': '''cs.id, cs.case_id, cs.check_status, cs.advocate_status,
@@ -689,32 +699,38 @@ _CHECK_DETAIL_COLUMNS = {
                      cs.statement, cs.triggers, cs.vendor_evidence AS evidence,
                      cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
                      cs.questionnaire, cs.vendor_feedback, cs.negative_status,
-                     cs.applied_cs_photos, cs.cs_received_photos, cs.dispatched_photos, cs.advocate_remark''',
+                     cs.applied_cs_photos, cs.cs_received_photos, cs.dispatched_photos, cs.advocate_remark,
+                     cs.admin_feedback, cs.is_reassigned''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','advocate_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
                     'police_station_name','court_district','court_case_no',
                     'statement','triggers','evidence','vendor_documents','case_documents',
                     'questionnaire','vendor_feedback','negative_status',
-                    'applied_cs_photos','cs_received_photos','dispatched_photos','advocate_remark'],
+                    'applied_cs_photos','cs_received_photos','dispatched_photos','advocate_remark',
+                    'admin_feedback','is_reassigned'],
     },
     'rti_checks': {
         'select': '''rt.id, rt.case_id, rt.check_status,
                      NULL AS statement, NULL AS triggers, rt.vendor_evidence AS evidence,
                      rt.vendor_documents AS vendor_documents, rt.case_documents AS case_documents,
-                     rt.questionnaire, rt.vendor_feedback''',
+                     rt.questionnaire, rt.vendor_feedback,
+                     rt.admin_feedback, rt.is_reassigned''',
         'alias': 'rt',
         'fields': ['id','case_id','check_status','statement','triggers','evidence',
-                   'vendor_documents','case_documents','questionnaire','vendor_feedback'],
+                   'vendor_documents','case_documents','questionnaire','vendor_feedback',
+                   'admin_feedback','is_reassigned'],
     },
     'rto_checks': {
         'select': '''ro.id, ro.case_id, ro.check_status,
                      NULL AS statement, NULL AS triggers, ro.vendor_evidence AS evidence,
                      ro.vendor_documents AS vendor_documents, ro.case_documents AS case_documents,
-                     ro.questionnaire, ro.vendor_feedback''',
+                     ro.questionnaire, ro.vendor_feedback,
+                     ro.admin_feedback, ro.is_reassigned''',
         'alias': 'ro',
         'fields': ['id','case_id','check_status','statement','triggers','evidence',
-                   'vendor_documents','case_documents','questionnaire','vendor_feedback'],
+                   'vendor_documents','case_documents','questionnaire','vendor_feedback',
+                   'admin_feedback','is_reassigned'],
     },
 }
 
@@ -789,7 +805,13 @@ def get_vendor_assigned_checks(request: HttpRequest):
                         # advocate_status position depends on whether insured_cum_driver column is present
                         adv_idx = 10 if table in _TABLES_WITH_INSURED_CUM_DRIVER else 9
                         adv_stat = r[adv_idx] if (table == 'chargesheets' and len(r) > adv_idx and r[adv_idx]) else ""
-                        status_val = adv_stat if adv_stat else (r[2] or "WIP")
+                        chk_stat = r[2] or "WIP"
+                        if chk_stat == 'Verified' or adv_stat == 'Verified':
+                            status_val = 'Verified'
+                        elif adv_stat:
+                            status_val = adv_stat
+                        else:
+                            status_val = chk_stat
                         assigned_checks.append({
                             "check_id": r[0],
                             "case_id": r[1],
@@ -997,6 +1019,10 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                 else None
             )
 
+            if table == 'chargesheets' and (check_detail.get('check_status') == 'Verified' or check_detail.get('advocate_status') == 'Verified'):
+                check_detail['check_status'] = 'Verified'
+                check_detail['advocate_status'] = 'Verified'
+
             return {
                 "case": case_info,
                 "check_type": check_type,
@@ -1199,6 +1225,10 @@ def get_vendor_check_detail_by_id(request: HttpRequest, check_id: int, check_typ
                         p["filename"] = extract_evidence_filename(p)
                     normalized.append(p)
                 check_detail[photo_field] = normalized
+
+            if table == 'chargesheets' and (check_detail.get('check_status') == 'Verified' or check_detail.get('advocate_status') == 'Verified'):
+                check_detail['check_status'] = 'Verified'
+                check_detail['advocate_status'] = 'Verified'
 
             return {
                 "case": case_info,
@@ -1738,13 +1768,18 @@ def vendor_check_questionnaire_save(request: HttpRequest, case_id: int, check_ty
 
                     # Copy shared fields from the source check to the paired check
                     cursor.execute(f"""
-                        SELECT vendor_evidence, vendor_documents, statement_entries
+                        SELECT vendor_evidence, vendor_documents, statement_entries,
+                               statement_audio_path, statement, statement_transcript_mr, statement_transcript_en
                         FROM {table} WHERE id = %s
                     """, [check_id])
                     src = cursor.fetchone()
                     src_evidence = src[0] if src else '[]'
                     src_documents = src[1] if src else '[]'
                     src_statements = src[2] if src else '[]'
+                    src_audio = src[3] if src else None
+                    src_statement = src[4] if src else None
+                    src_mr = src[5] if src else None
+                    src_en = src[6] if src else None
 
                     cursor.execute(f"""
                         UPDATE {paired_table} SET
@@ -1755,6 +1790,10 @@ def vendor_check_questionnaire_save(request: HttpRequest, case_id: int, check_ty
                             vendor_evidence = COALESCE(%s, '[]'::jsonb),
                             vendor_documents = COALESCE(%s, '[]'::jsonb),
                             statement_entries = COALESCE(%s, '[]'::jsonb),
+                            statement_audio_path = COALESCE(%s, statement_audio_path),
+                            statement = COALESCE(%s, statement),
+                            statement_transcript_mr = COALESCE(%s, statement_transcript_mr),
+                            statement_transcript_en = COALESCE(%s, statement_transcript_en),
                             updated_at = NOW()
                         WHERE id = %s
                     """, [
@@ -1762,6 +1801,7 @@ def vendor_check_questionnaire_save(request: HttpRequest, case_id: int, check_ty
                         vendor_feedback_val,
                         payload.negative_status or '',
                         src_evidence, src_documents, src_statements,
+                        src_audio, src_statement, src_mr, src_en,
                         paired_id,
                     ])
                     logger.info(f"Insured-cum-driver: mirrored data from {table}#{check_id} to {paired_table}#{paired_id}")

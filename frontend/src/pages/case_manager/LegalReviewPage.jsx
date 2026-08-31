@@ -36,6 +36,7 @@ import {
   Gavel,
   Assignment,
   InsertDriveFile,
+  Replay,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import StatCard from './components/StatCard';
@@ -70,6 +71,7 @@ const getEvidenceWatermarkLines = (photo) => {
 
 const getStatusDisplayLabel = (status) => {
   if (status === 'ACCEPTED') return 'APPROVED';
+  if (status === 'REASSIGNED') return 'REASSIGNED';
   return status;
 };
 
@@ -326,6 +328,8 @@ const LegalReviewPage = () => {
         return '#ff922b';
       case 'ASSIGNED':
         return '#4dabf7';
+      case 'REASSIGNED':
+        return '#845ef7';
       case 'ACCEPTED':
         return '#51cf66';
       case 'REJECTED':
@@ -341,6 +345,8 @@ const LegalReviewPage = () => {
         return <Schedule sx={{ fontSize: 16 }} />;
       case 'ASSIGNED':
         return <Assignment sx={{ fontSize: 16 }} />;
+      case 'REASSIGNED':
+        return <Replay sx={{ fontSize: 16 }} />;
       case 'ACCEPTED':
         return <CheckCircle sx={{ fontSize: 16 }} />;
       case 'REJECTED':
@@ -371,7 +377,7 @@ const LegalReviewPage = () => {
     },
     {
       title: 'Pending Review',
-      value: stats.pending + stats.assigned,
+      value: stats.pending + stats.assigned + (stats.reassigned || 0),
       icon: Schedule,
       iconBgColor: '#fff3e0',
     },
@@ -755,7 +761,7 @@ const LegalReviewPage = () => {
                           >
                             Review
                           </Button>
-                          {(row.status === 'PENDING' || row.status === 'ASSIGNED') && (
+                          {(row.status === 'PENDING' || row.status === 'ASSIGNED' || row.status === 'REASSIGNED') && (
                             <Button
                               variant="outlined"
                               size="small"

@@ -96,7 +96,15 @@ const CreateCaseDialog = ({ open, onClose, onSuccess }) => {
     }));
   };
 
+  const hasSelectedChecks = Object.keys(formData)
+    .filter(key => key.startsWith('chk_'))
+    .some(key => formData[key] === true);
+
   const handleSubmit = async () => {
+    if (!hasSelectedChecks) {
+      alert('Please select at least one verification check.');
+      return;
+    }
     setLoading(true);
     try {
       // Call the onSuccess callback with form data
@@ -665,7 +673,7 @@ const CreateCaseDialog = ({ open, onClose, onSuccess }) => {
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={loading || !formData.title}
+          disabled={loading || !formData.title || !hasSelectedChecks}
           sx={{
             backgroundColor: '#17539C',
             '&:hover': { backgroundColor: '#5568d3' },
