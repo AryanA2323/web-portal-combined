@@ -118,18 +118,9 @@ const AudioBlobPlayer = ({ rawUrl }) => {
       setLoading(true);
       setError(null);
       try {
-        // Build a relative /media/... path so it goes through Vite proxy (same-origin)
-        let fetchUrl = rawUrl;
-        if (fetchUrl.startsWith('http://') || fetchUrl.startsWith('https://')) {
-          try {
-            const u = new URL(fetchUrl);
-            fetchUrl = u.pathname; // strip to just /media/...
-          } catch { /* keep as-is */ }
-        }
-        if (!fetchUrl.startsWith('/')) fetchUrl = '/' + fetchUrl;
-        if (!fetchUrl.startsWith('/media/') && !fetchUrl.startsWith('/api/')) {
-          fetchUrl = '/media/' + fetchUrl.replace(/^\/+/, '');
-        }
+        // Use resolveMediaUrl to get the correct full URL for both dev and production
+        const fetchUrl = resolveMediaUrl(rawUrl);
+        if (!fetchUrl) throw new Error('No audio URL');
 
         const resp = await fetch(fetchUrl);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

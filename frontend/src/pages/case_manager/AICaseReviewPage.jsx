@@ -1037,14 +1037,14 @@ const AICaseReviewPage = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+              gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
               gap: 1.25,
               flex: 1,
-              maxWidth: 480,
+              maxWidth: { xs: '100%', sm: 540, md: 620, lg: 660 },
             }}
           >
             {statsData.map((stat, index) => (
-              <Box key={index} sx={{ minWidth: 0 }}>
+              <Box key={index} sx={{ minWidth: 0, height: '100%' }}>
                 <StatCard {...stat} compact={true} hideIcon={true} />
               </Box>
             ))}

@@ -14,7 +14,18 @@ const StatCard = ({
   dense = false,
   sx: customSx = {},
 }) => {
-  const themeColor = accentColor || iconColor || '#2563eb';
+  const getThemeColor = () => {
+    if (accentColor) return accentColor;
+    if (iconColor && iconColor !== '#2563eb') return iconColor;
+    if (iconBgColor === '#e3f2fd') return '#1d4ed8'; // Blue (Total Cases / Reports)
+    if (iconBgColor === '#ede7f6') return '#7e22ce'; // Purple (Generated Reports)
+    if (iconBgColor === '#fff3e0') return '#c2410c'; // Amber/Orange (WIP / Assigned Business Partners)
+    if (iconBgColor === '#e8f5e9') return '#15803d'; // Green (Closed / Dispatch Cases)
+    if (iconBgColor === '#ffebee') return '#dc2626'; // Red (Overdue / Rejected)
+    return iconColor || '#1d4ed8';
+  };
+
+  const themeColor = getThemeColor();
 
   if (compact) {
     return (
@@ -22,13 +33,16 @@ const StatCard = ({
         onClick={onClick}
         elevation={0}
         sx={{
-          p: 0.75,
-          width: { xs: '100%', md: 104 },
-          height: { xs: '100%', md: 82 },
-          borderRadius: '12px',
+          py: 1.25,
+          px: 1,
+          width: '100%',
+          minHeight: { xs: 78, sm: 84, md: 88 },
+          height: '100%',
+          borderRadius: '16px',
           border: '1px solid rgba(226, 232, 240, 0.9)',
+          borderTop: `3.5px solid ${themeColor}`,
           bgcolor: '#ffffff',
-          boxShadow: '0 2px 10px rgba(99, 102, 241, 0.06)',
+          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.04)',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
@@ -37,37 +51,42 @@ const StatCard = ({
           cursor: onClick ? 'pointer' : 'default',
           transition: 'all 0.2s ease-in-out',
           '&:hover': {
-            boxShadow: '0 6px 18px rgba(99, 102, 241, 0.14)',
-            borderColor: '#c7d2fe',
-            transform: 'translateY(-1px)',
+            boxShadow: '0 6px 18px rgba(0, 0, 0, 0.08)',
+            borderColor: '#cbd5e1',
+            borderTopColor: themeColor,
+            transform: onClick ? 'translateY(-2px)' : 'translateY(-1px)',
           },
           ...customSx,
         }}
       >
-        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <Box sx={{ width: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
           <Typography
             variant="h4"
             sx={{
-              fontWeight: 500,
-              mb: 1,
-              fontSize: '28px',
+              fontWeight: 800,
+              mb: 0.5,
+              fontSize: { xs: '22px', sm: '25px', md: '28px' },
               color: themeColor,
               lineHeight: 1,
               letterSpacing: '-0.5px',
             }}
           >
-            {typeof value === 'number' ? value.toLocaleString() : value}
+            {typeof value === 'number' ? value.toLocaleString() : (value ?? 0)}
           </Typography>
 
           <Typography
             variant="body2"
             sx={{
-              color: '#64748b',
+              color: '#334155',
               fontWeight: 600,
-              fontSize: '12px',
-              lineHeight: 1.15,
-              whiteSpace: 'nowrap',
+              fontSize: { xs: '11px', sm: '11.5px', md: '12px' },
+              lineHeight: 1.25,
+              whiteSpace: 'normal',
+              wordBreak: 'normal',
+              overflowWrap: 'break-word',
+              textAlign: 'center',
               letterSpacing: '-0.2px',
+              maxWidth: '100%',
             }}
           >
             {title}
