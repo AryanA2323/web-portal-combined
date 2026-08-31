@@ -50,7 +50,8 @@
       "reactCompiler": true
     },
     "updates": {
-      "enabled": false
+      "enabled": false,
+      "url": "https://u.expo.dev/0c9954ca-ac4a-4923-860b-1f28b7542ce7"
     },
     "extra": {
       "apiBaseUrl": "https://api.claimverify.shovelsolutions.in/api",
@@ -58,6 +59,9 @@
       "eas": {
         "projectId": "0c9954ca-ac4a-4923-860b-1f28b7542ce7"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
