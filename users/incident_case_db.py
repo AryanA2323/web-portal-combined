@@ -36,7 +36,7 @@ DB_ALIAS = 'default'
 VALID_INVESTIGATION_TYPES = {'Full Case', 'Partial Case', 'Reassessment', 'Connected Case'}
 VALID_SLA = {'AT', 'WT'}
 VALID_FULL_CASE_STATUS = {
-    'WIP', 'Pending CS', 'Completed', 'IR-Writing', 'NI', 'Withdraw',
+    'WIP', 'Pending CS', 'Completed', 'Closed', 'Open', 'IR-Writing', 'NI', 'Withdraw',
     'QC-1', 'Pending Additional Docs', 'Connected Pending', 'RCU Pending', 'Portal Upload',
 }
 VALID_INVESTIGATION_REPORT = {'Open', 'Approval', 'Stop', 'QC', 'Dispatch'}

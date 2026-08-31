@@ -1781,7 +1781,9 @@ def update_case_status(request: HttpRequest, case_id: int, payload: UpdateCaseSt
         from users.models import InsuranceCase
         
         status = payload.status
-        valid_statuses = ['OPEN', 'WIP', 'Closed']
+        if status == 'OPEN':
+            status = 'Open'
+        valid_statuses = ['Open', 'OPEN', 'WIP', 'Closed', 'Completed']
         if status not in valid_statuses:
             raise HttpError(400, f"Invalid status. Must be one of {valid_statuses}")
 
