@@ -1271,9 +1271,16 @@ def get_cases_incident_db(
                         try:
                             import json
                             parsed_docs = json.loads(case_docs_val) if isinstance(case_docs_val, str) else case_docs_val
-                            has_rto_formats = isinstance(parsed_docs, list) and len(parsed_docs) > 0
+                            # Only count docs with category "rto_document" (generated RTO formats)
+                            if isinstance(parsed_docs, list):
+                                has_rto_formats = any(
+                                    d.get("category") == "rto_document"
+                                    for d in parsed_docs
+                                    if isinstance(d, dict)
+                                )
                         except Exception:
                             has_rto_formats = False
+
                             
                     checks_by_case[cid].append({
                         "type": "RTO Check",
