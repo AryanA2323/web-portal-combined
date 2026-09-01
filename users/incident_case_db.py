@@ -597,7 +597,8 @@ def insert_claimant_check(case_id,
                           vendor_documents=None,
                           check_status='Not Initiated',
                           statement='', triggers='',
-                          fir_date=None, reason_if_delayed=''):
+                          fir_date=None, reason_if_delayed='',
+                          lat=None, lng=None):
     """Insert into incident_case_db.claimant_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
     dependants: list of dicts [{dependent_name, dependent_contact, dependent_address, relationship, age}, ...]
@@ -621,7 +622,7 @@ def insert_claimant_check(case_id,
                      %s, %s,
                      %s, %s, %s,
                      %s, %s, %s,
-                     NULL, NULL,
+                     %s, %s,
                      NOW(), NOW())
                 RETURNING id
             """, [
@@ -630,11 +631,12 @@ def insert_claimant_check(case_id,
                 json.dumps(dependants or []), json.dumps(case_documents or []),
                 json.dumps(vendor_documents or []),
                 check_status, statement, triggers,
+                lat, lng,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted claimant_check id={row_id} for case={case_id}")
         # Geocode in background — doesn't block the API response
-        if claimant_address and claimant_address.strip():
+        if (lat is None or lng is None) and claimant_address and claimant_address.strip():
             _geocode_and_update('claimant_checks', row_id, 'claimant_lat', 'claimant_lng', claimant_address)
     except Exception as e:
         logger.error(f"[incident_case_db] Failed to insert claimant_check: {e}")
@@ -652,7 +654,8 @@ def insert_insured_check(case_id,
                          rc='', permit='',
                          case_documents=None, vendor_documents=None,
                          check_status='Not Initiated',
-                         statement='', triggers=''):
+                         statement='', triggers='',
+                         lat=None, lng=None):
     """Insert into incident_case_db.insured_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
     case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
@@ -679,7 +682,7 @@ def insert_insured_check(case_id,
                      %s, %s,
                      %s, %s,
                      %s, %s, %s,
-                     NULL, NULL,
+                     %s, %s,
                      NOW(), NOW())
                 RETURNING id
             """, [
@@ -689,11 +692,12 @@ def insert_insured_check(case_id,
                 rc, permit,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status, statement, triggers,
+                lat, lng,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted insured_check id={row_id} for case={case_id}")
-        # Geocode in background — doesn't block the API response
-        if insured_address and insured_address.strip():
+        # Geocode in background if coordinates not provided
+        if (lat is None or lng is None) and insured_address and insured_address.strip():
             _geocode_and_update('insured_checks', row_id, 'insured_lat', 'insured_lng', insured_address)
     except Exception as e:
         logger.error(f"[incident_case_db] Failed to insert insured_check: {e}")
@@ -710,7 +714,8 @@ def insert_driver_check(case_id,
                         dl='', permit='', occupation='',
                         case_documents=None, vendor_documents=None,
                         check_status='Not Initiated',
-                        statement='', triggers=''):
+                        statement='', triggers='',
+                        lat=None, lng=None):
     """Insert into incident_case_db.driver_checks.
     Saves immediately with NULL coords, then geocodes in background thread.
     case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
@@ -735,7 +740,7 @@ def insert_driver_check(case_id,
                      %s, %s, %s,
                      %s, %s,
                      %s, %s, %s,
-                     NULL, NULL,
+                     %s, %s,
                      NOW(), NOW())
                 RETURNING id
             """, [
@@ -744,11 +749,12 @@ def insert_driver_check(case_id,
                 dl, permit, occupation,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status, statement, triggers,
+                lat, lng,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted driver_check id={row_id} for case={case_id}")
-        # Geocode in background
-        if driver_address and driver_address.strip():
+        # Geocode in background if coordinates not provided
+        if (lat is None or lng is None) and driver_address and driver_address.strip():
             _geocode_and_update('driver_checks', row_id, 'driver_lat', 'driver_lng', driver_address)
     except Exception as e:
         logger.error(f"[incident_case_db] Failed to insert driver_check: {e}")
@@ -765,7 +771,8 @@ def insert_spot_check(case_id,
                       city='', police_station='', accident_brief='',
                       case_documents=None, vendor_documents=None,
                       check_status='Not Initiated',
-                      triggers=''):
+                      triggers='',
+                      lat=None, lng=None):
     """Insert into incident_case_db.spot_checks.
     Note: spot_checks has 'observations' (plural) and no 'statement' column.
     Geocodes the accident location using place_of_accident + district in background thread.
@@ -791,7 +798,7 @@ def insert_spot_check(case_id,
                      %s, %s, %s,
                      %s, %s,
                      %s, %s,
-                     NULL, NULL,
+                     %s, %s,
                      NOW(), NOW())
                 RETURNING id
             """, [
@@ -800,12 +807,13 @@ def insert_spot_check(case_id,
                 city, police_station, accident_brief,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status, triggers,
+                lat, lng,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted spot_check id={row_id} for case={case_id}")
-        # Build a combined location string and geocode in background
+        # Build a combined location string and geocode in background if coordinates not provided
         location_query = ', '.join(filter(None, [place_of_accident, district]))
-        if location_query.strip():
+        if (lat is None or lng is None) and location_query.strip():
             _geocode_and_update('spot_checks', row_id, 'spot_lat', 'spot_lng', location_query)
     except Exception as e:
         logger.error(f"[incident_case_db] Failed to insert spot_check: {e}")
@@ -850,7 +858,7 @@ def insert_chargesheet(case_id,
                      %s, %s, %s,
                      %s, %s,
                      %s, %s, %s,
-                     NULL, NULL,
+                     %s, %s,
                      NOW(), NOW())
                 RETURNING id
             """, [
@@ -860,6 +868,7 @@ def insert_chargesheet(case_id,
                 police_station_name, court_district, court_case_no,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status, statement, triggers,
+                lat, lng,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted chargesheet id={row_id} for case={case_id}")
@@ -922,6 +931,7 @@ def insert_rti_check(case_id,
                 remarks,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status,
+                lat, lng,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted rti_check id={row_id} for case={case_id}")
@@ -941,7 +951,8 @@ def insert_rto_check(case_id,
                      rc_checked=False, rc_number='',
                      remarks='',
                      case_documents=None, vendor_documents=None,
-                     check_status='Not Initiated'):
+                     check_status='Not Initiated',
+                     lat=None, lng=None):
     """Insert into incident_case_db.rto_checks.
     Geocodes the RTO office address in background thread.
     """
@@ -970,7 +981,7 @@ def insert_rto_check(case_id,
                      %s,
                      %s, %s,
                      %s,
-                     NULL, NULL,
+                     %s, %s,
                      NOW(), NOW())
                 RETURNING id
             """, [
@@ -982,12 +993,13 @@ def insert_rto_check(case_id,
                 remarks,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status,
+                lat, lng,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted rto_check id={row_id} for case={case_id}")
-        # Geocode RTO office address in background
+        # Geocode RTO office address in background if coordinates not provided
         location_query = ', '.join(filter(None, [rto_name, rto_address]))
-        if location_query.strip():
+        if (lat is None or lng is None) and location_query.strip():
             _geocode_and_update('rto_checks', row_id, 'rto_lat', 'rto_lng', location_query)
     except Exception as e:
         logger.error(f"[incident_case_db] Failed to insert rto_check: {e}")

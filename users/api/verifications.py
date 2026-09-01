@@ -159,6 +159,10 @@ class CreateVerificationSchema(Schema):
     statement: Optional[str] = None
     observations: Optional[str] = None
     triggers: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    spot_latitude: Optional[str] = None
+    spot_longitude: Optional[str] = None
     
     # Claimant fields
     claimant_name: Optional[str] = None
@@ -379,6 +383,19 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                     insert_chargesheet, insert_rti_check, insert_rto_check,
                 )
                 
+                check_lat = payload.latitude
+                check_lng = payload.longitude
+                if check_lat is None and payload.spot_latitude:
+                    try:
+                        check_lat = float(payload.spot_latitude)
+                    except (ValueError, TypeError):
+                        pass
+                if check_lng is None and payload.spot_longitude:
+                    try:
+                        check_lng = float(payload.spot_longitude)
+                    except (ValueError, TypeError):
+                        pass
+
                 if verification_type == 'CLAIMANT_CHECK':
                     insert_claimant_check(
                         case_id=db2_case_id,
@@ -389,6 +406,8 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         check_status=payload.check_status,
                         statement=payload.statement or '',
                         triggers=payload.triggers or '',
+                        lat=check_lat,
+                        lng=check_lng,
                     )
                 elif verification_type == 'INSURED_CHECK':
                     insert_insured_check(
@@ -403,6 +422,8 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         check_status=payload.check_status,
                         statement=payload.statement or '',
                         triggers=payload.triggers or '',
+                        lat=check_lat,
+                        lng=check_lng,
                     )
                 elif verification_type == 'DRIVER_CHECK':
                     insert_driver_check(
@@ -416,6 +437,8 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         check_status=payload.check_status,
                         statement=payload.statement or '',
                         triggers=payload.triggers or '',
+                        lat=check_lat,
+                        lng=check_lng,
                     )
                 elif verification_type == 'SPOT_CHECK':
                     insert_spot_check(
@@ -429,7 +452,19 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         accident_brief=payload.accident_brief or '',
                         check_status=payload.check_status,
                         triggers=payload.triggers or '',
+                        lat=check_lat,
+                        lng=check_lng,
                     )
+                    if check_lat is not None and check_lng is not None and case:
+                        try:
+                            case.latitude = check_lat
+                            case.longitude = check_lng
+                            if payload.place_of_accident:
+                                case.incident_address = payload.place_of_accident
+                                case.formatted_address = payload.place_of_accident
+                            case.save(update_fields=['latitude', 'longitude', 'incident_address', 'formatted_address'])
+                        except Exception as save_spot_err:
+                            logger.warning(f"Failed to update case spot coordinates: {save_spot_err}")
                 elif verification_type == 'CHARGESHEET':
                     insert_chargesheet(
                         case_id=db2_case_id,
@@ -474,6 +509,8 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         rc_number=payload.rto_rc_number or '',
                         remarks=payload.rto_remarks or '',
                         check_status=payload.check_status,
+                        lat=check_lat,
+                        lng=check_lng,
                     )
             except Exception as db2_err:
                 logger.error(f"Failed to write verification to incident_case_db: {db2_err}")

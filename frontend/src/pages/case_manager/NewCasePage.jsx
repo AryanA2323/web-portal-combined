@@ -21,6 +21,8 @@ import {
   Chip,
   Dialog,
   DialogContent,
+  InputAdornment,
+  Tooltip,
 } from '@mui/material';
 import {
   Save,
@@ -30,6 +32,8 @@ import {
   AttachFile as AttachFileIcon,
   Close as CloseIcon,
   UploadFile as UploadFileIcon,
+  LocationOn as LocationOnIcon,
+  EditLocation as EditLocationIcon,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -40,10 +44,13 @@ import CaseManagerLayout from './components/CaseManagerLayout';
 import api from '../../services/api';
 import AlertMessage from '../../components/common/AlertMessage';
 import { NotificationBell } from '../../components/case_manager';
+import LocationPicker from '../../components/location/LocationPicker';
 
 const NewCasePage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [mapModalOpen, setMapModalOpen] = useState(false);
+  const [mapTargetField, setMapTargetField] = useState('place_of_accident');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -342,6 +349,8 @@ const NewCasePage = () => {
         driver_name: prev.insured_name || '',
         driver_contact: prev.insured_contact || '',
         driver_address: prev.insured_address || '',
+        driver_latitude: prev.insured_latitude || '',
+        driver_longitude: prev.insured_longitude || '',
       }));
     } else {
       setSameAsSource(null);
@@ -364,6 +373,8 @@ const NewCasePage = () => {
         insured_name: prev.driver_name || '',
         insured_contact: prev.driver_contact || '',
         insured_address: prev.driver_address || '',
+        insured_latitude: prev.driver_latitude || '',
+        insured_longitude: prev.driver_longitude || '',
       }));
     } else {
       setSameAsSource(null);
@@ -373,6 +384,74 @@ const NewCasePage = () => {
         insured_cum_driver: false,
       }));
     }
+  };
+
+  const handleOpenMapPicker = (targetField = 'place_of_accident') => {
+    setMapTargetField(targetField);
+    setMapModalOpen(true);
+  };
+
+  const handleLocationSelect = ({ lat, lng, address, title, details }) => {
+    const latStr = lat !== undefined && lat !== null ? lat.toString() : '';
+    const lngStr = lng !== undefined && lng !== null ? lng.toString() : '';
+
+    if (mapTargetField === 'place_of_accident') {
+      setVerificationData(prev => {
+        const nextState = {
+          ...prev,
+          place_of_accident: address || title || `${lat}, ${lng}`,
+          spot_latitude: latStr,
+          spot_longitude: lngStr,
+          spot_location_title: title || 'Pinned Location',
+          spot_raw_address: address || '',
+        };
+
+        if (details && details.address) {
+          const addr = details.address;
+          const dist = addr.state_district || addr.county || addr.district;
+          if (dist && !prev.district) {
+            nextState.district = dist.replace(/ District/i, '');
+          }
+          const cityCandidate = addr.city || addr.town || addr.municipality;
+          if (cityCandidate && !prev.spot_city) {
+            const matchedCity = courtCities.find(
+              c => c.toLowerCase() === cityCandidate.toLowerCase()
+            );
+            if (matchedCity) nextState.spot_city = matchedCity;
+          }
+        }
+        return nextState;
+      });
+    } else if (mapTargetField === 'claimant_address') {
+      setVerificationData(prev => ({
+        ...prev,
+        claimant_address: address || title || '',
+        claimant_latitude: latStr,
+        claimant_longitude: lngStr,
+      }));
+    } else if (mapTargetField === 'insured_address') {
+      setVerificationData(prev => ({
+        ...prev,
+        insured_address: address || title || '',
+        insured_latitude: latStr,
+        insured_longitude: lngStr,
+      }));
+    } else if (mapTargetField === 'driver_address') {
+      setVerificationData(prev => ({
+        ...prev,
+        driver_address: address || title || '',
+        driver_latitude: latStr,
+        driver_longitude: lngStr,
+      }));
+    } else if (mapTargetField === 'rto_address') {
+      setVerificationData(prev => ({
+        ...prev,
+        rto_address: address || title || '',
+        rto_latitude: latStr,
+        rto_longitude: lngStr,
+      }));
+    }
+    setMapModalOpen(false);
   };
 
   const handleVerificationChange = (e) => {
@@ -676,6 +755,8 @@ const NewCasePage = () => {
           claimant_name: verificationData.claimant_name,
           claimant_contact: verificationData.claimant_contact,
           claimant_address: verificationData.claimant_address,
+          latitude: verificationData.claimant_latitude ? parseFloat(verificationData.claimant_latitude) : null,
+          longitude: verificationData.claimant_longitude ? parseFloat(verificationData.claimant_longitude) : null,
           income: verificationData.income ? parseFloat(verificationData.income) : null,
         });
       }
@@ -691,6 +772,8 @@ const NewCasePage = () => {
           insured_name: verificationData.insured_name,
           insured_contact: verificationData.insured_contact,
           insured_address: verificationData.insured_address,
+          latitude: verificationData.insured_latitude ? parseFloat(verificationData.insured_latitude) : null,
+          longitude: verificationData.insured_longitude ? parseFloat(verificationData.insured_longitude) : null,
           policy_number: verificationData.policy_number,
           policy_period: verificationData.policy_period,
           rc_number: verificationData.rc_number,
@@ -709,6 +792,8 @@ const NewCasePage = () => {
           driver_name: verificationData.driver_name,
           driver_contact: verificationData.driver_contact,
           driver_address: verificationData.driver_address,
+          latitude: verificationData.driver_latitude ? parseFloat(verificationData.driver_latitude) : null,
+          longitude: verificationData.driver_longitude ? parseFloat(verificationData.driver_longitude) : null,
           dl_number: verificationData.dl_number,
           permit_driver: verificationData.permit_driver,
           occupation: verificationData.occupation,
@@ -731,6 +816,8 @@ const NewCasePage = () => {
           spot_city: verificationData.spot_city,
           police_station: verificationData.police_station,
           accident_brief: verificationData.accident_brief,
+          latitude: verificationData.spot_latitude ? parseFloat(verificationData.spot_latitude) : null,
+          longitude: verificationData.spot_longitude ? parseFloat(verificationData.spot_longitude) : null,
         });
       }
 
@@ -763,6 +850,8 @@ const NewCasePage = () => {
           check_status: verificationData.rto_check_status || 'WIP',
           rto_name: verificationData.rto_name,
           rto_address: verificationData.rto_address,
+          latitude: verificationData.rto_latitude ? parseFloat(verificationData.rto_latitude) : null,
+          longitude: verificationData.rto_longitude ? parseFloat(verificationData.rto_longitude) : null,
           rto_dl_checked: verificationData.rto_dl_checked,
           rto_dl_number: verificationData.rto_dl_number,
           rto_permit_checked: verificationData.rto_permit_checked,
@@ -1587,12 +1676,57 @@ const NewCasePage = () => {
                               inputProps={{ maxLength: 10 }}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <TextField fullWidth size="small" label="Claimant Address" name="claimant_address"
-                              value={verificationData.claimant_address} onChange={handleVerificationChange}
-                              required
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                          </Grid>
+                                                      <Grid item xs={12} sm={4}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Claimant Address"
+                                name="claimant_address"
+                                value={verificationData.claimant_address}
+                                required
+                                placeholder="Click map icon or box to select address"
+                                helperText={verificationData.claimant_address ? "Auto-filled from Map coordinates" : "Address locked; select via Map Pin"}
+                                InputProps={{
+                                  readOnly: true,
+                                  endAdornment: (
+                                    <InputAdornment position="end">
+                                      <Tooltip title="Pin Point on Interactive Map">
+                                        <IconButton
+                                          size="small"
+                                          onClick={(e) => { e.stopPropagation(); handleOpenMapPicker('claimant_address'); }}
+                                          sx={{ color: '#F36F21', bgcolor: 'rgba(243, 111, 33, 0.1)', '&:hover': { bgcolor: 'rgba(243, 111, 33, 0.2)' } }}
+                                        >
+                                          <LocationOnIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </InputAdornment>
+                                  ),
+                                }}
+                                onClick={() => handleOpenMapPicker('claimant_address')}
+                                onKeyDown={(e) => e.preventDefault()}
+                                sx={{
+                                  cursor: 'pointer',
+                                  '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    bgcolor: '#f8fafc',
+                                    cursor: 'pointer',
+                                    '& fieldset': { borderColor: '#cbd5e1' },
+                                    '&:hover fieldset': { borderColor: '#F36F21' },
+                                  },
+                                  '& .MuiInputBase-input': {
+                                    color: '#1e293b',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                  },
+                                  '& .MuiFormHelperText-root': {
+                                    color: verificationData.claimant_address ? '#16a34a' : '#64748b',
+                                    fontWeight: 600,
+                                    fontSize: '0.72rem',
+                                  }
+                                }}
+                              />
+                            </Grid>
                         </Grid>
 
                         <Divider sx={{ mb: 2.5 }} />
@@ -1744,20 +1878,48 @@ const NewCasePage = () => {
                               label="Insured Address"
                               name="insured_address"
                               value={verificationData.insured_address}
-                              onChange={handleVerificationChange}
                               required
                               disabled={isInsuredAutoFilled}
-                              helperText={isInsuredAutoFilled ? 'Auto-filled from Driver Details' : undefined}
+                              placeholder={isInsuredAutoFilled ? 'Auto-filled from Driver Details' : 'Click map icon or box to select address'}
+                              helperText={isInsuredAutoFilled ? 'Auto-filled from Driver Details' : (verificationData.insured_address ? "Auto-filled from Map coordinates" : "Address locked; select via Map Pin")}
+                              InputProps={{
+                                readOnly: true,
+                                endAdornment: !isInsuredAutoFilled && (
+                                  <InputAdornment position="end">
+                                    <Tooltip title="Pin Point on Interactive Map">
+                                      <IconButton
+                                        size="small"
+                                        onClick={(e) => { e.stopPropagation(); handleOpenMapPicker('insured_address'); }}
+                                        sx={{ color: '#F36F21', bgcolor: 'rgba(243, 111, 33, 0.1)', '&:hover': { bgcolor: 'rgba(243, 111, 33, 0.2)' } }}
+                                      >
+                                        <LocationOnIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </InputAdornment>
+                                ),
+                              }}
+                              onClick={() => !isInsuredAutoFilled && handleOpenMapPicker('insured_address')}
+                              onKeyDown={(e) => e.preventDefault()}
                               sx={{
+                                cursor: isInsuredAutoFilled ? 'default' : 'pointer',
                                 '& .MuiOutlinedInput-root': {
                                   borderRadius: '8px',
-                                  bgcolor: isInsuredAutoFilled ? '#f1f5f9' : 'inherit',
+                                  bgcolor: isInsuredAutoFilled ? '#f1f5f9' : '#f8fafc',
+                                  cursor: isInsuredAutoFilled ? 'default' : 'pointer',
+                                  '& fieldset': { borderColor: '#cbd5e1' },
+                                  '&:hover fieldset': { borderColor: isInsuredAutoFilled ? '#cbd5e1' : '#F36F21' },
                                 },
-                                '& .MuiInputBase-input.Mui-disabled': {
-                                  WebkitTextFillColor: '#334155',
-                                  color: '#334155',
+                                '& .MuiInputBase-input': {
+                                  color: '#1e293b',
                                   fontWeight: 500,
+                                  cursor: isInsuredAutoFilled ? 'default' : 'pointer',
+                                  userSelect: 'none',
                                 },
+                                '& .MuiFormHelperText-root': {
+                                  color: verificationData.insured_address ? '#16a34a' : '#64748b',
+                                  fontWeight: 600,
+                                  fontSize: '0.72rem',
+                                }
                               }}
                             />
                           </Grid>
@@ -1895,30 +2057,58 @@ const NewCasePage = () => {
                               }}
                             />
                           </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              label="Driver Address"
-                              name="driver_address"
-                              value={verificationData.driver_address}
-                              onChange={handleVerificationChange}
-                              required
-                              disabled={isDriverAutoFilled}
-                              helperText={isDriverAutoFilled ? 'Auto-filled from Insured Details' : undefined}
-                              sx={{
-                                '& .MuiOutlinedInput-root': {
-                                  borderRadius: '8px',
-                                  bgcolor: isDriverAutoFilled ? '#f1f5f9' : 'inherit',
-                                },
-                                '& .MuiInputBase-input.Mui-disabled': {
-                                  WebkitTextFillColor: '#334155',
-                                  color: '#334155',
-                                  fontWeight: 500,
-                                },
-                              }}
-                            />
-                          </Grid>
+                                                      <Grid item xs={12} sm={4}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Driver Address"
+                                name="driver_address"
+                                value={verificationData.driver_address}
+                                required
+                                disabled={isDriverAutoFilled}
+                                placeholder={isDriverAutoFilled ? 'Auto-filled from Insured Details' : 'Click map icon or box to select address'}
+                                helperText={isDriverAutoFilled ? 'Auto-filled from Insured Details' : (verificationData.driver_address ? "Auto-filled from Map coordinates" : "Address locked; select via Map Pin")}
+                                InputProps={{
+                                  readOnly: true,
+                                  endAdornment: !isDriverAutoFilled && (
+                                    <InputAdornment position="end">
+                                      <Tooltip title="Pin Point on Interactive Map">
+                                        <IconButton
+                                          size="small"
+                                          onClick={(e) => { e.stopPropagation(); handleOpenMapPicker('driver_address'); }}
+                                          sx={{ color: '#F36F21', bgcolor: 'rgba(243, 111, 33, 0.1)', '&:hover': { bgcolor: 'rgba(243, 111, 33, 0.2)' } }}
+                                        >
+                                          <LocationOnIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </InputAdornment>
+                                  ),
+                                }}
+                                onClick={() => !isDriverAutoFilled && handleOpenMapPicker('driver_address')}
+                                onKeyDown={(e) => e.preventDefault()}
+                                sx={{
+                                  cursor: isDriverAutoFilled ? 'default' : 'pointer',
+                                  '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    bgcolor: isDriverAutoFilled ? '#f1f5f9' : '#f8fafc',
+                                    cursor: isDriverAutoFilled ? 'default' : 'pointer',
+                                    '& fieldset': { borderColor: '#cbd5e1' },
+                                    '&:hover fieldset': { borderColor: isDriverAutoFilled ? '#cbd5e1' : '#F36F21' },
+                                  },
+                                  '& .MuiInputBase-input': {
+                                    color: '#1e293b',
+                                    fontWeight: 500,
+                                    cursor: isDriverAutoFilled ? 'default' : 'pointer',
+                                    userSelect: 'none',
+                                  },
+                                  '& .MuiFormHelperText-root': {
+                                    color: verificationData.driver_address ? '#16a34a' : '#64748b',
+                                    fontWeight: 600,
+                                    fontSize: '0.72rem',
+                                  }
+                                }}
+                              />
+                            </Grid>
                         </Grid>
 
                         <Divider sx={{ mb: 2.5 }} />
@@ -2025,12 +2215,57 @@ const NewCasePage = () => {
                               />
                             </LocalizationProvider>
                           </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <TextField fullWidth size="small" label="Place of Accident" name="place_of_accident"
-                              value={verificationData.place_of_accident} onChange={handleVerificationChange}
-                              required
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                          </Grid>
+                                                      <Grid item xs={12} sm={4}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Place of Accident"
+                                name="place_of_accident"
+                                value={verificationData.place_of_accident}
+                                required
+                                placeholder="Click map icon or box to select accident spot"
+                                helperText={verificationData.place_of_accident ? "Auto-filled from Map coordinates" : "Address locked; select via Map Pin"}
+                                InputProps={{
+                                  readOnly: true,
+                                  endAdornment: (
+                                    <InputAdornment position="end">
+                                      <Tooltip title="Pin Point on Interactive Map">
+                                        <IconButton
+                                          size="small"
+                                          onClick={(e) => { e.stopPropagation(); handleOpenMapPicker('place_of_accident'); }}
+                                          sx={{ color: '#F36F21', bgcolor: 'rgba(243, 111, 33, 0.1)', '&:hover': { bgcolor: 'rgba(243, 111, 33, 0.2)' } }}
+                                        >
+                                          <LocationOnIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </InputAdornment>
+                                  ),
+                                }}
+                                onClick={() => handleOpenMapPicker('place_of_accident')}
+                                onKeyDown={(e) => e.preventDefault()}
+                                sx={{
+                                  cursor: 'pointer',
+                                  '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    bgcolor: '#f8fafc',
+                                    cursor: 'pointer',
+                                    '& fieldset': { borderColor: '#cbd5e1' },
+                                    '&:hover fieldset': { borderColor: '#F36F21' },
+                                  },
+                                  '& .MuiInputBase-input': {
+                                    color: '#1e293b',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                  },
+                                  '& .MuiFormHelperText-root': {
+                                    color: verificationData.place_of_accident ? '#16a34a' : '#64748b',
+                                    fontWeight: 600,
+                                    fontSize: '0.72rem',
+                                  }
+                                }}
+                              />
+                            </Grid>
                           <Grid item xs={12} sm={4}>
                             <TextField fullWidth size="small" label="District" name="district"
                               value={verificationData.district} onChange={handleVerificationChange}
@@ -2258,13 +2493,58 @@ const NewCasePage = () => {
                           <Box sx={{ width: 4, height: 18, borderRadius: 2, bgcolor: '#4527a0' }} />
                           <Typography variant="overline" sx={{ fontWeight: 700, color: '#4527a0', letterSpacing: '1px', lineHeight: 1 }}>RTO Office</Typography>
                         </Box>
-                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                          <Grid item xs={12}>
-                            <TextField fullWidth size="small" label="RTO Address" name="rto_address"
-                              value={verificationData.rto_address || ''} onChange={handleVerificationChange}
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                                                  <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                            <Grid item xs={12}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="RTO Address"
+                                name="rto_address"
+                                value={verificationData.rto_address || ''}
+                                placeholder="Click map icon or box to select RTO office address"
+                                helperText={verificationData.rto_address ? "Auto-filled from Map coordinates" : "Address locked; select via Map Pin"}
+                                InputProps={{
+                                  readOnly: true,
+                                  endAdornment: (
+                                    <InputAdornment position="end">
+                                      <Tooltip title="Pin Point on Interactive Map">
+                                        <IconButton
+                                          size="small"
+                                          onClick={(e) => { e.stopPropagation(); handleOpenMapPicker('rto_address'); }}
+                                          sx={{ color: '#4527a0', bgcolor: 'rgba(69, 39, 160, 0.1)', '&:hover': { bgcolor: 'rgba(69, 39, 160, 0.2)' } }}
+                                        >
+                                          <LocationOnIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </InputAdornment>
+                                  ),
+                                }}
+                                onClick={() => handleOpenMapPicker('rto_address')}
+                                onKeyDown={(e) => e.preventDefault()}
+                                sx={{
+                                  cursor: 'pointer',
+                                  '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    bgcolor: '#f8fafc',
+                                    cursor: 'pointer',
+                                    '& fieldset': { borderColor: '#cbd5e1' },
+                                    '&:hover fieldset': { borderColor: '#4527a0' },
+                                  },
+                                  '& .MuiInputBase-input': {
+                                    color: '#1e293b',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                  },
+                                  '& .MuiFormHelperText-root': {
+                                    color: verificationData.rto_address ? '#16a34a' : '#64748b',
+                                    fontWeight: 600,
+                                    fontSize: '0.72rem',
+                                  }
+                                }}
+                              />
+                            </Grid>
                           </Grid>
-                        </Grid>
 
                         {/* ── Case Documents Upload ───────────────────────── */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
@@ -2398,7 +2678,58 @@ const NewCasePage = () => {
             </Typography>
           </DialogContent>
         </Dialog>
-      </CaseManagerLayout>
+  
+      {/* Interactive Pin Point Map Modal */}
+      <Dialog
+        open={mapModalOpen}
+        onClose={() => setMapModalOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '16px',
+            overflow: 'hidden',
+            boxShadow: '0 24px 48px rgba(0,0,0,0.2)',
+            height: '85vh',
+            maxHeight: '850px',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        }}
+      >
+        <DialogContent sx={{ p: 0, height: '100%', width: '100%', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <LocationPicker
+            height="100%"
+            onLocationSelect={handleLocationSelect}
+            onClose={() => setMapModalOpen(false)}
+            title={
+              mapTargetField === 'place_of_accident'
+                ? 'Select Accident / Spot Location'
+                : mapTargetField === 'claimant_address'
+                ? 'Select Claimant Address Location'
+                : mapTargetField === 'insured_address'
+                ? 'Select Insured Address Location'
+                : mapTargetField === 'driver_address'
+                ? 'Select Driver Address Location'
+                : 'Select RTO Office Location'
+            }
+            initialCenter={
+              mapTargetField === 'place_of_accident' && verificationData.spot_latitude && verificationData.spot_longitude
+                ? [parseFloat(verificationData.spot_latitude), parseFloat(verificationData.spot_longitude)]
+                : mapTargetField === 'claimant_address' && verificationData.claimant_latitude && verificationData.claimant_longitude
+                ? [parseFloat(verificationData.claimant_latitude), parseFloat(verificationData.claimant_longitude)]
+                : mapTargetField === 'insured_address' && verificationData.insured_latitude && verificationData.insured_longitude
+                ? [parseFloat(verificationData.insured_latitude), parseFloat(verificationData.insured_longitude)]
+                : mapTargetField === 'driver_address' && verificationData.driver_latitude && verificationData.driver_longitude
+                ? [parseFloat(verificationData.driver_latitude), parseFloat(verificationData.driver_longitude)]
+                : mapTargetField === 'rto_address' && verificationData.rto_latitude && verificationData.rto_longitude
+                ? [parseFloat(verificationData.rto_latitude), parseFloat(verificationData.rto_longitude)]
+                : [18.5204, 73.8567]
+            }
+          />
+        </DialogContent>
+      </Dialog>
+    </CaseManagerLayout>
   );
 };
 

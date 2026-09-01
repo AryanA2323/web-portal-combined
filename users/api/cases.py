@@ -2104,6 +2104,24 @@ def get_check_detail(request: HttpRequest, case_id: int, check_type: str):
 
                 check_data['statement_entries'] = normalized_entries
 
+            # Normalize exact coordinates
+            check_data['latitude'] = (
+                check_data.get('spot_lat') or
+                check_data.get('claimant_lat') or
+                check_data.get('insured_lat') or
+                check_data.get('driver_lat') or
+                check_data.get('rto_lat') or
+                check_data.get('chargesheet_lat')
+            )
+            check_data['longitude'] = (
+                check_data.get('spot_lng') or
+                check_data.get('claimant_lng') or
+                check_data.get('insured_lng') or
+                check_data.get('driver_lng') or
+                check_data.get('rto_lng') or
+                check_data.get('chargesheet_lng')
+            )
+
             final_type = "insured-cum-driver" if (check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or check_data.get('insured_cum_driver')) else check_type.lower()
             return {"case": case_data, "check": check_data, "check_type": final_type}
 
@@ -2493,30 +2511,35 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
             'claimant_income', 'dependants',
             'check_status', 'statement', 'triggers', 'negative_status',
             'case_documents', 'vendor_documents',
+            'claimant_lat', 'claimant_lng',
         },
         'insured_checks': {
             'insured_name', 'insured_contact', 'insured_address',
             'policy_number', 'policy_period', 'rc', 'permit',
             'check_status', 'statement', 'triggers', 'negative_status',
             'case_documents', 'vendor_documents',
+            'insured_lat', 'insured_lng',
         },
         'driver_checks': {
             'driver_name', 'driver_contact', 'driver_address',
             'dl', 'permit', 'occupation',
             'check_status', 'statement', 'triggers', 'negative_status',
             'case_documents', 'vendor_documents',
+            'driver_lat', 'driver_lng',
         },
         'spot_checks': {
             'time_of_accident', 'place_of_accident', 'district',
             'fir_number', 'city', 'police_station', 'accident_brief',
             'check_status', 'triggers', 'negative_status',
             'case_documents', 'vendor_documents',
+            'spot_lat', 'spot_lng',
         },
         'chargesheets': {
             'fir_number', 'city', 'court_name', 'mv_act', 'fir_delay_days',
             'bsn_section', 'ipc', 'police_station_name', 'court_district', 'court_case_no',
             'check_status', 'statement', 'triggers', 'negative_status', 'advocate_status',
             'case_documents', 'vendor_documents',
+            'chargesheet_lat', 'chargesheet_lng',
         },
         'rti_checks': {
             'chargesheet_checked', 'fir_number',
@@ -2535,6 +2558,7 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
             'remarks',
             'check_status', 'negative_status',
             'case_documents', 'vendor_documents',
+            'rto_lat', 'rto_lng',
         },
     }
 

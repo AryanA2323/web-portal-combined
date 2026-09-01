@@ -881,40 +881,43 @@ const CheckDetailPage = () => {
                     <Chip label="Auto-filled" size="small" sx={{ ml: 1, background: '#e0f7fa', color: '#00838f', fontWeight: 700, fontSize: '10px', height: '18px' }} />
                   </Box>
                   <Box sx={{ px: 2.5, py: 2 }}>
-                    <Grid container spacing={2} alignItems="center">
-                      {[{ key: latKey, label: 'Latitude' }, { key: lngKey, label: 'Longitude' }].map((c) => {
-                        const raw = checkData[c.key];
-                        return (
-                          <Grid size={{ xs: 12, sm: 5 }} key={c.key}>
-                            <Box sx={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', px: 2, py: 1.2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                              <PinDrop sx={{ fontSize: 18, color: '#06b6d4', flexShrink: 0 }} />
-                              <Box>
-                                <Typography sx={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{c.label}</Typography>
-                                <Typography sx={{ fontSize: '13px', fontFamily: 'monospace', color: raw != null ? '#0f172a' : '#94a3b8', fontWeight: 600 }}>
-                                  {raw != null ? Number(raw).toFixed(6) : 'pending geocoding…'}
-                                </Typography>
+                    {(() => {
+                      const activeLat = checkData[latKey] != null ? checkData[latKey] : (checkData.latitude != null ? checkData.latitude : (checkType === 'spot' ? caseData.latitude : null));
+                      const activeLng = checkData[lngKey] != null ? checkData[lngKey] : (checkData.longitude != null ? checkData.longitude : (checkType === 'spot' ? caseData.longitude : null));
+                      return (
+                        <Grid container spacing={2} alignItems="center">
+                          {[{ key: latKey, label: 'Latitude', val: activeLat }, { key: lngKey, label: 'Longitude', val: activeLng }].map((c) => (
+                            <Grid size={{ xs: 12, sm: 5 }} key={c.key}>
+                              <Box sx={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', px: 2, py: 1.2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <PinDrop sx={{ fontSize: 18, color: '#06b6d4', flexShrink: 0 }} />
+                                <Box>
+                                  <Typography sx={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{c.label}</Typography>
+                                  <Typography sx={{ fontSize: '13px', fontFamily: 'monospace', color: c.val != null ? '#0f172a' : '#94a3b8', fontWeight: 600 }}>
+                                    {c.val != null ? Number(c.val).toFixed(6) : 'pending geocoding…'}
+                                  </Typography>
+                                </Box>
                               </Box>
-                            </Box>
-                          </Grid>
-                        );
-                      })}
-                      {checkData[latKey] != null && checkData[lngKey] != null && (
-                        <Grid size={{ xs: 12, sm: 2 }}>
-                          <Button
-                            fullWidth
-                            size="medium"
-                            variant="outlined"
-                            startIcon={<LocationOn sx={{ fontSize: 16 }} />}
-                            href={`https://www.google.com/maps/search/?api=1&query=${checkData[latKey]},${checkData[lngKey]}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            sx={{ textTransform: 'none', fontSize: '12px', fontWeight: 700, color: '#06b6d4', borderColor: '#06b6d4', borderRadius: '8px', py: 1 }}
-                          >
-                            Google Maps
-                          </Button>
+                            </Grid>
+                          ))}
+                          {activeLat != null && activeLng != null && (
+                            <Grid size={{ xs: 12, sm: 2 }}>
+                              <Button
+                                fullWidth
+                                size="medium"
+                                variant="outlined"
+                                startIcon={<LocationOn sx={{ fontSize: 16 }} />}
+                                href={`https://www.google.com/maps/search/?api=1&query=${activeLat},${activeLng}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{ textTransform: 'none', fontSize: '12px', fontWeight: 700, color: '#06b6d4', borderColor: '#06b6d4', borderRadius: '8px', py: 1 }}
+                              >
+                                Google Maps
+                              </Button>
+                            </Grid>
+                          )}
                         </Grid>
-                      )}
-                    </Grid>
+                      );
+                    })()}
                   </Box>
                 </Paper>
               )}

@@ -620,12 +620,14 @@ _CHECK_DETAIL_COLUMNS = {
                      cc.claimant_income, cc.statement, cc.triggers, cc.vendor_evidence AS evidence,
                      cc.vendor_documents AS vendor_documents, cc.case_documents AS case_documents,
                      cc.questionnaire, cc.vendor_feedback, cc.negative_status,
-                     cc.admin_feedback, cc.is_reassigned''',
+                     cc.admin_feedback, cc.is_reassigned,
+                     cc.claimant_lat, cc.claimant_lng''',
         'alias': 'cc',
         'fields': ['id','case_id','check_status','claimant_name','claimant_contact',
                     'claimant_address','claimant_income','statement','triggers','evidence',
                     'vendor_documents','case_documents','questionnaire','vendor_feedback','negative_status',
-                    'admin_feedback','is_reassigned'],
+                    'admin_feedback','is_reassigned',
+                    'claimant_lat','claimant_lng'],
     },
     'insured_checks': {
         'select': '''ic.id, ic.case_id, ic.check_status,
@@ -634,13 +636,15 @@ _CHECK_DETAIL_COLUMNS = {
                      ic.statement, ic.triggers, ic.vendor_evidence AS evidence,
                      ic.vendor_documents AS vendor_documents, ic.case_documents AS case_documents,
                      ic.questionnaire, ic.vendor_feedback, ic.negative_status,
-                     ic.admin_feedback, ic.is_reassigned''',
+                     ic.admin_feedback, ic.is_reassigned,
+                     ic.insured_lat, ic.insured_lng''',
         'alias': 'ic',
         'fields': ['id','case_id','check_status','insured_name','insured_contact',
                     'insured_address','policy_number','policy_period','rc','permit',
                     'statement','triggers','evidence','vendor_documents','case_documents',
                     'questionnaire','vendor_feedback','negative_status',
-                    'admin_feedback','is_reassigned'],
+                    'admin_feedback','is_reassigned',
+                    'insured_lat','insured_lng'],
     },
     'driver_checks': {
         'select': '''dc.id, dc.case_id, dc.check_status,
@@ -649,13 +653,15 @@ _CHECK_DETAIL_COLUMNS = {
                      dc.statement, dc.triggers, dc.vendor_evidence AS evidence,
                      dc.vendor_documents AS vendor_documents, dc.case_documents AS case_documents,
                      dc.questionnaire, dc.vendor_feedback, dc.negative_status,
-                     dc.admin_feedback, dc.is_reassigned''',
+                     dc.admin_feedback, dc.is_reassigned,
+                     dc.driver_lat, dc.driver_lng''',
         'alias': 'dc',
         'fields': ['id','case_id','check_status','driver_name','driver_contact',
                     'driver_address','dl','permit','occupation',
                     'statement','triggers','evidence','vendor_documents','case_documents',
                     'questionnaire','vendor_feedback','negative_status',
-                    'admin_feedback','is_reassigned'],
+                    'admin_feedback','is_reassigned',
+                    'driver_lat','driver_lng'],
     },
     'spot_checks': {
         'select': '''sc.id, sc.case_id, sc.check_status,
@@ -664,13 +670,15 @@ _CHECK_DETAIL_COLUMNS = {
                      sc.triggers, sc.vendor_evidence AS evidence,
                      sc.vendor_documents AS vendor_documents, sc.case_documents AS case_documents,
                      sc.questionnaire, sc.vendor_feedback, sc.negative_status,
-                     sc.admin_feedback, sc.is_reassigned''',
+                     sc.admin_feedback, sc.is_reassigned,
+                     sc.spot_lat, sc.spot_lng''',
         'alias': 'sc',
         'fields': ['id','case_id','check_status','place_of_accident','police_station',
                     'district','fir_number','time_of_accident','accident_brief',
                     'triggers','evidence','vendor_documents','case_documents',
                     'questionnaire','vendor_feedback','negative_status',
-                    'admin_feedback','is_reassigned'],
+                    'admin_feedback','is_reassigned',
+                    'spot_lat','spot_lng'],
     },
     'chargesheets': {
         'select': '''cs.id, cs.case_id, cs.check_status, cs.advocate_status,
@@ -681,7 +689,8 @@ _CHECK_DETAIL_COLUMNS = {
                      cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
                      cs.questionnaire, cs.vendor_feedback, cs.negative_status,
                      cs.applied_cs_photos, cs.cs_received_photos, cs.dispatched_photos, cs.advocate_remark,
-                     cs.admin_feedback, cs.is_reassigned''',
+                     cs.admin_feedback, cs.is_reassigned,
+                     cs.chargesheet_lat, cs.chargesheet_lng''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','advocate_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
@@ -689,7 +698,8 @@ _CHECK_DETAIL_COLUMNS = {
                     'statement','triggers','evidence','vendor_documents','case_documents',
                     'questionnaire','vendor_feedback','negative_status',
                     'applied_cs_photos','cs_received_photos','dispatched_photos','advocate_remark',
-                    'admin_feedback','is_reassigned'],
+                    'admin_feedback','is_reassigned',
+                    'chargesheet_lat','chargesheet_lng'],
     },
     'chargesheet_checks': {
         'select': '''cs.id, cs.case_id, cs.check_status, cs.advocate_status,
@@ -700,7 +710,8 @@ _CHECK_DETAIL_COLUMNS = {
                      cs.vendor_documents AS vendor_documents, cs.case_documents AS case_documents,
                      cs.questionnaire, cs.vendor_feedback, cs.negative_status,
                      cs.applied_cs_photos, cs.cs_received_photos, cs.dispatched_photos, cs.advocate_remark,
-                     cs.admin_feedback, cs.is_reassigned''',
+                     cs.admin_feedback, cs.is_reassigned,
+                     cs.chargesheet_lat, cs.chargesheet_lng''',
         'alias': 'cs',
         'fields': ['id','case_id','check_status','advocate_status','court_name','fir_number','mv_act',
                     'fir_delay_days','bsn_section','ipc',
@@ -708,7 +719,8 @@ _CHECK_DETAIL_COLUMNS = {
                     'statement','triggers','evidence','vendor_documents','case_documents',
                     'questionnaire','vendor_feedback','negative_status',
                     'applied_cs_photos','cs_received_photos','dispatched_photos','advocate_remark',
-                    'admin_feedback','is_reassigned'],
+                    'admin_feedback','is_reassigned',
+                    'chargesheet_lat','chargesheet_lng'],
     },
     'rti_checks': {
         'select': '''rt.id, rt.case_id, rt.check_status,
@@ -726,11 +738,13 @@ _CHECK_DETAIL_COLUMNS = {
                      NULL AS statement, NULL AS triggers, ro.vendor_evidence AS evidence,
                      ro.vendor_documents AS vendor_documents, ro.case_documents AS case_documents,
                      ro.questionnaire, ro.vendor_feedback,
-                     ro.admin_feedback, ro.is_reassigned''',
+                     ro.admin_feedback, ro.is_reassigned,
+                     ro.rto_lat, ro.rto_lng, ro.rto_name, ro.rto_address''',
         'alias': 'ro',
         'fields': ['id','case_id','check_status','statement','triggers','evidence',
                    'vendor_documents','case_documents','questionnaire','vendor_feedback',
-                   'admin_feedback','is_reassigned'],
+                   'admin_feedback','is_reassigned',
+                   'rto_lat','rto_lng','rto_name','rto_address'],
     },
 }
 
@@ -1019,6 +1033,28 @@ def get_vendor_check_detail(request: HttpRequest, case_id: int, check_type: str)
                 else None
             )
 
+            # Normalize exact coordinates
+            check_lat = (
+                check_detail.get('spot_lat') or
+                check_detail.get('claimant_lat') or
+                check_detail.get('insured_lat') or
+                check_detail.get('driver_lat') or
+                check_detail.get('rto_lat') or
+                check_detail.get('chargesheet_lat')
+            )
+            check_lng = (
+                check_detail.get('spot_lng') or
+                check_detail.get('claimant_lng') or
+                check_detail.get('insured_lng') or
+                check_detail.get('driver_lng') or
+                check_detail.get('rto_lng') or
+                check_detail.get('chargesheet_lng')
+            )
+            if check_lat is not None:
+                check_detail['latitude'] = float(check_lat)
+            if check_lng is not None:
+                check_detail['longitude'] = float(check_lng)
+
             if table == 'chargesheets' and (check_detail.get('check_status') == 'Verified' or check_detail.get('advocate_status') == 'Verified'):
                 check_detail['check_status'] = 'Verified'
                 check_detail['advocate_status'] = 'Verified'
@@ -1225,6 +1261,28 @@ def get_vendor_check_detail_by_id(request: HttpRequest, check_id: int, check_typ
                         p["filename"] = extract_evidence_filename(p)
                     normalized.append(p)
                 check_detail[photo_field] = normalized
+
+            # Normalize exact coordinates
+            check_lat = (
+                check_detail.get('spot_lat') or
+                check_detail.get('claimant_lat') or
+                check_detail.get('insured_lat') or
+                check_detail.get('driver_lat') or
+                check_detail.get('rto_lat') or
+                check_detail.get('chargesheet_lat')
+            )
+            check_lng = (
+                check_detail.get('spot_lng') or
+                check_detail.get('claimant_lng') or
+                check_detail.get('insured_lng') or
+                check_detail.get('driver_lng') or
+                check_detail.get('rto_lng') or
+                check_detail.get('chargesheet_lng')
+            )
+            if check_lat is not None:
+                check_detail['latitude'] = float(check_lat)
+            if check_lng is not None:
+                check_detail['longitude'] = float(check_lng)
 
             if table == 'chargesheets' and (check_detail.get('check_status') == 'Verified' or check_detail.get('advocate_status') == 'Verified'):
                 check_detail['check_status'] = 'Verified'

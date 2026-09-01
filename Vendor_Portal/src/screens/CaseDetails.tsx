@@ -125,6 +125,15 @@ const checkFieldLabels: Record<string, Record<string, string>> = {
     statement: 'Statement',
     triggers: 'Triggers',
   },
+  rto: {
+    rto_name: 'RTO Office Name',
+    rto_address: 'Address',
+    remarks: 'Remarks',
+  },
+  rti: {
+    fir_number: 'FIR Number',
+    remarks: 'Remarks',
+  },
 };
 
 interface CaseDetailsProps {
@@ -674,33 +683,40 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
     }
 
     const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
-    let location = null;
-    if (locStatus === 'granted') {
-      try {
-        location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      } catch (e) {
-        console.warn('Could not get location', e);
-      }
-    } else {
+    if (locStatus !== 'granted') {
       showToast({ type: 'error', title: 'Location Required', message: 'Location permission is required to verify photo location.' });
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.8,
-    });
+    // Start fetching GPS location in parallel while camera is open
+    const locPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      .catch(() => Location.getLastKnownPositionAsync().catch(() => null));
+
+    // Open camera immediately
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
 
     if (result.canceled || !result.assets || result.assets.length === 0) return;
 
-    const newPhotos = result.assets.map((asset, i) => ({
-      uri: asset.uri,
-      name: asset.fileName || `camera_${Date.now()}_${i}.jpg`,
-      lat: location?.coords?.latitude?.toString() || '',
-      long: location?.coords?.longitude?.toString() || '',
-    }));
-
+    // Immediately show the loading overlay as soon as camera closes
     setUploading(true);
+
     try {
+      let location = await locPromise;
+      if (!location) {
+        try {
+          location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        } catch (e) {
+          location = await Location.getLastKnownPositionAsync().catch(() => null);
+        }
+      }
+
+      const newPhotos = result.assets.map((asset, i) => ({
+        uri: asset.uri,
+        name: asset.fileName || `camera_${Date.now()}_${i}.jpg`,
+        lat: location?.coords?.latitude?.toString() || '',
+        long: location?.coords?.longitude?.toString() || '',
+      }));
+
       await apiService.uploadCheckEvidence(caseId, checkType, newPhotos);
       showToast({ type: 'success', title: 'Photo Uploaded', message: 'Visit photo saved successfully.' });
       await loadData(false);
@@ -1041,18 +1057,118 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
               <>
                 {Object.entries(fieldLabels)
                   .filter(([field]) => field !== 'triggers' && field !== 'check_status')
-                  .map(([field, label]) => (
-                    <DetailRow key={field} label={label} value={checkInfo[field]} />
-                  ))}
+                  .map(([field, label]) => {
+                    const isAddr = field === 'court_name' || field.toLowerCase().includes('address') || field === 'place_of_accident';
+                    const targetLat = checkInfo.latitude ?? checkInfo.chargesheet_lat ?? caseInfo.latitude;
+                    const targetLng = checkInfo.longitude ?? checkInfo.chargesheet_lng ?? caseInfo.longitude;
+                    const val = checkInfo[field];
+                    return (
+                      <React.Fragment key={field}>
+                        <DetailRow label={label} value={val} />
+                        {isAddr && val ? (
+                          <View style={{ marginTop: 6, marginBottom: 8, alignItems: 'flex-start' }}>
+                            <TouchableOpacity
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#EFF6FF',
+                                borderWidth: 1,
+                                borderColor: '#93C5FD',
+                                borderRadius: 8,
+                                paddingVertical: 7,
+                                paddingHorizontal: 12,
+                                gap: 6,
+                              }}
+                              onPress={() => {
+                                let mapsUrl = '';
+                                if (targetLat != null && targetLng != null) {
+                                  mapsUrl = `https://www.google.com/maps/search/?api=1&query=${targetLat},${targetLng}`;
+                                } else {
+                                  mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(String(val))}`;
+                                }
+                                Linking.openURL(mapsUrl).catch(() => {
+                                  showToast({ type: 'error', title: 'Maps Error', message: 'Could not open Google Maps.' });
+                                });
+                              }}
+                              activeOpacity={0.75}
+                            >
+                              <MaterialCommunityIcons name="google-maps" size={18} color="#0F5FA8" />
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F5FA8' }}>
+                                Google Maps
+                              </Text>
+                              {targetLat != null && targetLng != null ? (
+                                <View style={{ backgroundColor: '#DBEAFE', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 2 }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#1E40AF', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                    {Number(targetLat).toFixed(4)}, {Number(targetLng).toFixed(4)}
+                                  </Text>
+                                </View>
+                              ) : null}
+                              <MaterialCommunityIcons name="open-in-new" size={13} color="#0F5FA8" style={{ marginLeft: 2 }} />
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
+                      </React.Fragment>
+                    );
+                  })}
               </>
             ) : (
               <>
                 <DetailRow label="Status" value={checkInfo.check_status} />
                 {Object.entries(fieldLabels)
                   .filter(([field]) => field !== 'triggers')
-                  .map(([field, label]) => (
-                    <DetailRow key={field} label={label} value={checkInfo[field]} />
-                  ))}
+                  .map(([field, label]) => {
+                    const isAddr = field === 'claimant_address' || field === 'insured_address' || field === 'driver_address' || field === 'place_of_accident' || field === 'rto_address' || field.toLowerCase().includes('address');
+                    const targetLat = checkInfo.latitude ?? checkInfo.spot_lat ?? checkInfo.claimant_lat ?? checkInfo.insured_lat ?? checkInfo.driver_lat ?? checkInfo.rto_lat ?? caseInfo.latitude;
+                    const targetLng = checkInfo.longitude ?? checkInfo.spot_lng ?? checkInfo.claimant_lng ?? checkInfo.insured_lng ?? checkInfo.driver_lng ?? checkInfo.rto_lng ?? caseInfo.longitude;
+                    const val = checkInfo[field];
+                    return (
+                      <React.Fragment key={field}>
+                        <DetailRow label={label} value={val} />
+                        {isAddr && val ? (
+                          <View style={{ marginTop: 6, marginBottom: 8, alignItems: 'flex-start' }}>
+                            <TouchableOpacity
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#EFF6FF',
+                                borderWidth: 1,
+                                borderColor: '#93C5FD',
+                                borderRadius: 8,
+                                paddingVertical: 7,
+                                paddingHorizontal: 12,
+                                gap: 6,
+                              }}
+                              onPress={() => {
+                                let mapsUrl = '';
+                                if (targetLat != null && targetLng != null) {
+                                  mapsUrl = `https://www.google.com/maps/search/?api=1&query=${targetLat},${targetLng}`;
+                                } else {
+                                  mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(String(val))}`;
+                                }
+                                Linking.openURL(mapsUrl).catch(() => {
+                                  showToast({ type: 'error', title: 'Maps Error', message: 'Could not open Google Maps.' });
+                                });
+                              }}
+                              activeOpacity={0.75}
+                            >
+                              <MaterialCommunityIcons name="google-maps" size={18} color="#0F5FA8" />
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F5FA8' }}>
+                                Google Maps
+                              </Text>
+                              {targetLat != null && targetLng != null ? (
+                                <View style={{ backgroundColor: '#DBEAFE', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 2 }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#1E40AF', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                    {Number(targetLat).toFixed(4)}, {Number(targetLng).toFixed(4)}
+                                  </Text>
+                                </View>
+                              ) : null}
+                              <MaterialCommunityIcons name="open-in-new" size={13} color="#0F5FA8" style={{ marginLeft: 2 }} />
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
+                      </React.Fragment>
+                    );
+                  })}
               </>
             )}
           </View>
@@ -1449,23 +1565,38 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 return;
               }
               const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
-              let location = null;
-              if (locStatus === 'granted') {
-                try { location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }); } catch (e) { }
-              } else {
+              if (locStatus !== 'granted') {
                 showToast({ type: 'error', title: 'Location Required', message: 'Location permission is required.' });
                 return;
               }
+
+              // Start fetching GPS location in parallel while camera is open
+              const locPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+                .catch(() => Location.getLastKnownPositionAsync().catch(() => null));
+
               const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
               if (result.canceled || !result.assets || result.assets.length === 0) return;
-              const newPhotos = result.assets.map((asset, i) => ({
-                uri: asset.uri,
-                name: asset.fileName || `dispatched_cam_${Date.now()}_${i}.jpg`,
-                lat: location?.coords?.latitude?.toString() || '',
-                long: location?.coords?.longitude?.toString() || '',
-              }));
+
+              // Immediately show the loading overlay as soon as camera closes
               setUploading(true);
+
               try {
+                let location = await locPromise;
+                if (!location) {
+                  try {
+                    location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                  } catch (e) {
+                    location = await Location.getLastKnownPositionAsync().catch(() => null);
+                  }
+                }
+
+                const newPhotos = result.assets.map((asset, i) => ({
+                  uri: asset.uri,
+                  name: asset.fileName || `dispatched_cam_${Date.now()}_${i}.jpg`,
+                  lat: location?.coords?.latitude?.toString() || '',
+                  long: location?.coords?.longitude?.toString() || '',
+                }));
+
                 await apiService.uploadCheckEvidence(caseId, checkType, newPhotos, category);
                 showToast({ type: 'success', title: 'Photo Uploaded', message: 'Photo saved successfully.' });
                 await loadData(false);
@@ -1927,8 +2058,17 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                       disabled={uploading}
                       activeOpacity={0.8}
                     >
-                      <MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" />
-                      <Text style={styles.smallActionButtonText}>Take Photo</Text>
+                      {uploading ? (
+                        <>
+                          <ActivityIndicator color="#FFFFFF" size="small" />
+                          <Text style={styles.smallActionButtonText}>Uploading...</Text>
+                        </>
+                      ) : (
+                        <>
+                          <MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.smallActionButtonText}>Take Photo</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2254,6 +2394,17 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             </>
           )}
         </ScrollView>
+
+        {/* Full-screen Loading Indicator while Photo/Evidence is uploading */}
+        <Modal visible={uploading} transparent animationType="fade" statusBarTranslucent>
+          <View style={styles.loadingModalOverlay}>
+            <View style={styles.loadingModalCard}>
+              <ActivityIndicator size="large" color="#0F5FA8" style={{ marginBottom: 14 }} />
+              <Text style={styles.loadingModalTitle}>Processing & Uploading Photo...</Text>
+              <Text style={styles.loadingModalSubTitle}>Validating photo location & uploading evidence</Text>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -2877,5 +3028,40 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  loadingModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loadingModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 26,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '85%',
+    maxWidth: 320,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  loadingModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  loadingModalSubTitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
