@@ -458,33 +458,92 @@ const LocationPicker = ({
 
   /**
    * Geolocation "Locate Me" button handler
+   * Uses multi-tier accuracy strategy:
+   * 1. Fresh High-Accuracy Device GPS (maximumAge: 0)
+   * 2. Standard Accuracy Browser Geolocation fallback
+   * 3. Network IP Geolocation fallback
    */
   const handleLocateMe = () => {
+    setIsLocating(true);
+
+    const applyLocation = (latitude, longitude, zoom = 17) => {
+      const precisionLat = Number(Number(latitude).toFixed(6));
+      const precisionLng = Number(Number(longitude).toFixed(6));
+
+      setCoordinates({ lat: precisionLat, lng: precisionLng });
+      if (onCoordinatesChange) {
+        onCoordinatesChange({ lat: precisionLat, lng: precisionLng });
+      }
+
+      isProgrammaticFlyRef.current = true;
+      if (mapRef.current) {
+        mapRef.current.flyTo([precisionLat, precisionLng], zoom, {
+          duration: 1.2,
+        });
+      }
+      fetchAddressForCoordinates(precisionLat, precisionLng);
+      setIsLocating(false);
+    };
+
+    const fallbackToIpLocation = async () => {
+      try {
+        const bdcRes = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
+        if (bdcRes.ok) {
+          const bdcData = await bdcRes.json();
+          if (bdcData.latitude && bdcData.longitude) {
+            applyLocation(bdcData.latitude, bdcData.longitude, 15);
+            return;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      try {
+        const ipRes = await fetch('https://ipapi.co/json/');
+        if (ipRes.ok) {
+          const ipData = await ipRes.json();
+          if (ipData.latitude && ipData.longitude) {
+            applyLocation(ipData.latitude, ipData.longitude, 15);
+            return;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      setIsLocating(false);
+      alert('Could not determine current location. Please ensure location permissions are allowed in your browser.');
+    };
+
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser');
+      fallbackToIpLocation();
       return;
     }
 
-    setIsLocating(true);
+    // Step 1: Try High Accuracy with zero cache (maximumAge: 0)
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setIsLocating(false);
         const { latitude, longitude } = position.coords;
-        setCoordinates({ lat: latitude, lng: longitude });
-
-        if (mapRef.current) {
-          mapRef.current.flyTo([latitude, longitude], 16, {
-            duration: 1.2,
-          });
-        }
-        fetchAddressForCoordinates(latitude, longitude);
+        applyLocation(latitude, longitude, 17);
       },
-      (error) => {
-        setIsLocating(false);
-        console.warn('Geolocation error:', error);
-        alert('Could not obtain current location. Please ensure location permissions are allowed.');
+      (highAccError) => {
+        console.warn('High accuracy geolocation failed, trying standard accuracy:', highAccError);
+        // Step 2: Try standard accuracy if high accuracy failed or timed out
+        navigator.geolocation.getCurrentPosition(
+          (stdPosition) => {
+            const { latitude, longitude } = stdPosition.coords;
+            applyLocation(latitude, longitude, 16);
+          },
+          (stdError) => {
+            console.warn('Standard geolocation failed, falling back to network location:', stdError);
+            // Step 3: Fallback to IP geolocation
+            fallbackToIpLocation();
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+        );
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
     );
   };
 
