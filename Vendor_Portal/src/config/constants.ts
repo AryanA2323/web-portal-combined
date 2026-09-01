@@ -1,12 +1,11 @@
 import Constants from 'expo-constants';
 
-const PRODUCTION_API_BASE_URL = 'https://api.claimverify.shovelsolutions.in/api';
+export const PRODUCTION_API_BASE_URL = 'https://api.claimverify.shovelsolutions.in/api';
 
 const getApiBaseUrl = () => {
-  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-  const normalizedEnvUrl = envUrl?.trim();
-
   if (__DEV__) {
+    const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+    const normalizedEnvUrl = envUrl?.trim();
     const hostUri = Constants.expoConfig?.hostUri;
     
     // Automatically detect local Wi-Fi IP from Expo Metro if available
@@ -25,19 +24,9 @@ const getApiBaseUrl = () => {
     
     // Fallback to the current local Wi-Fi IP Address of the PC
     return 'http://192.168.1.2:8001/api';
-  } else if (normalizedEnvUrl && !normalizedEnvUrl.includes('loca.lt')) {
-    return normalizedEnvUrl;
   }
 
-  const configuredApiBaseUrl = Constants.expoConfig?.extra?.apiBaseUrl;
-  if (
-    typeof configuredApiBaseUrl === 'string' &&
-    configuredApiBaseUrl.length > 0 &&
-    !configuredApiBaseUrl.includes('loca.lt')
-  ) {
-    return configuredApiBaseUrl;
-  }
-
+  // In production builds and EAS OTA updates, ALWAYS use production backend
   return PRODUCTION_API_BASE_URL;
 };
 
