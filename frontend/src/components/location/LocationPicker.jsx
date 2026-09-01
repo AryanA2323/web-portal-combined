@@ -1,12 +1,49 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import api from '../../services/api';
 import 'leaflet/dist/leaflet.css';
 import './LocationPicker.css';
 
 /**
+ * Parse coordinates directly from Google Maps URLs, query parameters, or decimal coordinates.
+ */
+const parseDirectLocation = (text) => {
+  if (!text) return null;
+  const str = text.trim();
+
+  // 1. Google Maps URL containing coordinates e.g. @18.5634121,73.9442015
+  const gmapMatch = str.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (gmapMatch) {
+    const lat = parseFloat(gmapMatch[1]);
+    const lon = parseFloat(gmapMatch[2]);
+    const placeMatch = str.match(/\/place\/([^/@]+)/);
+    const placeName = placeMatch ? decodeURIComponent(placeMatch[1].replace(/\+/g, ' ')) : 'Google Maps Location';
+    return { place_id: 'direct-gmaps', lat, lon, title: placeName, display_name: `${placeName} (${lat}, ${lon})` };
+  }
+
+  // 2. Query param coordinates e.g. ?q=18.5634121,73.9442015
+  const qMatch = str.match(/[?&](?:q|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (qMatch) {
+    const lat = parseFloat(qMatch[1]);
+    const lon = parseFloat(qMatch[2]);
+    return { place_id: 'direct-q', lat, lon, title: 'Coordinates', display_name: `Location (${lat}, ${lon})` };
+  }
+
+  // 3. Raw decimal coordinates e.g. "18.5634121, 73.9442015" or "18.5634121 73.9442015"
+  const decMatch = str.match(/^\s*(-?\d{1,2}\.\d+)[,\s]+(-?\d{1,3}\.\d+)\s*$/);
+  if (decMatch) {
+    const lat = parseFloat(decMatch[1]);
+    const lon = parseFloat(decMatch[2]);
+    return { place_id: 'direct-dec', lat, lon, title: 'Coordinates', display_name: `Latitude: ${lat}, Longitude: ${lon}` };
+  }
+
+  return null;
+};
+
+/**
  * Controller component inside MapContainer to handle map events and programmatically fly/pan.
  */
-const MapEventsHandler = ({ onMoveStart, onMoveEnd, onMove, mapRef }) => {
+const MapEventsHandler = ({ onMoveStart, onMoveEnd, onMove, onMapClick, mapRef }) => {
   const map = useMapEvents({
     movestart: () => {
       onMoveStart && onMoveStart();
@@ -18,6 +55,11 @@ const MapEventsHandler = ({ onMoveStart, onMoveEnd, onMove, mapRef }) => {
     moveend: () => {
       const center = map.getCenter();
       onMoveEnd && onMoveEnd({ lat: center.lat, lng: center.lng });
+    },
+    click: (e) => {
+      if (onMapClick) {
+        onMapClick(e.latlng);
+      }
     },
   });
 
@@ -50,8 +92,9 @@ const MapEventsHandler = ({ onMoveStart, onMoveEnd, onMove, mapRef }) => {
  * @param {string} [props.height='520px'] - Height of map container
  */
 const LocationPicker = ({
-  initialCenter = [12.9716, 77.5946], // Default: Bangalore
+  initialCenter = [18.5204, 73.8567],
   initialZoom = 15,
+  initialAddress = '',
   onLocationSelect,
   onCoordinatesChange,
   onCancel,
@@ -82,7 +125,7 @@ const LocationPicker = ({
   });
 
   // Search state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialAddress || '');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -315,7 +358,8 @@ const LocationPicker = ({
   }, [fetchAddressForCoordinates, initialCenter]);
 
   /**
-   * Search / Forward Geocoding with Debounce (Photon primary with Nominatim fallback)
+   * Search / Forward Geocoding with Debounce
+   * Supports: Direct Google Maps URLs, Coordinates, Photon OSM with local proximity bias, and Backend Geocoding
    */
   const handleSearchInputChange = (e) => {
     const value = e.target.value;
@@ -333,6 +377,15 @@ const LocationPicker = ({
       return;
     }
 
+    // Check for direct Google Maps link or coordinates match
+    const directMatch = parseDirectLocation(value);
+    if (directMatch) {
+      setSearchResults([directMatch]);
+      setShowSearchResults(true);
+      setIsSearching(false);
+      return;
+    }
+
     setIsSearching(true);
     setShowSearchResults(true);
 
@@ -340,15 +393,24 @@ const LocationPicker = ({
       try {
         const query = value.trim();
         let items = [];
+        const seenCoordinates = new Set();
 
-        // 1. Primary: Photon OSM Geocoding API (lightning fast, no 429 rate limits, free)
+        const addResult = (item) => {
+          const key = `${Number(item.lat).toFixed(4)},${Number(item.lon).toFixed(4)}`;
+          if (!seenCoordinates.has(key)) {
+            seenCoordinates.add(key);
+            items.push(item);
+          }
+        };
+
+        // 1. Primary: Photon OSM Geocoding API with local coordinate bias
         try {
-          const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6`;
+          const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${coordinates.lat || 18.5204}&lon=${coordinates.lng || 73.8567}&limit=6`;
           const photonRes = await fetch(photonUrl);
           if (photonRes.ok) {
             const data = await photonRes.json();
             if (data && data.features && data.features.length > 0) {
-              items = data.features.map((f, i) => {
+              data.features.forEach((f, i) => {
                 const p = f.properties;
                 const fullAddr = [
                   p.name,
@@ -362,45 +424,70 @@ const LocationPicker = ({
                   .filter(Boolean)
                   .join(', ');
 
-                return {
+                addResult({
                   place_id: p.osm_id ? `osm-${p.osm_id}` : `photon-${i}`,
                   lat: f.geometry.coordinates[1],
                   lon: f.geometry.coordinates[0],
                   display_name: fullAddr || p.name || query,
                   title: p.name || p.street || 'Place',
                   raw: p,
-                };
+                });
               });
             }
           }
         } catch (photonErr) {
-          console.warn('Photon search error, falling back to Nominatim:', photonErr);
+          console.warn('Photon search error:', photonErr);
         }
 
-        // 2. Fallback to Nominatim Search API if Photon yielded 0 results
-        if (items.length === 0) {
-          const nomUrl = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(
-            query
-          )}&limit=5&addressdetails=1`;
-          const nomRes = await fetch(nomUrl);
-          if (nomRes.ok) {
-            const nomData = await nomRes.json();
-            if (Array.isArray(nomData) && nomData.length > 0) {
-              items = nomData.map((item) => ({
-                place_id: item.place_id,
-                lat: parseFloat(item.lat),
-                lon: parseFloat(item.lon),
-                display_name: item.display_name,
-                title: item.display_name.split(',')[0],
-                raw: item,
-              }));
+        // 2. Backend Multi-Strategy Geocode API (ArcGIS, Plus Codes, Mapbox)
+        try {
+          const backendRes = await api.get('/cases/geocode-search', { params: { query } });
+          if (backendRes.data && backendRes.data.success && Array.isArray(backendRes.data.results)) {
+            backendRes.data.results.forEach((r, i) => {
+              addResult({
+                place_id: `backend-geo-${i}`,
+                lat: parseFloat(r.lat),
+                lon: parseFloat(r.lng),
+                display_name: r.display_name || query,
+                title: r.title || query,
+                raw: r,
+              });
+            });
+          }
+        } catch (backendErr) {
+          console.warn('Backend geocode search error:', backendErr);
+        }
+
+        // 3. Fallback to Nominatim Search API if items are few
+        if (items.length < 3) {
+          try {
+            const nomUrl = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(
+              query
+            )}&limit=5&addressdetails=1`;
+            const nomRes = await fetch(nomUrl);
+            if (nomRes.ok) {
+              const nomData = await nomRes.json();
+              if (Array.isArray(nomData) && nomData.length > 0) {
+                nomData.forEach((item) => {
+                  addResult({
+                    place_id: item.place_id,
+                    lat: parseFloat(item.lat),
+                    lon: parseFloat(item.lon),
+                    display_name: item.display_name,
+                    title: item.display_name.split(',')[0],
+                    raw: item,
+                  });
+                });
+              }
             }
+          } catch (nomErr) {
+            console.warn('Nominatim fallback error:', nomErr);
           }
         }
 
         setSearchResults(items);
         if (items.length === 0) {
-          setSearchError('No matching locations found. Try a different landmark or city.');
+          setSearchError('No matching locations found. Try entering area, society name, or paste a Google Maps link.');
         }
       } catch (error) {
         console.error('Search error:', error);
@@ -409,7 +496,7 @@ const LocationPicker = ({
       } finally {
         setIsSearching(false);
       }
-    }, 450);
+    }, 400);
   };
 
   /**
@@ -457,16 +544,61 @@ const LocationPicker = ({
   };
 
   /**
+   * Click on map handler to immediately move pin to clicked coordinate
+   */
+  const handleMapClick = (latlng) => {
+    const precisionLat = Number(Number(latlng.lat).toFixed(6));
+    const precisionLng = Number(Number(latlng.lng).toFixed(6));
+
+    setCoordinates({ lat: precisionLat, lng: precisionLng });
+    if (onCoordinatesChange) {
+      onCoordinatesChange({ lat: precisionLat, lng: precisionLng });
+    }
+
+    isProgrammaticFlyRef.current = true;
+    if (mapRef.current) {
+      mapRef.current.flyTo([precisionLat, precisionLng], mapRef.current.getZoom(), {
+        duration: 0.5,
+      });
+    }
+    fetchAddressForCoordinates(precisionLat, precisionLng);
+  };
+
+  /**
    * Geolocation "Locate Me" button handler
-   * Uses multi-tier accuracy strategy:
-   * 1. Fresh High-Accuracy Device GPS (maximumAge: 0)
-   * 2. Standard Accuracy Browser Geolocation fallback
-   * 3. Network IP Geolocation fallback
+   * Uses high-accuracy device location watching with immediate refinement
    */
   const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+
     setIsLocating(true);
 
-    const applyLocation = (latitude, longitude, zoom = 17) => {
+    let bestPosition = null;
+    let watchId = null;
+    let timeoutId = null;
+
+    const finalizeLocation = (position) => {
+      if (watchId !== null) {
+        try {
+          navigator.geolocation.clearWatch(watchId);
+        } catch (e) {}
+        watchId = null;
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
+      if (!position) {
+        setIsLocating(false);
+        alert('Could not determine your location. Please check your browser location permissions.');
+        return;
+      }
+
+      const { latitude, longitude } = position.coords;
       const precisionLat = Number(Number(latitude).toFixed(6));
       const precisionLng = Number(Number(longitude).toFixed(6));
 
@@ -477,7 +609,7 @@ const LocationPicker = ({
 
       isProgrammaticFlyRef.current = true;
       if (mapRef.current) {
-        mapRef.current.flyTo([precisionLat, precisionLng], zoom, {
+        mapRef.current.flyTo([precisionLat, precisionLng], 17, {
           duration: 1.2,
         });
       }
@@ -485,66 +617,48 @@ const LocationPicker = ({
       setIsLocating(false);
     };
 
-    const fallbackToIpLocation = async () => {
-      try {
-        const bdcRes = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
-        if (bdcRes.ok) {
-          const bdcData = await bdcRes.json();
-          if (bdcData.latitude && bdcData.longitude) {
-            applyLocation(bdcData.latitude, bdcData.longitude, 15);
-            return;
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const acc = position.coords.accuracy || 99999;
+          if (!bestPosition || acc < (bestPosition.coords.accuracy || 99999)) {
+            bestPosition = position;
           }
-        }
-      } catch (e) {
-        // ignore
-      }
 
-      try {
-        const ipRes = await fetch('https://ipapi.co/json/');
-        if (ipRes.ok) {
-          const ipData = await ipRes.json();
-          if (ipData.latitude && ipData.longitude) {
-            applyLocation(ipData.latitude, ipData.longitude, 15);
-            return;
+          if (acc <= 50) {
+            finalizeLocation(bestPosition);
           }
+        },
+        (error) => {
+          console.warn('watchPosition error:', error);
+          if (error.code === 1) { // PERMISSION_DENIED
+            finalizeLocation(null);
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 0,
         }
-      } catch (e) {
-        // ignore
-      }
-
-      setIsLocating(false);
-      alert('Could not determine current location. Please ensure location permissions are allowed in your browser.');
-    };
-
-    if (!navigator.geolocation) {
-      fallbackToIpLocation();
-      return;
+      );
+    } catch (e) {
+      console.warn('watchPosition exception:', e);
     }
 
-    // Step 1: Try High Accuracy with zero cache (maximumAge: 0)
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        applyLocation(latitude, longitude, 17);
-      },
-      (highAccError) => {
-        console.warn('High accuracy geolocation failed, trying standard accuracy:', highAccError);
-        // Step 2: Try standard accuracy if high accuracy failed or timed out
+    timeoutId = setTimeout(() => {
+      if (bestPosition) {
+        finalizeLocation(bestPosition);
+      } else {
         navigator.geolocation.getCurrentPosition(
-          (stdPosition) => {
-            const { latitude, longitude } = stdPosition.coords;
-            applyLocation(latitude, longitude, 16);
+          (pos) => finalizeLocation(pos),
+          (err) => {
+            console.error('Final fallback error:', err);
+            finalizeLocation(null);
           },
-          (stdError) => {
-            console.warn('Standard geolocation failed, falling back to network location:', stdError);
-            // Step 3: Fallback to IP geolocation
-            fallbackToIpLocation();
-          },
-          { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+          { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
         );
-      },
-      { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
-    );
+      }
+    }, 6000);
   };
 
   /**
@@ -717,6 +831,7 @@ const LocationPicker = ({
           onMoveStart={handleMapMoveStart}
           onMove={handleMapMove}
           onMoveEnd={handleMapMoveEnd}
+          onMapClick={handleMapClick}
           mapRef={mapRef}
         />
       </MapContainer>

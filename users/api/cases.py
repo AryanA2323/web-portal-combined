@@ -5631,3 +5631,36 @@ def review_deletion_request(request, request_id: int, data: ChangeRequestReviewS
     action_past = "APPROVED" if action == "APPROVE" else "REJECTED"
     return {"success": True, "message": f"Deletion request {action_past.lower()} successfully"}
 
+
+@router.get("/cases/geocode-search", summary="Geocode Address or Query")
+def geocode_search_api(request: HttpRequest, query: str):
+    """
+    High-accuracy multi-strategy geocoding endpoint for Location Picker.
+    Supports: Google Maps URLs, Plus Codes, Decimal coords, DMS, Mapbox, ArcGIS, Nominatim.
+    """
+    if not query or not query.strip():
+        return {"success": False, "results": []}
+
+    try:
+        from users.incident_case_db import _geocode
+        raw = query.strip()
+        lat, lng = _geocode(raw)
+        if lat is not None and lng is not None:
+            display_name = _reverse_geocode_to_english(lat, lng) or raw
+            return {
+                "success": True,
+                "results": [
+                    {
+                        "lat": float(lat),
+                        "lng": float(lng),
+                        "display_name": display_name,
+                        "title": display_name.split(",")[0],
+                    }
+                ],
+            }
+    except Exception as e:
+        logger.debug(f"[geocode-search] Error: {e}")
+
+    return {"success": False, "results": []}
+
+

@@ -2702,6 +2702,7 @@ const NewCasePage = () => {
             height="100%"
             onLocationSelect={handleLocationSelect}
             onClose={() => setMapModalOpen(false)}
+            initialAddress={verificationData[mapTargetField] || ''}
             title={
               mapTargetField === 'place_of_accident'
                 ? 'Select Accident / Spot Location'
