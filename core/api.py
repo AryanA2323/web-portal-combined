@@ -109,6 +109,45 @@ def health_check(request):
     }
 
 
+@api.get(
+    "/cases/geocode-search",
+    tags=["Cases"],
+    summary="Geocode Address or Query",
+    description="Multi-strategy geocoding endpoint for Location Picker.",
+)
+def geocode_search_api(request: HttpRequest, query: str = ""):
+    """
+    High-accuracy multi-strategy geocoding endpoint for Location Picker.
+    Supports: Google Maps URLs, Plus Codes, Decimal coords, DMS, Mapbox, ArcGIS, Nominatim.
+    """
+    if not query or not query.strip():
+        return {"success": False, "results": []}
+
+    try:
+        from users.incident_case_db import _geocode
+        from users.api.cases import _reverse_geocode_to_english
+        raw = query.strip()
+        lat, lng = _geocode(raw)
+        if lat is not None and lng is not None:
+            display_name = _reverse_geocode_to_english(lat, lng) or raw
+            return {
+                "success": True,
+                "results": [
+                    {
+                        "lat": float(lat),
+                        "lng": float(lng),
+                        "display_name": display_name,
+                        "title": display_name.split(",")[0],
+                    }
+                ],
+            }
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"[geocode-search] Error: {e}")
+
+    return {"success": False, "results": []}
+
+
 # =============================================================================
 # Register Routers
 # =============================================================================
