@@ -342,16 +342,29 @@ const NewCasePage = () => {
     const isChecked = e.target.checked;
     if (isChecked) {
       setSameAsSource('insured');
-      setVerificationData(prev => ({
-        ...prev,
-        driver_and_insured_same: true,
-        insured_cum_driver: true,
-        driver_name: prev.insured_name || '',
-        driver_contact: prev.insured_contact || '',
-        driver_address: prev.insured_address || '',
-        driver_latitude: prev.insured_latitude || '',
-        driver_longitude: prev.insured_longitude || '',
-      }));
+      setVerificationData(prev => {
+        const name = prev.insured_name || prev.driver_name || '';
+        const contact = prev.insured_contact || prev.driver_contact || '';
+        const address = prev.insured_address || prev.driver_address || '';
+        const lat = prev.insured_latitude || prev.driver_latitude || '';
+        const lng = prev.insured_longitude || prev.driver_longitude || '';
+
+        return {
+          ...prev,
+          driver_and_insured_same: true,
+          insured_cum_driver: true,
+          insured_name: name,
+          driver_name: name,
+          insured_contact: contact,
+          driver_contact: contact,
+          insured_address: address,
+          driver_address: address,
+          insured_latitude: lat,
+          driver_latitude: lat,
+          insured_longitude: lng,
+          driver_longitude: lng,
+        };
+      });
     } else {
       setSameAsSource(null);
       setVerificationData(prev => ({
@@ -366,16 +379,29 @@ const NewCasePage = () => {
     const isChecked = e.target.checked;
     if (isChecked) {
       setSameAsSource('driver');
-      setVerificationData(prev => ({
-        ...prev,
-        driver_and_insured_same: true,
-        insured_cum_driver: true,
-        insured_name: prev.driver_name || '',
-        insured_contact: prev.driver_contact || '',
-        insured_address: prev.driver_address || '',
-        insured_latitude: prev.driver_latitude || '',
-        insured_longitude: prev.driver_longitude || '',
-      }));
+      setVerificationData(prev => {
+        const name = prev.driver_name || prev.insured_name || '';
+        const contact = prev.driver_contact || prev.insured_contact || '';
+        const address = prev.driver_address || prev.insured_address || '';
+        const lat = prev.driver_latitude || prev.insured_latitude || '';
+        const lng = prev.driver_longitude || prev.insured_longitude || '';
+
+        return {
+          ...prev,
+          driver_and_insured_same: true,
+          insured_cum_driver: true,
+          insured_name: name,
+          driver_name: name,
+          insured_contact: contact,
+          driver_contact: contact,
+          insured_address: address,
+          driver_address: address,
+          insured_latitude: lat,
+          driver_latitude: lat,
+          insured_longitude: lng,
+          driver_longitude: lng,
+        };
+      });
     } else {
       setSameAsSource(null);
       setVerificationData(prev => ({
@@ -430,19 +456,35 @@ const NewCasePage = () => {
         claimant_longitude: lngStr,
       }));
     } else if (mapTargetField === 'insured_address') {
-      setVerificationData(prev => ({
-        ...prev,
-        insured_address: address || title || '',
-        insured_latitude: latStr,
-        insured_longitude: lngStr,
-      }));
+      setVerificationData(prev => {
+        const nextState = {
+          ...prev,
+          insured_address: address || title || '',
+          insured_latitude: latStr,
+          insured_longitude: lngStr,
+        };
+        if (prev.driver_and_insured_same || prev.insured_cum_driver) {
+          nextState.driver_address = address || title || '';
+          nextState.driver_latitude = latStr;
+          nextState.driver_longitude = lngStr;
+        }
+        return nextState;
+      });
     } else if (mapTargetField === 'driver_address') {
-      setVerificationData(prev => ({
-        ...prev,
-        driver_address: address || title || '',
-        driver_latitude: latStr,
-        driver_longitude: lngStr,
-      }));
+      setVerificationData(prev => {
+        const nextState = {
+          ...prev,
+          driver_address: address || title || '',
+          driver_latitude: latStr,
+          driver_longitude: lngStr,
+        };
+        if (prev.driver_and_insured_same || prev.insured_cum_driver) {
+          nextState.insured_address = address || title || '';
+          nextState.insured_latitude = latStr;
+          nextState.insured_longitude = lngStr;
+        }
+        return nextState;
+      });
     } else if (mapTargetField === 'rto_address') {
       setVerificationData(prev => ({
         ...prev,
@@ -472,7 +514,7 @@ const NewCasePage = () => {
       };
 
       // Real-time synchronization when Insured is same as Driver or vice-versa is active
-      if (prev.driver_and_insured_same) {
+      if (prev.driver_and_insured_same || prev.insured_cum_driver) {
         if (sameAsSource === 'insured' || !sameAsSource) {
           if (name === 'insured_name') newData.driver_name = newVal;
           if (name === 'insured_contact') newData.driver_contact = newVal;
