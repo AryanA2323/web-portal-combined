@@ -481,6 +481,8 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         check_status=payload.check_status,
                         statement=payload.statement or '',
                         triggers=payload.triggers or '',
+                        lat=check_lat,
+                        lng=check_lng,
                     )
                 elif verification_type == 'RTI_CHECK':
                     insert_rti_check(

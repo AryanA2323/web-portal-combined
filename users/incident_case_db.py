@@ -831,7 +831,8 @@ def insert_chargesheet(case_id,
                        police_station_name='', court_district='', court_case_no='',
                        case_documents=None, vendor_documents=None,
                        check_status='Not Initiated',
-                       statement='', triggers=''):
+                       statement='', triggers='',
+                       lat=None, lng=None):
     """Insert into incident_case_db.chargesheets.
     Geocodes the city/court location using OpenStreetMap Nominatim.
     case_documents: list of dicts [{filename, url, size, mime_type, uploaded_at}, ...]
@@ -874,7 +875,7 @@ def insert_chargesheet(case_id,
         logger.info(f"[incident_case_db] Inserted chargesheet id={row_id} for case={case_id}")
         # Geocode court/city location in background
         location_query = ', '.join(filter(None, [court_name, city]))
-        if location_query.strip():
+        if (lat is None or lng is None) and location_query.strip():
             _geocode_and_update('chargesheets', row_id, 'chargesheet_lat', 'chargesheet_lng', location_query)
     except Exception as e:
         logger.error(f"[incident_case_db] Failed to insert chargesheet: {e}")
@@ -931,7 +932,6 @@ def insert_rti_check(case_id,
                 remarks,
                 json.dumps(case_documents or []), json.dumps(vendor_documents or []),
                 check_status,
-                lat, lng,
             ])
             row_id = cursor.fetchone()[0]
         logger.info(f"[incident_case_db] Inserted rti_check id={row_id} for case={case_id}")

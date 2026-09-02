@@ -683,6 +683,8 @@ class CreateCaseSchema(Schema):
     chk_rc: bool = False
     chk_permit: bool = False
     chk_court: bool = False
+    chk_chargesheet: bool = False
+    chk_rto: bool = False
     chk_notice: bool = False
     chk_134_notice: bool = False
     chk_rti: bool = False
@@ -2986,7 +2988,8 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
             payload.chk_spot, payload.chk_hospital, payload.chk_claimant,
             payload.chk_insured, payload.chk_witness, payload.chk_driver,
             payload.chk_dl, payload.chk_rc, payload.chk_permit,
-            payload.chk_court, payload.chk_notice, payload.chk_134_notice,
+            payload.chk_court, payload.chk_chargesheet, payload.chk_rto,
+            payload.chk_notice, payload.chk_134_notice,
             payload.chk_rti, payload.chk_medical_verification, payload.chk_income
         ])
         
@@ -3170,10 +3173,10 @@ def create_case(request: HttpRequest, payload: CreateCaseSchema):
                     'chk_insured': payload.chk_insured,
                     'chk_witness': payload.chk_witness,
                     'chk_driver': payload.chk_driver,
-                    'chk_dl': payload.chk_dl,
-                    'chk_rc': payload.chk_rc,
-                    'chk_permit': payload.chk_permit,
-                    'chk_court': payload.chk_court,
+                    'chk_dl': payload.chk_rto or payload.chk_dl,
+                    'chk_rc': payload.chk_rto or payload.chk_rc,
+                    'chk_permit': payload.chk_rto or payload.chk_permit,
+                    'chk_court': payload.chk_chargesheet or payload.chk_court,
                     'chk_notice': payload.chk_notice,
                     'chk_134_notice': payload.chk_134_notice,
                     'chk_rti': payload.chk_rti,
