@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Box,
@@ -17,6 +17,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Button,
   Menu,
@@ -28,6 +29,18 @@ import {
   FolderOpen,
   GroupAdd,
   ArrowDropDown,
+  SwapHoriz,
+  FactCheck,
+  Sync,
+  CloudUpload,
+  Description,
+  DeleteSweep,
+  DeleteOutline,
+  AutoAwesome,
+  CheckCircle,
+  Cancel,
+  Search,
+  Refresh,
 } from '@mui/icons-material';
 import CaseManagerLayout from './components/CaseManagerLayout';
 import superAdminService from '../../services/superAdminService';
@@ -41,10 +54,31 @@ const getActionIcon = (action) => {
       return <FolderOpen sx={{ fontSize: 18, color: '#2563eb' }} />;
     case 'REPORT_GENERATED':
       return <Assignment sx={{ fontSize: 18, color: '#16a34a' }} />;
+    case 'AI_REPORT_GENERATED':
+      return <AutoAwesome sx={{ fontSize: 18, color: '#059669' }} />;
     case 'QC_ASSIGNED':
       return <Person sx={{ fontSize: 18, color: '#9333ea' }} />;
+    case 'QC_ACCEPTED_REPORT':
+      return <CheckCircle sx={{ fontSize: 18, color: '#16a34a' }} />;
+    case 'QC_REJECTED_REPORT':
+      return <Cancel sx={{ fontSize: 18, color: '#dc2626' }} />;
     case 'VENDOR_ASSIGNED':
       return <GroupAdd sx={{ fontSize: 18, color: '#ea580c' }} />;
+    case 'VENDOR_REASSIGNED':
+      return <SwapHoriz sx={{ fontSize: 18, color: '#d97706' }} />;
+    case 'CHECK_REVIEWED':
+      return <FactCheck sx={{ fontSize: 18, color: '#0d9488' }} />;
+    case 'STATUS_CHANGE':
+    case 'VENDOR_STATUS_CHANGE':
+      return <Sync sx={{ fontSize: 18, color: '#4f46e5' }} />;
+    case 'MEDIA_UPLOADED':
+      return <CloudUpload sx={{ fontSize: 18, color: '#0284c7' }} />;
+    case 'RTO_DOCS_GENERATED':
+      return <Description sx={{ fontSize: 18, color: '#0891b2' }} />;
+    case 'CASE_DELETION_REQUESTED':
+      return <DeleteSweep sx={{ fontSize: 18, color: '#d97706' }} />;
+    case 'CASE_DELETED':
+      return <DeleteOutline sx={{ fontSize: 18, color: '#dc2626' }} />;
     default:
       return <History sx={{ fontSize: 18, color: '#6366f1' }} />;
   }
@@ -56,12 +90,36 @@ const getActionChip = (action) => {
       return <Chip label="Case Created" size="small" sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '11px' }} />;
     case 'REPORT_GENERATED':
       return <Chip label="Report Generated" size="small" sx={{ bgcolor: '#f0fdf4', color: '#15803d', fontWeight: 700, fontSize: '11px' }} />;
+    case 'AI_REPORT_GENERATED':
+      return <Chip label="AI Report Generated" size="small" sx={{ bgcolor: '#ecfdf5', color: '#047857', fontWeight: 700, fontSize: '11px' }} />;
     case 'QC_ASSIGNED':
       return <Chip label="QC Assigned" size="small" sx={{ bgcolor: '#f3e8ff', color: '#7e22ce', fontWeight: 700, fontSize: '11px' }} />;
+    case 'QC_ACCEPTED_REPORT':
+      return <Chip label="Report Approved" size="small" sx={{ bgcolor: '#f0fdf4', color: '#16a34a', fontWeight: 700, fontSize: '11px' }} />;
+    case 'QC_REJECTED_REPORT':
+      return <Chip label="Report Rejected" size="small" sx={{ bgcolor: '#fef2f2', color: '#b91c1c', fontWeight: 700, fontSize: '11px' }} />;
     case 'VENDOR_ASSIGNED':
       return <Chip label="Partner Assigned" size="small" sx={{ bgcolor: '#fff7ed', color: '#c2410c', fontWeight: 700, fontSize: '11px' }} />;
-    default:
-      return <Chip label={action || 'Activity'} size="small" sx={{ bgcolor: '#e0e7ff', color: '#4338ca', fontWeight: 700, fontSize: '11px' }} />;
+    case 'VENDOR_REASSIGNED':
+      return <Chip label="Partner Reassigned" size="small" sx={{ bgcolor: '#fffbeb', color: '#b45309', fontWeight: 700, fontSize: '11px' }} />;
+    case 'CHECK_REVIEWED':
+      return <Chip label="Check Reviewed" size="small" sx={{ bgcolor: '#f0fdfa', color: '#0f766e', fontWeight: 700, fontSize: '11px' }} />;
+    case 'STATUS_CHANGE':
+      return <Chip label="Status Change" size="small" sx={{ bgcolor: '#eef2ff', color: '#4338ca', fontWeight: 700, fontSize: '11px' }} />;
+    case 'VENDOR_STATUS_CHANGE':
+      return <Chip label="Partner Status" size="small" sx={{ bgcolor: '#faf5ff', color: '#6b21a8', fontWeight: 700, fontSize: '11px' }} />;
+    case 'MEDIA_UPLOADED':
+      return <Chip label="Media Uploaded" size="small" sx={{ bgcolor: '#f0f9ff', color: '#0369a1', fontWeight: 700, fontSize: '11px' }} />;
+    case 'RTO_DOCS_GENERATED':
+      return <Chip label="RTO Docs Generated" size="small" sx={{ bgcolor: '#ecfeff', color: '#0e7490', fontWeight: 700, fontSize: '11px' }} />;
+    case 'CASE_DELETION_REQUESTED':
+      return <Chip label="Deletion Requested" size="small" sx={{ bgcolor: '#fffbeb', color: '#d97706', fontWeight: 700, fontSize: '11px' }} />;
+    case 'CASE_DELETED':
+      return <Chip label="Case Deleted" size="small" sx={{ bgcolor: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: '11px' }} />;
+    default: {
+      const formatted = String(action || 'Activity').replaceAll('_', ' ');
+      return <Chip label={formatted} size="small" sx={{ bgcolor: '#e0e7ff', color: '#4338ca', fontWeight: 700, fontSize: '11px' }} />;
+    }
   }
 };
 
@@ -71,6 +129,7 @@ const SuperAdminLogsPage = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [error, setError] = useState(null);
   const [selectedCmId, setSelectedCmId] = useState(location.state?.cmId || '');
+  const [searchTerm, setSearchTerm] = useState('');
   const [timeFilterAnchorEl, setTimeFilterAnchorEl] = useState(null);
   const [timeFilter, setTimeFilter] = useState('');
   const [timeMenuAnchorEl, setTimeMenuAnchorEl] = useState(null);
@@ -78,6 +137,8 @@ const SuperAdminLogsPage = () => {
   const [toDate, setToDate] = useState('');
   const [fromTime, setFromTime] = useState('');
   const [toTime, setToTime] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(15);
 
   useEffect(() => {
     fetchDashboardData(false);
@@ -106,55 +167,74 @@ const SuperAdminLogsPage = () => {
 
   const activeCm = case_managers.find((cm) => String(cm.id) === String(selectedCmId)) || case_managers[0];
 
-  const cmLogs = activity_logs.filter((log) => {
-    const matchesCm = activeCm ? String(log.user_id) === String(activeCm.id) : true;
-    if (!matchesCm) return false;
-    
-    if (timeFilter || fromTime || toTime) {
-      const logDate = new Date(log.created_at);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+  const filteredLogs = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
 
-      const logDateOnly = new Date(logDate);
-      logDateOnly.setHours(0, 0, 0, 0);
+    return activity_logs.filter((log) => {
+      const matchesCm = activeCm
+        ? (String(log.user_id) === String(activeCm.id) || (log.actor && activeCm.name && log.actor.trim().toLowerCase() === activeCm.name.trim().toLowerCase()))
+        : true;
+      if (!matchesCm) return false;
 
-      if (timeFilter === 'yesterday') {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        if (logDateOnly.getTime() !== yesterday.getTime()) return false;
-      } else if (timeFilter === '2_days_ago') {
-        const twoDaysAgo = new Date(today);
-        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-        if (logDateOnly.getTime() !== twoDaysAgo.getTime()) return false;
-      } else if (timeFilter === '3_days_ago') {
-        const threeDaysAgo = new Date(today);
-        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-        if (logDateOnly.getTime() !== threeDaysAgo.getTime()) return false;
-      } else if (timeFilter === 'custom') {
-        // Date part
-        if (fromDate) {
-          const from = new Date(fromDate);
-          from.setHours(0, 0, 0, 0);
-          if (logDateOnly < from) return false;
-        }
-        if (toDate) {
-          const to = new Date(toDate);
-          to.setHours(0, 0, 0, 0);
-          if (logDateOnly > to) return false;
-        }
+      if (search) {
+        const matchesSearch =
+          String(log.details || '').toLowerCase().includes(search) ||
+          String(log.action || '').toLowerCase().includes(search) ||
+          String(log.actor || '').toLowerCase().includes(search);
+        if (!matchesSearch) return false;
       }
-
-      // Time part: apply independently of date filter
-      const hours = logDate.getHours().toString().padStart(2, '0');
-      const minutes = logDate.getMinutes().toString().padStart(2, '0');
-      const logTimeStr = `${hours}:${minutes}`;
       
-      if (fromTime && logTimeStr < fromTime) return false;
-      if (toTime && logTimeStr > toTime) return false;
-    }
-    
-    return true;
-  });
+      if (timeFilter || fromTime || toTime) {
+        const logDate = new Date(log.created_at);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const logDateOnly = new Date(logDate);
+        logDateOnly.setHours(0, 0, 0, 0);
+
+        if (timeFilter === 'yesterday') {
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          if (logDateOnly.getTime() !== yesterday.getTime()) return false;
+        } else if (timeFilter === '2_days_ago') {
+          const twoDaysAgo = new Date(today);
+          twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+          if (logDateOnly.getTime() !== twoDaysAgo.getTime()) return false;
+        } else if (timeFilter === '3_days_ago') {
+          const threeDaysAgo = new Date(today);
+          threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+          if (logDateOnly.getTime() !== threeDaysAgo.getTime()) return false;
+        } else if (timeFilter === 'custom') {
+          // Date part
+          if (fromDate) {
+            const from = new Date(fromDate);
+            from.setHours(0, 0, 0, 0);
+            if (logDateOnly < from) return false;
+          }
+          if (toDate) {
+            const to = new Date(toDate);
+            to.setHours(0, 0, 0, 0);
+            if (logDateOnly > to) return false;
+          }
+        }
+
+        // Time part: apply independently of date filter
+        const hours = logDate.getHours().toString().padStart(2, '0');
+        const minutes = logDate.getMinutes().toString().padStart(2, '0');
+        const logTimeStr = `${hours}:${minutes}`;
+        
+        if (fromTime && logTimeStr < fromTime) return false;
+        if (toTime && logTimeStr > toTime) return false;
+      }
+      
+      return true;
+    });
+  }, [activity_logs, activeCm, searchTerm, timeFilter, fromDate, toDate, fromTime, toTime]);
+
+  const paginatedLogs = filteredLogs.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
 
   return (
     <CaseManagerLayout>
@@ -185,18 +265,21 @@ const SuperAdminLogsPage = () => {
               labelId="cm-select-label"
               value={selectedCmId || (activeCm?.id || '')}
               label="Select Case Manager"
-              onChange={(e) => setSelectedCmId(e.target.value)}
+              onChange={(e) => {
+                setSelectedCmId(e.target.value);
+                setPage(0);
+              }}
               sx={{ borderRadius: '10px', fontSize: '14px', fontWeight: 600 }}
             >
               {case_managers?.map((cm) => (
                 <MenuItem key={cm.id} value={cm.id}>
-                  {cm.name || cm.email}
+                  {cm.name || cm.email} ({cm.role === 'SUPER_ADMIN' ? 'Admin' : 'Case Manager'})
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
 
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             {/* Date Filter Dropdown */}
             <Box>
               <Button
@@ -213,12 +296,13 @@ const SuperAdminLogsPage = () => {
                 onClose={() => setTimeFilterAnchorEl(null)}
                 PaperProps={{ sx: { borderRadius: '12px', mt: 1, minWidth: 160 } }}
               >
-                <MenuItem onClick={() => { setTimeFilter('yesterday'); setTimeFilterAnchorEl(null); }}>Yesterday</MenuItem>
-                <MenuItem onClick={() => { setTimeFilter('2_days_ago'); setTimeFilterAnchorEl(null); }}>2 days ago</MenuItem>
-                <MenuItem onClick={() => { setTimeFilter('3_days_ago'); setTimeFilterAnchorEl(null); }}>3 days ago</MenuItem>
+                <MenuItem onClick={() => { setTimeFilter('yesterday'); setTimeFilterAnchorEl(null); setPage(0); }}>Yesterday</MenuItem>
+                <MenuItem onClick={() => { setTimeFilter('2_days_ago'); setTimeFilterAnchorEl(null); setPage(0); }}>2 days ago</MenuItem>
+                <MenuItem onClick={() => { setTimeFilter('3_days_ago'); setTimeFilterAnchorEl(null); setPage(0); }}>3 days ago</MenuItem>
                 <MenuItem 
                   onClick={(e) => { 
                     setTimeFilter('custom'); 
+                    setPage(0);
                   }}
                   sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, minHeight: '48px', backgroundColor: timeFilter === 'custom' ? 'rgba(0, 0, 0, 0.04)' : 'transparent', whiteSpace: 'normal', minWidth: timeFilter === 'custom' ? '320px' : 'auto' }}
                 >
@@ -229,8 +313,8 @@ const SuperAdminLogsPage = () => {
                       onKeyDown={(e) => e.stopPropagation()}
                       sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, width: '100%', pb: 1 }}
                     >
-                      <TextField size="small" type="date" label="From Date" InputLabelProps={{ shrink: true }} value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                      <TextField size="small" type="date" label="To Date" InputLabelProps={{ shrink: true }} value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                      <TextField size="small" type="date" label="From Date" InputLabelProps={{ shrink: true }} value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(0); }} />
+                      <TextField size="small" type="date" label="To Date" InputLabelProps={{ shrink: true }} value={toDate} onChange={(e) => { setToDate(e.target.value); setPage(0); }} />
                     </Box>
                   )}
                 </MenuItem>
@@ -263,25 +347,58 @@ const SuperAdminLogsPage = () => {
                     onKeyDown={(e) => e.stopPropagation()}
                     sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, width: '100%', pb: 1 }}
                   >
-                    <TextField size="small" type="time" label="From Time" InputLabelProps={{ shrink: true }} value={fromTime} onChange={(e) => setFromTime(e.target.value)} />
-                    <TextField size="small" type="time" label="To Time" InputLabelProps={{ shrink: true }} value={toTime} onChange={(e) => setToTime(e.target.value)} />
+                    <TextField size="small" type="time" label="From Time" InputLabelProps={{ shrink: true }} value={fromTime} onChange={(e) => { setFromTime(e.target.value); setPage(0); }} />
+                    <TextField size="small" type="time" label="To Time" InputLabelProps={{ shrink: true }} value={toTime} onChange={(e) => { setToTime(e.target.value); setPage(0); }} />
                   </Box>
                 </MenuItem>
               </Menu>
             </Box>
           </Box>
 
-          {(timeFilter || fromTime || toTime) && (
-            <Box sx={{ display: 'flex', flex: 1, justifyContent: 'flex-end' }}>
-              <Button 
-                variant="text" 
-                color="error" 
-                onClick={() => { setTimeFilter(''); setFromDate(''); setToDate(''); setFromTime(''); setToTime(''); }}
-                sx={{ textTransform: 'none', fontWeight: 600, minWidth: '100px' }}
-              >
-                Clear Filters
-              </Button>
-            </Box>
+          <TextField
+            placeholder="Search activity details..."
+            size="small"
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(0);
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search sx={{ color: '#999', fontSize: 20 }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              ml: { md: 'auto' },
+              width: { xs: '100%', md: '240px' },
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '10px',
+                backgroundColor: '#f8fafc',
+              },
+            }}
+          />
+
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Refresh />}
+            onClick={() => fetchDashboardData(false)}
+            sx={{ borderRadius: '10px', height: '40px', fontWeight: 600, textTransform: 'none' }}
+          >
+            Refresh
+          </Button>
+
+          {(timeFilter || fromTime || toTime || searchTerm) && (
+            <Button 
+              variant="text" 
+              color="error" 
+              onClick={() => { setTimeFilter(''); setFromDate(''); setToDate(''); setFromTime(''); setToTime(''); setSearchTerm(''); setPage(0); }}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              Clear Filters
+            </Button>
           )}
         </Paper>
 
@@ -304,14 +421,14 @@ const SuperAdminLogsPage = () => {
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
-                ) : cmLogs.length === 0 ? (
+                ) : paginatedLogs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} align="center" sx={{ py: 6, color: '#94a3b8', fontStyle: 'italic' }}>
                       No activity logs found for the selected Case Manager.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  cmLogs.map((log) => (
+                  paginatedLogs.map((log) => (
                     <TableRow key={log.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                       <TableCell sx={{ py: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -343,6 +460,20 @@ const SuperAdminLogsPage = () => {
               </TableBody>
             </Table>
           </TableContainer>
+
+          <TablePagination
+            component="div"
+            count={filteredLogs.length}
+            page={page}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
+            rowsPerPageOptions={[15, 30, 50, 100]}
+            sx={{ borderTop: '1px solid #e2e8f0' }}
+          />
         </Paper>
       </Box>
     </CaseManagerLayout>

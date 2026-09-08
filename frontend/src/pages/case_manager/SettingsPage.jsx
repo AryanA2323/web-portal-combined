@@ -248,31 +248,17 @@ const SettingsPage = () => {
           px: { xs: 2, md: 3 },
           borderRadius: '0 0 16px 16px',
           boxSizing: 'border-box',
-          background: 'linear-gradient(120deg, #f8fafc 0%, #edf2f7 35%, #e2e8f0 70%, #e0e7ff 100%)',
-          boxShadow: '0 4px 16px rgba(148, 163, 184, 0.08)',
+          bgcolor: '#2566b4',
+          boxShadow: '0 4px 16px rgba(37, 102, 180, 0.20)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: 1.5,
           position: 'relative',
-          overflow: 'hidden',
-          border: '1px solid rgba(226, 232, 240, 0.9)',
+          border: '1px solid #1e5597',
           borderTop: 'none',
         }}
       >
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background:
-              'radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(14, 165, 233, 0.15) 0%, transparent 40%)',
-            zIndex: 1,
-            pointerEvents: 'none',
-          }}
-        />
 
         {/* Left Side: Header Title & Icon */}
         <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -284,11 +270,10 @@ const SettingsPage = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
-              border: '1px solid rgba(226, 232, 240, 0.8)',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
             }}
           >
-            <SettingsIcon sx={{ color: '#4f46e5', fontSize: 26 }} />
+            <SettingsIcon sx={{ color: '#17539C', fontSize: 26 }} />
           </Box>
 
           <Box>
@@ -298,7 +283,7 @@ const SettingsPage = () => {
                 fontWeight: 800,
                 fontSize: { xs: '1.4rem', md: '1.75rem' },
                 letterSpacing: '-0.5px',
-                color: '#0f172a',
+                color: '#ffffff',
                 lineHeight: 1.1,
               }}
             >
@@ -307,7 +292,7 @@ const SettingsPage = () => {
             <Typography
               variant="body2"
               sx={{
-                color: '#475569',
+                color: 'rgba(255, 255, 255, 0.85)',
                 fontSize: { xs: '0.75rem', md: '0.85rem' },
                 fontWeight: 500,
                 mt: 0.25,

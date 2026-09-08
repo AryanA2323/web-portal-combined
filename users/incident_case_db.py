@@ -38,6 +38,7 @@ VALID_SLA = {'AT', 'WT'}
 VALID_FULL_CASE_STATUS = {
     'WIP', 'Pending CS', 'Completed', 'Closed', 'Open', 'IR-Writing', 'NI', 'Withdraw',
     'QC-1', 'Pending Additional Docs', 'Connected Pending', 'RCU Pending', 'Portal Upload',
+    'Not Initiated',
 }
 VALID_INVESTIGATION_REPORT = {'Open', 'Approval', 'Stop', 'QC', 'Dispatch'}
 VALID_CHECK_STATUS = {
@@ -531,7 +532,7 @@ def insert_case(claim_number, client_name, category,
                 case_due_date=None, tat_days=None,
                 sla='', investigation_type='',
                 investigation_report_status='Open',
-                full_case_status='WIP',
+                full_case_status='Not Initiated',
                 special_instructions='',
                 case_number='',
                 policy_document='',
@@ -545,7 +546,7 @@ def insert_case(claim_number, client_name, category,
     if investigation_type not in VALID_INVESTIGATION_TYPES:
         investigation_type = 'Full Case'
     if full_case_status not in VALID_FULL_CASE_STATUS:
-        full_case_status = 'WIP'
+        full_case_status = 'Not Initiated'
     if investigation_report_status not in VALID_INVESTIGATION_REPORT:
         investigation_report_status = 'Open'
     # sla is nullable; only pass value if valid, else NULL
@@ -593,6 +594,7 @@ def insert_case(claim_number, client_name, category,
 def insert_claimant_check(case_id,
                           claimant_name='', claimant_contact='',
                           claimant_address='', claimant_income=None,
+                          income_per_annum=None, income_per_month=None,
                           dependants=None, case_documents=None,
                           vendor_documents=None,
                           check_status='Not Initiated',
@@ -607,18 +609,40 @@ def insert_claimant_check(case_id,
     """
     if check_status not in VALID_CHECK_STATUS:
         check_status = 'WIP'
+
+    # Normalize income fields
+    if income_per_annum is not None and claimant_income is None:
+        claimant_income = income_per_annum
+    elif claimant_income is not None and income_per_annum is None:
+        income_per_annum = claimant_income
+
+    if income_per_annum is not None and income_per_month is None:
+        try:
+            income_per_month = round(float(income_per_annum) / 12.0, 2)
+        except (ValueError, TypeError):
+            pass
+    elif income_per_month is not None and income_per_annum is None:
+        try:
+            income_per_annum = round(float(income_per_month) * 12.0, 2)
+            if claimant_income is None:
+                claimant_income = income_per_annum
+        except (ValueError, TypeError):
+            pass
+
     try:
         with _get_cursor() as cursor:
             cursor.execute("""
                 INSERT INTO claimant_checks
                     (case_id, claimant_name, claimant_contact,
                      claimant_address, claimant_income,
+                     income_per_annum, income_per_month,
                      dependants, case_documents, vendor_documents,
                      check_status, statement, triggers,
                      claimant_lat, claimant_lng,
                      created_at, updated_at)
                 VALUES
                     (%s, %s, %s,
+                     %s, %s,
                      %s, %s,
                      %s, %s, %s,
                      %s, %s, %s,
@@ -628,6 +652,7 @@ def insert_claimant_check(case_id,
             """, [
                 case_id, claimant_name, claimant_contact,
                 claimant_address, claimant_income,
+                income_per_annum, income_per_month,
                 json.dumps(dependants or []), json.dumps(case_documents or []),
                 json.dumps(vendor_documents or []),
                 check_status, statement, triggers,
@@ -1063,3 +1088,70 @@ def delete_case(case_id):
     except Exception as e:
         logger.error(f"[incident_case_db] Failed to delete case {case_id}: {e}")
         raise
+
+
+def sync_case_full_status_from_checks(case_id: int, cursor=None) -> str:
+    """
+    Recalculates and updates full_case_status for a case based on check assignments:
+    - If assigned checks >= 1 and current status in ('Not Initiated', 'NI', '', None):
+        Transition status to 'WIP'
+    - If assigned checks == 0 and current status in ('WIP', 'Not Initiated', 'NI', 'Open', '', None):
+        Transition status to 'Not Initiated'
+    Does not alter closed / terminal states (e.g. 'Closed', 'Withdraw', 'Completed').
+    Returns the effective status.
+    """
+    close_cursor = False
+    if cursor is None:
+        cursor = _get_cursor()
+        close_cursor = True
+
+    try:
+        # Check current status
+        cursor.execute("SELECT full_case_status, case_number FROM cases WHERE id = %s", [case_id])
+        row = cursor.fetchone()
+        if not row:
+            return 'Not Initiated'
+        current_status, case_number = row[0], row[1]
+
+        # Do not override terminal statuses
+        if current_status in ('Closed', 'Withdraw', 'Completed', 'Portal Upload'):
+            return current_status
+
+        # Count total assigned checks across all 7 check tables
+        cursor.execute("""
+            SELECT (
+                (SELECT COUNT(*) FROM claimant_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
+                (SELECT COUNT(*) FROM insured_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
+                (SELECT COUNT(*) FROM driver_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
+                (SELECT COUNT(*) FROM spot_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
+                (SELECT COUNT(*) FROM chargesheets WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
+                (SELECT COUNT(*) FROM rti_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
+                (SELECT COUNT(*) FROM rto_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL)
+            ) AS assigned_count
+        """, [case_id] * 7)
+        assigned_row = cursor.fetchone()
+        assigned_count = assigned_row[0] if assigned_row else 0
+
+        target_status = 'WIP' if assigned_count > 0 else 'Not Initiated'
+
+        # If transition is needed:
+        if current_status != target_status:
+            # Transition only between Not Initiated/NI/Open/WIP
+            if current_status in ('Not Initiated', 'NI', 'WIP', 'Open', '', None):
+                cursor.execute(
+                    "UPDATE cases SET full_case_status = %s, updated_at = NOW() WHERE id = %s",
+                    [target_status, case_id]
+                )
+                try:
+                    from users.models import InsuranceCase
+                    InsuranceCase.objects.filter(case_number=case_number).update(full_case_status=target_status)
+                except Exception:
+                    pass
+                logger.info(f"[incident_case_db] Synced case id={case_id} ({case_number}) status: {current_status} -> {target_status} (assigned_checks={assigned_count})")
+                return target_status
+
+        return current_status
+    finally:
+        if close_cursor:
+            cursor.close()
+

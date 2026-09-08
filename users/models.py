@@ -705,27 +705,27 @@ class InsuranceCase(models.Model):
     # =========================================================================
     # Claim Information
     # =========================================================================
-    claim_number = models.CharField(max_length=100, blank=True, db_index=True)
-    client_code = models.CharField(max_length=100, blank=True)
-    client_name = models.CharField(max_length=500, blank=True, help_text='Client / Insurance company name')
+    claim_number = models.CharField(max_length=255, blank=True, help_text='Claim number from incident database')
+    client_name = models.CharField(max_length=255, blank=True, help_text='Client / Insurance company name')
+    client_code = models.CharField(max_length=50, blank=True, help_text='Client short code')
     
     # =========================================================================
     # Dates and Timing
     # =========================================================================
     case_receive_date = models.DateField(null=True, blank=True, help_text='Date case was received')
-    receive_month = models.CharField(max_length=20, blank=True, help_text='Month of receive')
+    receive_month = models.CharField(max_length=50, blank=True, help_text='Month case was received e.g. January 2025')
     closure_date = models.DateField(null=True, blank=True, help_text='Date case was closed')
-    closure_month = models.CharField(max_length=20, blank=True, help_text='Month of closure')
-    case_due_date = models.DateField(null=True, blank=True, help_text='Due date for the case')
+    closure_month = models.CharField(max_length=50, blank=True, help_text='Month case was closed e.g. February 2025')
+    case_due_date = models.DateField(null=True, blank=True, help_text='SLA Due date for the case')
     tat_days = models.IntegerField(null=True, blank=True, help_text='Turn Around Time in days')
-    sla_status = models.CharField(max_length=10, choices=SLA_CHOICES, blank=True, help_text='SLA status - AT or WT')
+    sla_status = models.CharField(max_length=10, choices=SLA_CHOICES, blank=True, help_text='AT (Above TAT) or WT (Within TAT)')
     
     # =========================================================================
     # Case Classification
     # =========================================================================
     investigation_type = models.CharField(max_length=50, choices=INVESTIGATION_TYPE_CHOICES, blank=True, help_text='Full Case / Partial / Reassessment / Connected')
     investigation_report_status = models.CharField(max_length=20, choices=INVESTIGATION_REPORT_CHOICES, default='Open', help_text='Investigation report status')
-    full_case_status = models.CharField(max_length=30, choices=FULL_CASE_STATUS_CHOICES, default='WIP', help_text='Detailed case status')
+    full_case_status = models.CharField(max_length=30, choices=FULL_CASE_STATUS_CHOICES, default='Not Initiated', help_text='Detailed case status')
     special_instructions = models.TextField(blank=True, help_text='Scope of work for this case')
     
     # =========================================================================

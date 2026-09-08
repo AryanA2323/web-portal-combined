@@ -34,19 +34,25 @@ const LoadingButton = ({
         fontWeight: 600,
         fontSize: { xs: '15px', sm: '16px' },
         background: variant === 'contained' 
-          ? 'linear-gradient(135deg, #17539C 0%, #F36F21 100%)'
+          ? '#17539C'
+          : 'transparent',
+        backgroundColor: variant === 'contained' 
+          ? '#17539C'
           : 'transparent',
         boxShadow: variant === 'contained' 
-          ? '0 4px 14px 0 rgba(102, 126, 234, 0.4)'
+          ? '0 4px 14px 0 rgba(23, 83, 156, 0.4)'
           : 'none',
         transition: 'all 0.2s ease',
         '&:hover': {
           transform: disabled || loading ? 'none' : 'translateY(-1px)',
           background: variant === 'contained'
-            ? 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
+            ? '#F36F21'
+            : 'transparent',
+          backgroundColor: variant === 'contained'
+            ? '#F36F21'
             : 'transparent',
           boxShadow: variant === 'contained'
-            ? '0 6px 20px 0 rgba(102, 126, 234, 0.5)'
+            ? '0 6px 20px 0 rgba(243, 111, 33, 0.45)'
             : 'none',
         },
         '&:active': {

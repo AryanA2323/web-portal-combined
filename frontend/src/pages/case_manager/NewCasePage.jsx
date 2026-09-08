@@ -23,6 +23,7 @@ import {
   DialogContent,
   InputAdornment,
   Tooltip,
+  ListSubheader,
 } from '@mui/material';
 import {
   Save,
@@ -34,6 +35,7 @@ import {
   UploadFile as UploadFileIcon,
   LocationOn as LocationOnIcon,
   EditLocation as EditLocationIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -89,7 +91,7 @@ const NewCasePage = () => {
     sla_status: '',
     investigation_type: 'Full Case',
     investigation_report_status: 'Open',
-    full_case_status: 'WIP',
+    full_case_status: 'Not Initiated',
     special_instructions: '',
   });
 
@@ -201,7 +203,8 @@ const NewCasePage = () => {
     claimant_name: '',
     claimant_contact: '',
     claimant_address: '',
-    income: '',
+    income_per_annum: '',
+    income_per_month: '',
     fir_number_claimant: '',
     court_name: '',
     mv_act: '',
@@ -261,7 +264,12 @@ const NewCasePage = () => {
   // Court details dropdown options
   const [courtCities, setCourtCities] = useState([]);
   const [spotPoliceStations, setSpotPoliceStations] = useState([]);
+  const [policeStationSearch, setPoliceStationSearch] = useState('');
   const [chargesheetCourts, setChargesheetCourts] = useState([]);
+
+  const filteredSpotPoliceStations = spotPoliceStations.filter((ps) =>
+    (ps || '').toLowerCase().includes(policeStationSearch.toLowerCase().trim())
+  );
 
   // Fetch clients on mount
   useEffect(() => {
@@ -523,6 +531,23 @@ const NewCasePage = () => {
           if (name === 'driver_name') newData.insured_name = newVal;
           if (name === 'driver_contact') newData.insured_contact = newVal;
           if (name === 'driver_address') newData.insured_address = newVal;
+        }
+      }
+
+      // Auto-calculate monthly/annual income
+      if (name === 'income_per_annum') {
+        const numVal = parseFloat(newVal);
+        if (!isNaN(numVal) && numVal >= 0) {
+          newData.income_per_month = (numVal / 12).toFixed(2).replace(/\.00$/, '');
+        } else if (newVal === '') {
+          newData.income_per_month = '';
+        }
+      } else if (name === 'income_per_month') {
+        const numVal = parseFloat(newVal);
+        if (!isNaN(numVal) && numVal >= 0) {
+          newData.income_per_annum = (numVal * 12).toFixed(2).replace(/\.00$/, '');
+        } else if (newVal === '') {
+          newData.income_per_annum = '';
         }
       }
 
@@ -791,7 +816,7 @@ const NewCasePage = () => {
           case_id: caseId,
           incident_case_db_id: incidentCaseDbId,
           check_type: 'CLAIMANT',
-          check_status: verificationData.claimant_check_status || 'WIP',
+          check_status: verificationData.claimant_check_status || 'Not Initiated',
           statement: verificationData.claimant_statement,
           triggers: verificationData.claimant_triggers,
           claimant_name: verificationData.claimant_name,
@@ -799,7 +824,9 @@ const NewCasePage = () => {
           claimant_address: verificationData.claimant_address,
           latitude: verificationData.claimant_latitude ? parseFloat(verificationData.claimant_latitude) : null,
           longitude: verificationData.claimant_longitude ? parseFloat(verificationData.claimant_longitude) : null,
-          income: verificationData.income ? parseFloat(verificationData.income) : null,
+          income_per_annum: verificationData.income_per_annum ? parseFloat(verificationData.income_per_annum) : null,
+          income_per_month: verificationData.income_per_month ? parseFloat(verificationData.income_per_month) : null,
+          income: verificationData.income_per_annum ? parseFloat(verificationData.income_per_annum) : (verificationData.income_per_month ? parseFloat(verificationData.income_per_month) * 12 : null),
         });
       }
 
@@ -808,7 +835,7 @@ const NewCasePage = () => {
           case_id: caseId,
           incident_case_db_id: incidentCaseDbId,
           check_type: 'INSURED',
-          check_status: verificationData.insured_check_status || 'WIP',
+          check_status: verificationData.insured_check_status || 'Not Initiated',
           statement: verificationData.insured_statement,
           triggers: verificationData.insured_triggers,
           insured_name: verificationData.insured_name,
@@ -828,7 +855,7 @@ const NewCasePage = () => {
           case_id: caseId,
           incident_case_db_id: incidentCaseDbId,
           check_type: 'DRIVER',
-          check_status: verificationData.driver_check_status || 'WIP',
+          check_status: verificationData.driver_check_status || 'Not Initiated',
           statement: verificationData.driver_statement,
           triggers: verificationData.driver_triggers,
           driver_name: verificationData.driver_name,
@@ -848,7 +875,7 @@ const NewCasePage = () => {
           case_id: caseId,
           incident_case_db_id: incidentCaseDbId,
           check_type: 'SPOT',
-          check_status: verificationData.spot_check_status || 'WIP',
+          check_status: verificationData.spot_check_status || 'Not Initiated',
           statement: verificationData.spot_statement,
           triggers: verificationData.spot_triggers,
           time_of_accident: verificationData.time_of_accident,
@@ -868,7 +895,7 @@ const NewCasePage = () => {
           case_id: caseId,
           incident_case_db_id: incidentCaseDbId,
           check_type: 'CHARGESHEET',
-          check_status: verificationData.chargesheet_check_status || 'WIP',
+          check_status: verificationData.chargesheet_check_status || 'Not Initiated',
           statement: verificationData.chargesheet_statement,
           triggers: verificationData.chargesheet_triggers,
           fir_number_claimant: verificationData.fir_number_claimant,
@@ -889,7 +916,7 @@ const NewCasePage = () => {
           case_id: caseId,
           incident_case_db_id: incidentCaseDbId,
           check_type: 'RTO',
-          check_status: verificationData.rto_check_status || 'WIP',
+          check_status: verificationData.rto_check_status || 'Not Initiated',
           rto_name: verificationData.rto_name,
           rto_address: verificationData.rto_address,
           latitude: verificationData.rto_latitude ? parseFloat(verificationData.rto_latitude) : null,
@@ -1804,14 +1831,21 @@ const NewCasePage = () => {
                             </Grid>
                           </Grid>
                         ))}
-                        <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                          <Grid item xs={12} sm={3}>
-                            <TextField fullWidth size="small" label="Income" name="income" type="number"
-                              value={verificationData.income} onChange={handleVerificationChange}
+                        <Grid container spacing={2.5} sx={{ mb: 3 }} alignItems="center">
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Income Per Annum (₹)" name="income_per_annum" type="number"
+                              placeholder="e.g. 600000"
+                              value={verificationData.income_per_annum} onChange={handleVerificationChange}
                               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                           </Grid>
-                          <Grid item xs={12} sm={3} sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Button startIcon={<AddIcon />} onClick={handleAddDependent} variant="outlined" size="small" sx={{ borderRadius: '8px' }}>Add Dependent</Button>
+                          <Grid item xs={12} sm={4}>
+                            <TextField fullWidth size="small" label="Income Per Month (₹)" name="income_per_month" type="number"
+                              placeholder="e.g. 50000"
+                              value={verificationData.income_per_month} onChange={handleVerificationChange}
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                          </Grid>
+                          <Grid item xs={12} sm={4} sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Button startIcon={<AddIcon />} onClick={handleAddDependent} variant="outlined" size="small" sx={{ borderRadius: '8px', py: 0.9, px: 2, fontWeight: 600, textTransform: 'none' }}>Add Dependent</Button>
                           </Grid>
                         </Grid>
 
@@ -2346,14 +2380,95 @@ const NewCasePage = () => {
                           </Grid>
                           <Grid item xs={12} sm={6}>
                             <FormControl fullWidth size="small" required>
-                              <Select name="police_station" value={verificationData.police_station}
+                              <Select
+                                name="police_station"
+                                value={verificationData.police_station}
                                 displayEmpty
                                 renderValue={(selected) => selected || <span className="required-placeholder">Select Police Station</span>}
                                 onChange={handleVerificationChange}
+                                onClose={() => setPoliceStationSearch('')}
                                 sx={{ borderRadius: '8px' }}
-                                disabled={!verificationData.spot_city}>
-                                <MenuItem value=""><em>Select Police Station</em></MenuItem>
-                                {spotPoliceStations.map(ps => <MenuItem key={ps} value={ps}>{ps}</MenuItem>)}
+                                disabled={!verificationData.spot_city}
+                                MenuProps={{
+                                  autoFocus: false,
+                                  PaperProps: {
+                                    sx: {
+                                      maxHeight: 350,
+                                      borderRadius: '8px',
+                                    },
+                                  },
+                                }}
+                              >
+                                <ListSubheader
+                                  sx={{
+                                    p: 1,
+                                    bgcolor: '#ffffff',
+                                    position: 'sticky',
+                                    top: 0,
+                                    zIndex: 2,
+                                    lineHeight: 'normal',
+                                  }}
+                                >
+                                  <TextField
+                                    size="small"
+                                    fullWidth
+                                    autoFocus
+                                    placeholder="Search police station..."
+                                    value={policeStationSearch}
+                                    onChange={(e) => setPoliceStationSearch(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key !== 'Escape') {
+                                        e.stopPropagation();
+                                      }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    InputProps={{
+                                      startAdornment: (
+                                        <InputAdornment position="start">
+                                          <SearchIcon sx={{ fontSize: 18, color: '#94a3b8' }} />
+                                        </InputAdornment>
+                                      ),
+                                      endAdornment: policeStationSearch ? (
+                                        <InputAdornment position="end">
+                                          <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setPoliceStationSearch('');
+                                            }}
+                                          >
+                                            <CloseIcon sx={{ fontSize: 16 }} />
+                                          </IconButton>
+                                        </InputAdornment>
+                                      ) : null,
+                                    }}
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        borderRadius: '6px',
+                                        fontSize: '13px',
+                                        height: '36px',
+                                        bgcolor: '#f8fafc',
+                                      },
+                                    }}
+                                  />
+                                </ListSubheader>
+
+                                <MenuItem value="">
+                                  <em>Select Police Station</em>
+                                </MenuItem>
+                                {filteredSpotPoliceStations.length > 0 ? (
+                                  filteredSpotPoliceStations.map((ps) => (
+                                    <MenuItem key={ps} value={ps}>
+                                      {ps}
+                                    </MenuItem>
+                                  ))
+                                ) : (
+                                  <MenuItem disabled value="">
+                                    <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic', px: 1 }}>
+                                      No police station found
+                                    </Typography>
+                                  </MenuItem>
+                                )}
                               </Select>
                             </FormControl>
                           </Grid>

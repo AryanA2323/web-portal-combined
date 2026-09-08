@@ -325,17 +325,17 @@ const LegalReviewPage = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'PENDING':
-        return '#ff922b';
+        return '#ea580c';
       case 'ASSIGNED':
-        return '#4dabf7';
+        return '#0284c7';
       case 'REASSIGNED':
-        return '#845ef7';
+        return '#7c3aed';
       case 'ACCEPTED':
-        return '#51cf66';
+        return '#16a34a';
       case 'REJECTED':
-        return '#ff6b6b';
+        return '#dc2626';
       default:
-        return '#868e96';
+        return '#475569';
     }
   };
 
@@ -367,31 +367,48 @@ const LegalReviewPage = () => {
     return date.toLocaleDateString();
   };
 
-  // Stats data for cards
+  // Stats data for cards with interactive filters
   const statsData = [
     {
       title: 'Total Reports',
       value: stats.total,
       icon: Description,
       iconBgColor: '#e3f2fd',
+      onClick: () => {
+        setStatusFilter('all');
+        setCategoryFilter('all');
+        setPage(0);
+      },
     },
     {
       title: 'Pending Review',
       value: stats.pending + stats.assigned + (stats.reassigned || 0),
       icon: Schedule,
       iconBgColor: '#fff3e0',
+      onClick: () => {
+        setStatusFilter('pending');
+        setPage(0);
+      },
     },
     {
       title: 'Approved Reports',
       value: stats.accepted,
       icon: CheckCircle,
       iconBgColor: '#e8f5e9',
+      onClick: () => {
+        setStatusFilter('accepted');
+        setPage(0);
+      },
     },
     {
       title: 'Rejected Reports',
       value: stats.rejected,
       icon: Cancel,
       iconBgColor: '#ffebee',
+      onClick: () => {
+        setStatusFilter('rejected');
+        setPage(0);
+      },
     },
   ];
 
@@ -417,48 +434,33 @@ const LegalReviewPage = () => {
           px: { xs: 2, md: 3 },
           borderRadius: '0 0 16px 16px',
           boxSizing: 'border-box',
-          background: 'linear-gradient(120deg, #fefce8 0%, #fef3c7 25%, #e0f2fe 65%, #e0e7ff 100%)',
-          boxShadow: '0 4px 16px rgba(148, 163, 184, 0.08)',
+          bgcolor: '#2566b4',
+          boxShadow: '0 4px 16px rgba(37, 102, 180, 0.20)',
           display: 'flex',
           flexDirection: { xs: 'column', md: 'row' },
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: 1.5,
           position: 'relative',
-          overflow: 'hidden',
-          border: '1px solid rgba(226, 232, 240, 0.9)',
+          border: '1px solid #1e5597',
           borderTop: 'none',
         }}
       >
-        {/* Multi-Tone Ambient Glowing Mesh Accents */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'radial-gradient(circle at 10% 20%, rgba(245, 158, 11, 0.18) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.20) 0%, transparent 40%)',
-            zIndex: 1,
-            pointerEvents: 'none',
-          }}
-        />
-
         {/* Left Side: Title & Gavel Icon */}
-        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box
             sx={{
               width: 44,
               height: 44,
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+              bgcolor: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(217, 119, 6, 0.18)',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
             }}
           >
-            <Gavel sx={{ fontSize: 26, color: '#b45309' }} />
+            <Gavel sx={{ fontSize: 26, color: '#17539C' }} />
           </Box>
           <Typography
             variant="h3"
@@ -466,13 +468,11 @@ const LegalReviewPage = () => {
               fontWeight: 800,
               fontSize: { xs: '1.5rem', md: '1.9rem' },
               letterSpacing: '-0.8px',
-              background: 'linear-gradient(135deg, #0f172a 0%, #78350f 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: '#ffffff',
               whiteSpace: 'nowrap',
             }}
           >
-            Legal Review
+            Quality Analyst Review
           </Typography>
         </Box>
 
@@ -536,7 +536,7 @@ const LegalReviewPage = () => {
         <Box sx={{ p: 2.5, borderBottom: '1px solid #e0e0e0' }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#333' }}>
-              Legal Review Queue
+              Quality Analyst Review Queue
             </Typography>
 
             {/* Status Filter */}
@@ -731,12 +731,16 @@ const LegalReviewPage = () => {
                           label={getStatusDisplayLabel(row.status)}
                           size="small"
                           sx={{
-                            backgroundColor: `${getStatusColor(row.status)}15`,
+                            backgroundColor: `${getStatusColor(row.status)}18`,
                             color: getStatusColor(row.status),
-                            fontWeight: 500,
-                            fontSize: '12px',
-                            height: '26px',
-                            borderRadius: '6px',
+                            fontWeight: 800,
+                            fontSize: '13px',
+                            height: '28px',
+                            borderRadius: '8px',
+                            border: `1.5px solid ${getStatusColor(row.status)}`,
+                            boxShadow: `0 1px 3px ${getStatusColor(row.status)}20`,
+                            letterSpacing: '0.2px',
+                            px: 0.5,
                             '& .MuiChip-icon': {
                               color: getStatusColor(row.status),
                             },
@@ -916,9 +920,15 @@ const LegalReviewPage = () => {
                 <Chip
                   label={`Status: ${getStatusDisplayLabel(selectedReport.status)}`}
                   sx={{
-                    backgroundColor: `${getStatusColor(selectedReport.status)}15`,
+                    backgroundColor: `${getStatusColor(selectedReport.status)}18`,
                     color: getStatusColor(selectedReport.status),
-                    fontWeight: 600,
+                    fontWeight: 800,
+                    fontSize: '13px',
+                    height: '28px',
+                    borderRadius: '8px',
+                    border: `1.5px solid ${getStatusColor(selectedReport.status)}`,
+                    boxShadow: `0 1px 3px ${getStatusColor(selectedReport.status)}20`,
+                    letterSpacing: '0.2px',
                   }}
                 />
                 {selectedReport.assigned_qc_name && (

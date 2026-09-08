@@ -73,7 +73,7 @@ const ADMIN_PAGES = [
   { path: '/case_manager/cases', label: 'Cases' },
   { path: '/case_manager/closed-cases', label: 'Closed Cases' },
   { path: '/case_manager/ai-case-review', label: 'AI Case Review' },
-  { path: '/case_manager/legal-review', label: 'Legal Review' },
+  { path: '/case_manager/legal-review', label: 'Quality Analyst Review' },
   { path: '/case_manager/reports', label: 'Reports' },
   { path: '/case_manager/audit-logs', label: 'Audit Logs' },
   { path: '/case_manager/settings', label: 'Settings' },

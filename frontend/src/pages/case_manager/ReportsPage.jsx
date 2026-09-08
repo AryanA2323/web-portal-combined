@@ -407,7 +407,7 @@ const ReportsPage = () => {
 
   return (
     <CaseManagerLayout disablePadding>
-      {/* Top Header Section - Reports Theme */}
+      {/* Top Header Section */}
       <Box
         sx={{
           minHeight: 110,
@@ -416,47 +416,32 @@ const ReportsPage = () => {
           px: { xs: 2, md: 3 },
           borderRadius: '0 0 16px 16px',
           boxSizing: 'border-box',
-          background: 'linear-gradient(120deg, #ecfeff 0%, #cff4fc 30%, #e0f2fe 65%, #e0e7ff 100%)',
-          boxShadow: '0 4px 16px rgba(148, 163, 184, 0.08)',
+          bgcolor: '#2566b4',
+          boxShadow: '0 4px 16px rgba(37, 102, 180, 0.20)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: 1.5,
           position: 'relative',
-          overflow: 'hidden',
-          border: '1px solid rgba(226, 232, 240, 0.9)',
+          border: '1px solid #1e5597',
           borderTop: 'none',
         }}
       >
-        {/* Multi-Tone Ambient Glowing Mesh Accents */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'radial-gradient(circle at 10% 20%, rgba(6, 182, 212, 0.18) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(56, 189, 248, 0.20) 0%, transparent 40%)',
-            zIndex: 1,
-            pointerEvents: 'none',
-          }}
-        />
-
         {/* Left Side: Title & Description Icon */}
-        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box
             sx={{
               width: 44,
               height: 44,
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, #cff4fc 0%, #a5f3fc 100%)',
+              bgcolor: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(8, 145, 178, 0.18)',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
             }}
           >
-            <Description sx={{ fontSize: 26, color: '#0891b2' }} />
+            <Description sx={{ fontSize: 26, color: '#17539C' }} />
           </Box>
           <Typography
             variant="h3"
@@ -464,9 +449,7 @@ const ReportsPage = () => {
               fontWeight: 800,
               fontSize: { xs: '1.5rem', md: '1.9rem' },
               letterSpacing: '-0.8px',
-              background: 'linear-gradient(135deg, #0f172a 0%, #164e63 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: '#ffffff',
               whiteSpace: 'nowrap',
             }}
           >

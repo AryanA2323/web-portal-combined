@@ -617,14 +617,14 @@ _CHECK_DETAIL_COLUMNS = {
     'claimant_checks': {
         'select': '''cc.id, cc.case_id, cc.check_status,
                      cc.claimant_name, cc.claimant_contact, cc.claimant_address,
-                     cc.claimant_income, cc.statement, cc.triggers, cc.vendor_evidence AS evidence,
+                     cc.claimant_income, cc.income_per_annum, cc.income_per_month, cc.statement, cc.triggers, cc.vendor_evidence AS evidence,
                      cc.vendor_documents AS vendor_documents, cc.case_documents AS case_documents,
                      cc.questionnaire, cc.vendor_feedback, cc.negative_status,
                      cc.admin_feedback, cc.is_reassigned,
                      cc.claimant_lat, cc.claimant_lng''',
         'alias': 'cc',
         'fields': ['id','case_id','check_status','claimant_name','claimant_contact',
-                    'claimant_address','claimant_income','statement','triggers','evidence',
+                    'claimant_address','claimant_income','income_per_annum','income_per_month','statement','triggers','evidence',
                     'vendor_documents','case_documents','questionnaire','vendor_feedback','negative_status',
                     'admin_feedback','is_reassigned',
                     'claimant_lat','claimant_lng'],
@@ -1369,8 +1369,9 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
     try:
         with connections['default'].cursor() as cursor:
             where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
+            extra_cols = ", advocate_status" if table == 'chargesheets' else ""
             cursor.execute(f"""
-                SELECT id, {evidence_column} FROM {table}
+                SELECT id, {evidence_column}{extra_cols} FROM {table}
                 WHERE case_id = %s AND {where_vendor}
             """, [case_id, *vendor_params])
             check_row = cursor.fetchone()
@@ -1378,6 +1379,26 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
                 return 404, {"error": "Check not found or not assigned to you"}
             check_id = check_row[0]
             existing_evidence = check_row[1]
+            advocate_status_db = check_row[2] if (table == 'chargesheets' and len(check_row) > 2) else ''
+
+            if table == 'chargesheets':
+                def _cs_status_idx(s):
+                    val = (s or '').strip().lower()
+                    if not val or val in ('not initiated', 'wip'): return 0
+                    if val in ('not found',): return 1
+                    if val in ('applied for cs',): return 2
+                    if val in ('cs recieved to adv', 'cs received to adv'): return 3
+                    if val in ('dispatched',): return 4
+                    return 0
+
+                adv_idx = _cs_status_idx(advocate_status_db)
+                has_existing = bool(parse_json_list(existing_evidence))
+                if photo_category == 'applied_cs' and adv_idx >= 2 and has_existing:
+                    return 400, {"error": "Photos for 'Applied for CS' have already been submitted and cannot be added/modified."}
+                elif photo_category == 'cs_received' and adv_idx >= 3 and has_existing:
+                    return 400, {"error": "Photos for 'CS Received to adv' have already been submitted and cannot be added/modified."}
+                elif photo_category == 'dispatched' and adv_idx >= 4 and has_existing:
+                    return 400, {"error": "Photos for 'Dispatched' have already been submitted and cannot be added/modified."}
 
             # Fetch check location for validation using proper table columns
             case_location = None
@@ -1450,7 +1471,7 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
                     pass
                     
         if latitude is None or longitude is None:
-            errors.append(f"{f.name}: Missing GPS coordinates")
+            errors.append(f"{f.name}: Missing GPS coordinates. Please ensure GPS/Location is enabled on your device.")
             continue
             
         if case_location:
@@ -1460,7 +1481,11 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
             distance_meters = geodesic(case_coords, photo_location).meters
             
             if distance_meters > 1000 and table not in ['rto_checks', 'rti_checks', 'chargesheet_checks', 'chargesheets']:
-                errors.append(f"Location mismatch: The uploaded photo was taken {distance_meters:.0f}m away from the check location (maximum allowed is 1000m). Please upload from the correct location.")
+                if distance_meters >= 1000:
+                    dist_str = f"{distance_meters / 1000:.1f} km"
+                else:
+                    dist_str = f"{distance_meters:.0f} meters"
+                errors.append(f"Location Mismatch: The uploaded photo was taken {dist_str} away from the check location (maximum allowed is 1 km). Please take the photo at the assigned check location.")
                 continue
                 
         # If valid, proceed to save
@@ -1728,6 +1753,24 @@ def vendor_check_status_update(request: HttpRequest, case_id: int, check_type: s
             old_status = old_status_row[0] if old_status_row else ''
 
             if table == 'chargesheets':
+                def _get_cs_status_index(s):
+                    val = (s or '').strip().lower()
+                    if not val or val in ('not initiated', 'wip'):
+                        return 0
+                    if val in ('not found',):
+                        return 1
+                    if val in ('applied for cs',):
+                        return 2
+                    if val in ('cs recieved to adv', 'cs received to adv'):
+                        return 3
+                    if val in ('dispatched',):
+                        return 4
+                    return 0
+
+                old_idx = _get_cs_status_index(old_status)
+                new_idx = _get_cs_status_index(db_status)
+                if new_idx < old_idx:
+                    return 400, {"error": "Status flow is one directional only. Cannot revert to a previous status."}
 
                 cursor.execute(
                     f"UPDATE {table} SET advocate_status = %s, advocate_remark = %s, updated_at = NOW() WHERE id = %s",
@@ -1928,8 +1971,9 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
     try:
         with connections['default'].cursor() as cursor:
             where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
+            extra_cols = ", advocate_status" if table == 'chargesheets' else ""
             cursor.execute(f"""
-                SELECT id, {evidence_column} FROM {table}
+                SELECT id, {evidence_column}{extra_cols} FROM {table}
                 WHERE case_id = %s AND {where_vendor}
             """, [case_id, *vendor_params])
             check_row = cursor.fetchone()
@@ -1938,6 +1982,25 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
 
             check_id = check_row[0]
             evidence_list = parse_json_list(check_row[1])
+            advocate_status_db = check_row[2] if (table == 'chargesheets' and len(check_row) > 2) else ''
+
+            if table == 'chargesheets':
+                def _cs_status_idx(s):
+                    val = (s or '').strip().lower()
+                    if not val or val in ('not initiated', 'wip'): return 0
+                    if val in ('not found',): return 1
+                    if val in ('applied for cs',): return 2
+                    if val in ('cs recieved to adv', 'cs received to adv'): return 3
+                    if val in ('dispatched',): return 4
+                    return 0
+
+                adv_idx = _cs_status_idx(advocate_status_db)
+                if photo_category == 'applied_cs' and adv_idx >= 2:
+                    return 400, {"error": "Photos for 'Applied for CS' have already been submitted and cannot be deleted."}
+                elif photo_category == 'cs_received' and adv_idx >= 3:
+                    return 400, {"error": "Photos for 'CS Received to adv' have already been submitted and cannot be deleted."}
+                elif photo_category == 'dispatched' and adv_idx >= 4:
+                    return 400, {"error": "Photos for 'Dispatched' have already been submitted and cannot be deleted."}
 
             delete_index = next(
                 (idx for idx, item in enumerate(evidence_list) if extract_evidence_filename(item) == filename),
@@ -2419,8 +2482,12 @@ def upload_evidence(
                 
                 # Reject if distance > 1000 meters
                 if distance_meters > 1000:
+                    if distance_meters >= 1000:
+                        dist_str = f"{distance_meters / 1000:.1f} km"
+                    else:
+                        dist_str = f"{distance_meters:.0f} meters"
                     errors.append(
-                        f"Location mismatch: The uploaded photo {file.name} was taken {distance_meters:.0f}m away from the check location (maximum allowed distance is 1000m)."
+                        f"Location Mismatch: The uploaded photo was taken {dist_str} away from the check location (maximum allowed is 1 km). Please take the photo at the assigned check location."
                     )
                     logger.warning(
                         f"[Evidence Upload] Photo {file.name} rejected: "

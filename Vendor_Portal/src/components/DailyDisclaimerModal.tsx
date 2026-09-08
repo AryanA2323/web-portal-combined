@@ -40,6 +40,10 @@ export const DailyDisclaimerModal: React.FC = () => {
     }
   };
 
+  if (!visible) {
+    return null;
+  }
+
   return (
     <Modal
       visible={visible}

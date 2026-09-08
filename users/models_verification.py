@@ -64,6 +64,8 @@ class CaseVerification(models.Model):
     claimant_contact = models.CharField(max_length=20, blank=True)
     claimant_address = models.TextField(blank=True)
     income = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    income_per_annum = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    income_per_month = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     fir_number_claimant = models.CharField(max_length=100, blank=True)
     court_name = models.CharField(max_length=500, blank=True)
     mv_act = models.CharField(max_length=500, blank=True)

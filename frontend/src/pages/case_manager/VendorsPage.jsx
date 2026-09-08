@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -176,6 +177,7 @@ const VendorCard = ({ vendor, onViewProfile }) => {
 };
 
 const VendorsPage = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -218,10 +220,36 @@ const VendorsPage = () => {
   useAutoRefresh(fetchVendors);
 
   const statsData = [
-    { title: 'Total Business Partners', value: stats.total.toString(), icon: LocationOn, color: '#3498db', bgColor: '#e3f2fd' },
-    { title: 'Active Business Partners', value: stats.active.toString(), icon: TrendingUp, color: '#27ae60', bgColor: '#e8f5e9' },
-    { title: 'Avg Rating', value: stats.avgRating.toString(), icon: Star, color: '#f39c12', bgColor: '#fff3e0' },
-    { title: 'Active Cases', value: stats.activeCases.toString(), icon: TrendingUp, color: '#9b59b6', bgColor: '#f3e5f5' },
+    {
+      title: 'Total Business Partners',
+      value: stats.total.toString(),
+      icon: LocationOn,
+      color: '#3498db',
+      bgColor: '#e3f2fd',
+      onClick: () => setSearchTerm(''),
+    },
+    {
+      title: 'Active Business Partners',
+      value: stats.active.toString(),
+      icon: TrendingUp,
+      color: '#27ae60',
+      bgColor: '#e8f5e9',
+    },
+    {
+      title: 'Avg Rating',
+      value: stats.avgRating.toString(),
+      icon: Star,
+      color: '#f39c12',
+      bgColor: '#fff3e0',
+    },
+    {
+      title: 'Active Cases',
+      value: stats.activeCases.toString(),
+      icon: TrendingUp,
+      color: '#9b59b6',
+      bgColor: '#f3e5f5',
+      onClick: () => navigate('/case_manager/cases?status=WIP'),
+    },
   ];
 
   const filteredVendors = vendors.filter(

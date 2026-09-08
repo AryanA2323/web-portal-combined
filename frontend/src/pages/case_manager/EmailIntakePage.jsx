@@ -33,37 +33,8 @@ import CaseManagerLayout from './components/CaseManagerLayout';
 import StatCard from './components/StatCard';
 import { NotificationBell } from '../../components/case_manager';
 
-// Demo data for stats
-const statsData = [
-  {
-    title: 'Total Email Cases',
-    value: 387,
-    change: 15.9,
-    icon: Email,
-    iconBgColor: '#e3f2fd',
-  },
-  {
-    title: 'Parsed Cases',
-    value: 286,
-    change: 12.7,
-    icon: Warning,
-    iconBgColor: '#fff3e0',
-  },
-  {
-    title: 'Pending Review',
-    value: 72,
-    change: 12.8,
-    icon: Schedule,
-    iconBgColor: '#fff8e1',
-  },
-  {
-    title: 'Unable to Parse',
-    value: 29,
-    change: -9.4,
-    icon: Warning,
-    iconBgColor: '#ffebee',
-  },
-];
+// Demo data
+
 
 // Demo data for email intake table
 const emailIntakeData = [
@@ -187,6 +158,54 @@ const EmailIntakePage = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState([]);
 
+  // Stats data with click filter handlers
+  const statsData = [
+    {
+      title: 'Total Email Cases',
+      value: 387,
+      change: 15.9,
+      icon: Email,
+      iconBgColor: '#e3f2fd',
+      onClick: () => {
+        setStatusFilter('all');
+        setPage(0);
+      },
+    },
+    {
+      title: 'Parsed Cases',
+      value: 286,
+      change: 12.7,
+      icon: Warning,
+      iconBgColor: '#fff3e0',
+      onClick: () => {
+        setStatusFilter('parsed');
+        setPage(0);
+      },
+    },
+    {
+      title: 'Pending Review',
+      value: 72,
+      change: 12.8,
+      icon: Schedule,
+      iconBgColor: '#fff8e1',
+      onClick: () => {
+        setStatusFilter('pending');
+        setPage(0);
+      },
+    },
+    {
+      title: 'Unable to Parse',
+      value: 29,
+      change: -9.4,
+      icon: Warning,
+      iconBgColor: '#ffebee',
+      onClick: () => {
+        setStatusFilter('unable');
+        setPage(0);
+      },
+    },
+  ];
+
   const handleSelectAll = (event) => {
     if (event.target.checked) {
       const newSelected = emailIntakeData.map((n) => n.id);
@@ -237,15 +256,16 @@ const EmailIntakePage = () => {
 
   const getStatusChip = (status, statusColor) => {
     const isError = status === 'Unable to Parse';
+    const effectiveColor = isError ? '#dc2626' : (statusColor === '#48bb78' ? '#16a34a' : (statusColor || '#ea580c'));
     return (
       <Chip
         icon={
           <Box
             sx={{
-              width: 6,
-              height: 6,
+              width: 8,
+              height: 8,
               borderRadius: '50%',
-              backgroundColor: isError ? '#f56565' : statusColor,
+              backgroundColor: effectiveColor,
               ml: 1,
             }}
           />
@@ -253,13 +273,15 @@ const EmailIntakePage = () => {
         label={status}
         size="small"
         sx={{
-          backgroundColor: isError ? '#fff5f5' : `${statusColor}15`,
-          color: isError ? '#c53030' : statusColor === '#48bb78' ? '#22543d' : '#c05621',
-          fontWeight: 500,
-          fontSize: '12px',
-          height: '26px',
-          borderRadius: '6px',
-          border: isError ? '1px solid #feb2b2' : 'none',
+          backgroundColor: `${effectiveColor}18`,
+          color: effectiveColor,
+          fontWeight: 800,
+          fontSize: '13px',
+          height: '28px',
+          borderRadius: '8px',
+          border: `1.5px solid ${effectiveColor}`,
+          boxShadow: `0 1px 3px ${effectiveColor}20`,
+          letterSpacing: '0.2px',
           '& .MuiChip-icon': {
             marginLeft: '8px',
           },

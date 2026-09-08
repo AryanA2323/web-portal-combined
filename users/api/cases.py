@@ -601,6 +601,62 @@ class RecentActivitySchema(Schema):
     time: str
 
 
+class AgingCaseItemSchema(Schema):
+    """Schema for individual case item in aging analysis."""
+    id: int
+    case_number: str
+    claim_number: str = ''
+    client_name: str = ''
+    category: str = 'MACT'
+    investigation_type: str = ''
+    case_receive_date: str = ''
+    case_due_date: str = ''
+    days_remaining: int
+    status_text: str = ''
+
+
+class AgingBucketSchema(Schema):
+    """Schema for each TAT bucket (beyond, approaching, within)."""
+    count: int
+    percentage: float
+    cases: List[AgingCaseItemSchema]
+
+
+class AgingAnalysisResponseSchema(Schema):
+    """Schema for full aging analysis response."""
+    total_active: int
+    beyond_tat: AgingBucketSchema
+    approaching_tat: AgingBucketSchema
+    within_tat: AgingBucketSchema
+
+
+class VendorReviewItemSchema(Schema):
+    """Schema for individual pending review item in vendor review queue."""
+    id: int
+    case_number: str
+    vendor_name: str = ''
+    checks_submitted: int = 0
+    total_checks: int = 0
+    checks_display: str = ''
+    tat_status: str = 'Within TAT'  # 'Beyond TAT' | 'Approaching TAT' | 'Within TAT' | 'Normal'
+    tat_text: str = ''
+    hours_remaining: Optional[float] = None
+    days_remaining: int = 0
+
+
+class VendorReviewQueueResponseSchema(Schema):
+    """Schema for vendor review queue response."""
+    total_pending_checks: int
+    immediate_attention_count: int
+    beyond_tat_count: int
+    approaching_tat_count: int
+    normal_count: int
+    within_tat_count: Optional[int] = 0
+    total_pending_reviews: int
+    top_reviews: List[VendorReviewItemSchema]
+
+
+
 class AuditLogEntrySchema(Schema):
     """Audit log entry for admin portal."""
     event_time: datetime
@@ -608,6 +664,8 @@ class AuditLogEntrySchema(Schema):
     actor: str
     description: str
     case_number: Optional[str] = None
+    client_name: Optional[str] = None
+    is_archived: bool = False
     source: str
 
 
@@ -639,7 +697,7 @@ class CreateCaseSchema(Schema):
     sla_status: str = ''  # AT or WT
     investigation_type: str = ''   # Full Case / Partial Case / Reassessment / Connected Case
     investigation_report_status: str = 'Open'
-    full_case_status: str = 'WIP'
+    full_case_status: str = 'Not Initiated'
     special_instructions: str = ''
     
     # Basic / system fields
@@ -716,9 +774,9 @@ class ReassignVendorResponse(Schema):
     """Response schema for vendor reassignment."""
     case_id: int
     check_type: str
-    previous_vendor_id: Optional[int]
-    new_vendor_id: Optional[int]
-    message: str
+    previous_vendor_id: Optional[int] = None
+    new_vendor_id: Optional[int] = None
+    message: str = "Vendor reassignment successful"
 
 
 class UpdateCaseStatusSchema(Schema):
@@ -862,6 +920,8 @@ def get_cases_incident_db(
     investigation_type: Optional[str] = None,
     investigation_report_status: Optional[str] = None,
     assigned_vendor_name: Optional[str] = None,
+    is_overdue: Optional[bool] = None,
+    review_pending: Optional[bool] = None,
 ):
     """
     Returns paginated cases from incident_case_db.cases joined with all 5 check
@@ -876,8 +936,22 @@ def get_cases_incident_db(
             conditions, params = [], []
 
             if full_case_status:
-                conditions.append("c.full_case_status = %s")
-                params.append(full_case_status)
+                if full_case_status in ('Not Initiated', 'NI'):
+                    conditions.append("c.full_case_status IN ('Not Initiated', 'NI')")
+                elif full_case_status in ('pending_review', 'Pending Review'):
+                    review_pending = True
+                else:
+                    conditions.append("c.full_case_status = %s")
+                    params.append(full_case_status)
+
+            if review_pending:
+                conditions.append(
+                    "("
+                    "EXISTS (SELECT 1 FROM claimant_checks cc WHERE cc.case_id = c.id AND cc.check_status IN ('Under Verification', 'Submitted')) OR "
+                    "EXISTS (SELECT 1 FROM insured_checks ic WHERE ic.case_id = c.id AND ic.check_status IN ('Under Verification', 'Submitted')) OR "
+                    "EXISTS (SELECT 1 FROM driver_checks dc WHERE dc.case_id = c.id AND dc.check_status IN ('Under Verification', 'Submitted'))"
+                    ")"
+                )
 
             if investigation_type:
                 conditions.append("c.investigation_type = %s")
@@ -886,6 +960,14 @@ def get_cases_incident_db(
             if investigation_report_status:
                 conditions.append("c.investigation_report_status = %s")
                 params.append(investigation_report_status)
+
+            if is_overdue:
+                conditions.append(
+                    "((c.case_due_date IS NOT NULL AND c.case_due_date < CURRENT_DATE) OR "
+                    "(c.case_due_date IS NULL AND c.case_receive_date IS NOT NULL AND c.tat_days IS NOT NULL AND "
+                    "(c.case_receive_date + (c.tat_days || ' days')::interval)::date < CURRENT_DATE)) "
+                    "AND (c.full_case_status IS NULL OR c.full_case_status NOT IN ('Closed', 'Withdraw', 'Portal Upload'))"
+                )
 
             if assigned_vendor_name:
                 conditions.append("EXISTS (SELECT 1 FROM claimant_checks cc LEFT JOIN users_vendor uv ON uv.id = cc.assigned_vendor_id WHERE cc.case_id = c.id AND uv.company_name ILIKE %s) OR "
@@ -949,7 +1031,9 @@ def get_cases_incident_db(
                        cc.claimant_name  AS name,
                        cc.claimant_contact AS contact,
                        cc.claimant_address AS location,
-                       CAST(cc.claimant_income AS TEXT) AS key_info,
+                       cc.income_per_annum,
+                       cc.income_per_month,
+                       cc.claimant_income,
                        cc.statement,
                        cc.triggers AS triggers,
                        cc.assigned_vendor_id,
@@ -961,18 +1045,41 @@ def get_cases_incident_db(
             """, case_ids)
             for r in cursor.fetchall():
                 cid = r[0]
+                inc_pa = r[5]
+                inc_pm = r[6]
+                legacy_inc = r[7]
+                inc_parts = []
+                if inc_pa is not None:
+                    try:
+                        val_pa = float(inc_pa)
+                        inc_parts.append(f"PA: ₹{val_pa:,.0f}" if val_pa.is_integer() else f"PA: ₹{val_pa:,.2f}")
+                    except (ValueError, TypeError):
+                        inc_parts.append(f"PA: ₹{inc_pa}")
+                if inc_pm is not None:
+                    try:
+                        val_pm = float(inc_pm)
+                        inc_parts.append(f"PM: ₹{val_pm:,.0f}" if val_pm.is_integer() else f"PM: ₹{val_pm:,.2f}")
+                    except (ValueError, TypeError):
+                        inc_parts.append(f"PM: ₹{inc_pm}")
+                if not inc_parts and legacy_inc is not None:
+                    try:
+                        val_leg = float(legacy_inc)
+                        inc_parts.append(f"₹{val_leg:,.0f}" if val_leg.is_integer() else f"₹{val_leg:,.2f}")
+                    except (ValueError, TypeError):
+                        inc_parts.append(f"₹{legacy_inc}")
+
                 if cid in checks_by_case:
                     checks_by_case[cid].append({
                         "type": "Claimant Check",
-                        "check_status": "Not Initiated" if not r[8] else (r[1] or "WIP"),
+                        "check_status": "Not Initiated" if not r[10] else (r[1] or "WIP"),
                         "name": r[2] or "—",
                         "contact": r[3] or "—",
                         "location": r[4] or "—",
-                        "key_info": f"Income: {r[5]}" if r[5] else "—",
-                        "statement": (r[6] or r[7] or "")[:120],
-                        "assigned_vendor_id": r[8],
-                        "assigned_vendor_name": r[9],
-                        "negative_status": r[10] or "",
+                        "key_info": f"Income: {' | '.join(inc_parts)}" if inc_parts else "—",
+                        "statement": (r[8] or r[9] or "")[:120],
+                        "assigned_vendor_id": r[10],
+                        "assigned_vendor_name": r[11],
+                        "negative_status": r[12] or "",
                     })
 
             # ─── insured_checks & driver_checks ─────────────────────────────
@@ -1523,7 +1630,7 @@ def _fetch_ai_case_review_case_context(case_id: int) -> dict:
         ]
     )
 
-    # Detect whether the case has a spot check
+    # Detect whether the case has non-statement checks (spot check, chargesheet, RTI, RTO)
     has_spot_check = False
     try:
         with connections['default'].cursor() as cursor:
@@ -1531,6 +1638,56 @@ def _fetch_ai_case_review_case_context(case_id: int) -> dict:
             has_spot_check = cursor.fetchone() is not None
     except Exception:
         pass
+
+    has_chargesheet = False
+    chargesheet_data = {}
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT court_name, fir_number, mv_act, fir_delay_days, bsn_section, ipc,
+                       statement, triggers, advocate_status, negative_status
+                FROM chargesheets
+                WHERE case_id = %s
+                LIMIT 1
+                """,
+                [case_id],
+            )
+            cs_row = cursor.fetchone()
+            if cs_row:
+                has_chargesheet = True
+                chargesheet_data = {
+                    "court_name": cs_row[0] or "",
+                    "fir_number": cs_row[1] or "",
+                    "mv_act": cs_row[2] or "",
+                    "fir_delay_days": cs_row[3],
+                    "bsn_section": cs_row[4] or "",
+                    "ipc": cs_row[5] or "",
+                    "statement": cs_row[6] or "",
+                    "triggers": cs_row[7] or "",
+                    "advocate_status": cs_row[8] or "",
+                    "negative_status": cs_row[9] or "",
+                }
+    except Exception as exc:
+        logger.warning(f"Failed to fetch chargesheet context for case {case_id}: {exc}")
+
+    has_rti_check = False
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("SELECT 1 FROM rti_checks WHERE case_id = %s LIMIT 1", [case_id])
+            has_rti_check = cursor.fetchone() is not None
+    except Exception:
+        pass
+
+    has_rto_check = False
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("SELECT 1 FROM rto_checks WHERE case_id = %s LIMIT 1", [case_id])
+            has_rto_check = cursor.fetchone() is not None
+    except Exception:
+        pass
+
+    fir_number = row[16] or chargesheet_data.get("fir_number") or ""
 
     return {
         "case_id": row[0],
@@ -1549,7 +1706,7 @@ def _fetch_ai_case_review_case_context(case_id: int) -> dict:
         "incident_brief": row[13],
         "incident_date": row[14],
         "incident_location": row[15],
-        "fir_number": row[16],
+        "fir_number": fir_number,
         "claimant_name": row[17],
         "claimant_address": row[18],
         "claimant_statement": row[19],
@@ -1566,6 +1723,10 @@ def _fetch_ai_case_review_case_context(case_id: int) -> dict:
         "vendor_statements": vendor_statements,
         "vendor_statement_text": vendor_statement_text,
         "has_spot_check": has_spot_check,
+        "has_chargesheet": has_chargesheet,
+        "chargesheet_data": chargesheet_data,
+        "has_rti_check": has_rti_check,
+        "has_rto_check": has_rto_check,
     }
 
 
@@ -1594,7 +1755,12 @@ def generate_ai_case_review_report(
         case_context = _fetch_ai_case_review_case_context(case_id)
         statement_text = str(case_context.get("vendor_statement_text") or "").strip()
         has_spot_check = case_context.get("has_spot_check", False)
-        if not statement_text and not has_spot_check:
+        has_chargesheet = case_context.get("has_chargesheet", False)
+        has_rti_check = case_context.get("has_rti_check", False)
+        has_rto_check = case_context.get("has_rto_check", False)
+        has_non_statement_check = has_spot_check or has_chargesheet or has_rti_check or has_rto_check
+
+        if not statement_text and not has_non_statement_check:
             raise HttpError(
                 400,
                 "No vendor statements are stored for this case. Please record statements in the vendor portal first.",
@@ -1769,6 +1935,32 @@ def delete_case_from_incident_db(request: HttpRequest, case_id: int):
         raise HttpError(500, f"Failed to delete case: {str(exc)}")
 
 
+def _has_approved_qa_report(case_id: int, case_number: Optional[str] = None) -> bool:
+    """Check if the case has an approved report by QA/QC (status='ACCEPTED') available in reports."""
+    from users.models import Report, InsuranceCase
+    try:
+        ic_ids = []
+        if case_number:
+            ic_ids.extend(list(InsuranceCase.objects.filter(case_number=case_number).values_list('id', flat=True)))
+        if case_id:
+            ic_ids.extend(list(InsuranceCase.objects.filter(id=case_id).values_list('id', flat=True)))
+
+        if not ic_ids:
+            return False
+
+        latest_report = Report.objects.filter(case_id__in=ic_ids).order_by('-created_at', '-id').first()
+        if latest_report and latest_report.status == Report.Status.ACCEPTED:
+            return True
+
+        if Report.objects.filter(case_id__in=ic_ids, status=Report.Status.ACCEPTED).exists():
+            return True
+
+        return False
+    except Exception as exc:
+        logger.warning(f"Error checking approved report for case {case_id} ({case_number}): {exc}")
+        return False
+
+
 @router.patch(
     "/cases/incident-db/{case_id}/status",
     summary="Update Case Status",
@@ -1785,7 +1977,10 @@ def update_case_status(request: HttpRequest, case_id: int, payload: UpdateCaseSt
         status = payload.status
         if status == 'OPEN':
             status = 'Open'
-        valid_statuses = ['Open', 'OPEN', 'WIP', 'Closed', 'Completed']
+        valid_statuses = [
+            'Not Initiated', 'NI', 'WIP', 'Open', 'OPEN', 'Closed', 'Completed',
+            'Pending CS', 'IR-Writing', 'Withdraw', 'QC-1', 'Pending Additional Docs', 'Portal Upload'
+        ]
         if status not in valid_statuses:
             raise HttpError(400, f"Invalid status. Must be one of {valid_statuses}")
 
@@ -1814,6 +2009,8 @@ def update_case_status(request: HttpRequest, case_id: int, payload: UpdateCaseSt
             old_status = row[1]
             
             if status == 'Closed':
+                if not _has_approved_qa_report(case_id, case_number):
+                    raise HttpError(400, "Cannot close case. The case report must be approved by QA and available in the reports page first.")
                 cursor.execute(
                     "UPDATE cases SET full_case_status = %s, updated_at = NOW(), closure_date = %s, closure_month = %s WHERE id = %s",
                     [status, closure_date_sql, closure_month_sql, case_id]
@@ -2153,6 +2350,7 @@ def get_full_case_details(request: HttpRequest, case_id: int):
             if not case_row:
                 raise HttpError(404, f"Case id={case_id} not found")
             case_data = dict(zip(col_names, case_row))
+            case_data['has_approved_report'] = _has_approved_qa_report(case_id, case_data.get('case_number'))
 
             # 1.5 Fetch missing fields from insurance_case, check tables, and insurance_client
             cursor.execute("SELECT client_code, insured_name, claimant_name FROM insurance_case WHERE case_number = %s", [case_data.get('case_number')])
@@ -2510,7 +2708,7 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
     CHECK_FIELDS = {
         'claimant_checks': {
             'claimant_name', 'claimant_contact', 'claimant_address',
-            'claimant_income', 'dependants',
+            'claimant_income', 'income_per_annum', 'income_per_month', 'dependants',
             'check_status', 'statement', 'triggers', 'negative_status',
             'case_documents', 'vendor_documents',
             'claimant_lat', 'claimant_lng',
@@ -2644,6 +2842,11 @@ def update_check_detail(request: HttpRequest, case_id: int, check_type: str):
             # ── Update check table ────────────────────────────────────────
             allowed_check_fields = CHECK_FIELDS.get(table, set())
             safe_check = {k: v for k, v in check_updates.items() if k in allowed_check_fields}
+            if table == 'claimant_checks':
+                if 'income_per_annum' in safe_check and safe_check['income_per_annum'] is not None and 'claimant_income' not in safe_check:
+                    safe_check['claimant_income'] = safe_check['income_per_annum']
+                elif 'claimant_income' in safe_check and safe_check['claimant_income'] is not None and 'income_per_annum' not in safe_check:
+                    safe_check['income_per_annum'] = safe_check['claimant_income']
             # Serialize JSONB fields
             for jf in _JSONB_FIELDS:
                 if jf in safe_check and not isinstance(safe_check[jf], str):
@@ -2808,6 +3011,10 @@ def assign_vendor_to_check(request: HttpRequest, case_id: int, check_type: str):
                             "UPDATE driver_checks SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
                             [vendor_id if vendor_id else None, new_status, case_id]
                         )
+
+            # Automatically sync case full_case_status (Not Initiated if 0 assigned checks, WIP if >= 1)
+            from users.incident_case_db import sync_case_full_status_from_checks
+            sync_case_full_status_from_checks(case_id, cursor=cursor)
 
             cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
             case_row = cursor.fetchone()
@@ -3307,6 +3514,445 @@ def get_dashboard_stats(request: HttpRequest):
 
 
 @router.get(
+    "/dashboard/aging-analysis",
+    response=AgingAnalysisResponseSchema,
+    summary="Get Dashboard Aging Analysis & TAT Health",
+    description="Get Turnaround Time (TAT) health buckets for active cases.",
+)
+def get_aging_analysis(request: HttpRequest):
+    """Get aging analysis and TAT health distribution for active cases."""
+    if not is_admin_or_super_admin(request.user):
+        return {
+            "total_active": 0,
+            "beyond_tat": {"count": 0, "percentage": 0.0, "cases": []},
+            "approaching_tat": {"count": 0, "percentage": 0.0, "cases": []},
+            "within_tat": {"count": 0, "percentage": 0.0, "cases": []},
+        }
+
+    try:
+        from datetime import date as dt_date, datetime as dt, timedelta
+        
+        with connections['default'].cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    c.id,
+                    c.case_number,
+                    COALESCE(c.claim_number, '') as claim_number,
+                    COALESCE(c.client_name, '') as client_name,
+                    COALESCE(c.category, 'MACT') as category,
+                    c.case_receive_date,
+                    c.case_due_date,
+                    COALESCE(c.investigation_type, '') as investigation_type,
+                    COALESCE(c.full_case_status, '') as full_case_status,
+                    c.created_at
+                FROM cases c
+                WHERE c.full_case_status NOT IN ('Closed', 'Withdraw', 'Portal Upload', 'CLOSED', 'ARCHIVED')
+                   OR c.full_case_status IS NULL
+                ORDER BY c.created_at DESC
+            """)
+            rows = cursor.fetchall()
+
+        today = dt_date.today()
+        beyond_tat = []
+        approaching_tat = []
+        within_tat = []
+
+        for r in rows:
+            c_id, c_number, claim_num, client_name, category, receive_date, due_date, inv_type, status, created_at = r
+            
+            # Parse effective due date
+            eff_due_date = None
+            if due_date:
+                if isinstance(due_date, str):
+                    try:
+                        eff_due_date = dt.strptime(due_date, '%Y-%m-%d').date()
+                    except ValueError:
+                        pass
+                elif hasattr(due_date, 'date') and not isinstance(due_date, str):
+                    eff_due_date = due_date.date()
+                else:
+                    eff_due_date = due_date
+
+            if not eff_due_date:
+                ref_date = None
+                if receive_date:
+                    if isinstance(receive_date, str):
+                        try:
+                            ref_date = dt.strptime(receive_date, '%Y-%m-%d').date()
+                        except ValueError:
+                            pass
+                    elif hasattr(receive_date, 'date') and not isinstance(receive_date, str):
+                        ref_date = receive_date.date()
+                    else:
+                        ref_date = receive_date
+                elif created_at:
+                    ref_date = created_at.date() if hasattr(created_at, 'date') else None
+
+                if ref_date:
+                    eff_due_date = ref_date + timedelta(days=30)
+                else:
+                    eff_due_date = today + timedelta(days=30)
+
+            days_remaining = (eff_due_date - today).days
+
+            if days_remaining < 0:
+                abs_days = abs(days_remaining)
+                status_text = f"{abs_days} days overdue" if abs_days != 1 else "1 day overdue"
+            elif days_remaining == 0:
+                status_text = "Due today"
+            elif 0 < days_remaining <= 3:
+                status_text = f"Due in {days_remaining} days" if days_remaining != 1 else "Due in 1 day"
+            else:
+                status_text = f"{days_remaining} days left" if days_remaining != 1 else "1 day left"
+
+            case_item = {
+                "id": c_id,
+                "case_number": c_number or '',
+                "claim_number": claim_num or '',
+                "client_name": client_name or '',
+                "category": category or 'MACT',
+                "investigation_type": inv_type or '',
+                "case_receive_date": receive_date.isoformat() if hasattr(receive_date, 'isoformat') else str(receive_date or ''),
+                "case_due_date": eff_due_date.isoformat() if hasattr(eff_due_date, 'isoformat') else str(eff_due_date or ''),
+                "days_remaining": days_remaining,
+                "status_text": status_text,
+            }
+
+            if days_remaining < 0:
+                beyond_tat.append(case_item)
+            elif 0 <= days_remaining <= 3:
+                approaching_tat.append(case_item)
+            else:
+                within_tat.append(case_item)
+
+        # Sort each bucket
+        beyond_tat.sort(key=lambda x: x["days_remaining"])          # most overdue first
+        approaching_tat.sort(key=lambda x: x["days_remaining"])     # closest due date first
+        within_tat.sort(key=lambda x: x["days_remaining"])          # closest due date first
+
+        total_active = len(beyond_tat) + len(approaching_tat) + len(within_tat)
+        calc_pct = lambda count: round((count / total_active) * 100, 1) if total_active > 0 else 0.0
+
+        return {
+            "total_active": total_active,
+            "beyond_tat": {
+                "count": len(beyond_tat),
+                "percentage": calc_pct(len(beyond_tat)),
+                "cases": beyond_tat,
+            },
+            "approaching_tat": {
+                "count": len(approaching_tat),
+                "percentage": calc_pct(len(approaching_tat)),
+                "cases": approaching_tat,
+            },
+            "within_tat": {
+                "count": len(within_tat),
+                "percentage": calc_pct(len(within_tat)),
+                "cases": within_tat,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch aging analysis data: {e}")
+        return {
+            "total_active": 0,
+            "beyond_tat": {"count": 0, "percentage": 0.0, "cases": []},
+            "approaching_tat": {"count": 0, "percentage": 0.0, "cases": []},
+            "within_tat": {"count": 0, "percentage": 0.0, "cases": []},
+        }
+
+
+@router.get(
+    "/dashboard/vendor-review-queue",
+    response=VendorReviewQueueResponseSchema,
+    summary="Get Dashboard Vendor Review Queue",
+    description="Get cases and checks with pending review prioritized by TAT urgency.",
+)
+def get_vendor_review_queue(request: HttpRequest):
+    """Get vendor review queue data with pending checks and TAT urgency breakdown."""
+    if not is_admin_or_super_admin(request.user):
+        return {
+            "total_pending_checks": 0,
+            "immediate_attention_count": 0,
+            "beyond_tat_count": 0,
+            "approaching_tat_count": 0,
+            "normal_count": 0,
+            "total_pending_reviews": 0,
+            "top_reviews": [],
+        }
+
+    try:
+        from datetime import date as dt_date, datetime as dt, timedelta
+
+        with connections['default'].cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    c.id,
+                    c.case_number,
+                    COALESCE(c.claim_number, '') as claim_number,
+                    COALESCE(c.client_name, '') as client_name,
+                    COALESCE(c.category, 'MACT') as category,
+                    c.case_receive_date,
+                    c.case_due_date,
+                    COALESCE(c.investigation_type, '') as investigation_type,
+                    COALESCE(c.full_case_status, '') as full_case_status,
+                    c.created_at
+                FROM cases c
+                WHERE c.full_case_status NOT IN ('Closed', 'Withdraw', 'Portal Upload', 'CLOSED', 'ARCHIVED')
+                   OR c.full_case_status IS NULL
+                ORDER BY c.created_at DESC
+            """)
+            rows = cursor.fetchall()
+
+        today = dt_date.today()
+        case_ids = [r[0] for r in rows]
+        checks_by_case = {cid: [] for cid in case_ids}
+        assigned_vendor_by_case = {}
+
+        if case_ids:
+            ph = ','.join(['%s'] * len(case_ids))
+            with connections['default'].cursor() as cursor:
+                # Claimant checks
+                cursor.execute(f"""
+                    SELECT cc.case_id, cc.check_status, v.company_name
+                    FROM claimant_checks cc
+                    LEFT JOIN users_vendor v ON v.id = cc.assigned_vendor_id
+                    WHERE cc.case_id IN ({ph})
+                """, case_ids)
+                for r in cursor.fetchall():
+                    checks_by_case[r[0]].append({'type': 'claimant', 'status': r[1]})
+                    if r[2] and r[0] not in assigned_vendor_by_case:
+                        assigned_vendor_by_case[r[0]] = r[2]
+
+                # Insured checks
+                cursor.execute(f"""
+                    SELECT ic.case_id, ic.check_status, v.company_name, ic.insured_cum_driver
+                    FROM insured_checks ic
+                    LEFT JOIN users_vendor v ON v.id = ic.assigned_vendor_id
+                    WHERE ic.case_id IN ({ph})
+                """, case_ids)
+                insured_map = {}
+                for r in cursor.fetchall():
+                    insured_map[r[0]] = {'status': r[1], 'cum': bool(r[3])}
+                    if r[2] and r[0] not in assigned_vendor_by_case:
+                        assigned_vendor_by_case[r[0]] = r[2]
+
+                # Driver checks
+                cursor.execute(f"""
+                    SELECT dc.case_id, dc.check_status, v.company_name, dc.insured_cum_driver
+                    FROM driver_checks dc
+                    LEFT JOIN users_vendor v ON v.id = dc.assigned_vendor_id
+                    WHERE dc.case_id IN ({ph})
+                """, case_ids)
+                driver_map = {}
+                for r in cursor.fetchall():
+                    driver_map[r[0]] = {'status': r[1], 'cum': bool(r[3])}
+                    if r[2] and r[0] not in assigned_vendor_by_case:
+                        assigned_vendor_by_case[r[0]] = r[2]
+
+                # Merge insured and driver checks if insured_cum_driver is true
+                for cid in case_ids:
+                    ic = insured_map.get(cid)
+                    dc = driver_map.get(cid)
+                    if (ic and ic['cum']) or (dc and dc['cum']):
+                        st = ic['status'] if ic else (dc['status'] if dc else 'WIP')
+                        checks_by_case[cid].append({'type': 'insured_cum_driver', 'status': st})
+                    else:
+                        if ic:
+                            checks_by_case[cid].append({'type': 'insured', 'status': ic['status']})
+                        if dc:
+                            checks_by_case[cid].append({'type': 'driver', 'status': dc['status']})
+
+                # Spot checks
+                cursor.execute(f"""
+                    SELECT sc.case_id, sc.check_status, v.company_name
+                    FROM spot_checks sc
+                    LEFT JOIN users_vendor v ON v.id = sc.assigned_vendor_id
+                    WHERE sc.case_id IN ({ph})
+                """, case_ids)
+                for r in cursor.fetchall():
+                    checks_by_case[r[0]].append({'type': 'spot', 'status': r[1]})
+                    if r[2] and r[0] not in assigned_vendor_by_case:
+                        assigned_vendor_by_case[r[0]] = r[2]
+
+                # RTI checks
+                cursor.execute(f"""
+                    SELECT rti.case_id, rti.check_status, v.company_name
+                    FROM rti_checks rti
+                    LEFT JOIN users_vendor v ON v.id = rti.assigned_vendor_id
+                    WHERE rti.case_id IN ({ph})
+                """, case_ids)
+                for r in cursor.fetchall():
+                    checks_by_case[r[0]].append({'type': 'rti', 'status': r[1]})
+                    if r[2] and r[0] not in assigned_vendor_by_case:
+                        assigned_vendor_by_case[r[0]] = r[2]
+
+                # RTO checks
+                cursor.execute(f"""
+                    SELECT rto.case_id, rto.check_status, v.company_name
+                    FROM rto_checks rto
+                    LEFT JOIN users_vendor v ON v.id = rto.assigned_vendor_id
+                    WHERE rto.case_id IN ({ph})
+                """, case_ids)
+                for r in cursor.fetchall():
+                    checks_by_case[r[0]].append({'type': 'rto', 'status': r[1]})
+                    if r[2] and r[0] not in assigned_vendor_by_case:
+                        assigned_vendor_by_case[r[0]] = r[2]
+
+                # Chargesheets
+                cursor.execute(f"""
+                    SELECT cs.case_id, cs.check_status, cs.advocate_status, v.company_name
+                    FROM chargesheets cs
+                    LEFT JOIN users_vendor v ON v.id = cs.assigned_vendor_id
+                    WHERE cs.case_id IN ({ph})
+                """, case_ids)
+                for r in cursor.fetchall():
+                    checks_by_case[r[0]].append({'type': 'chargesheet', 'status': r[1], 'advocate_status': r[2]})
+                    if r[3] and r[0] not in assigned_vendor_by_case:
+                        assigned_vendor_by_case[r[0]] = r[3]
+
+        beyond_list = []
+        approaching_list = []
+        within_list = []
+        total_pending_checks = 0
+
+        for r in rows:
+            c_id, c_number, claim_num, client_name, category, receive_date, due_date, inv_type, status, created_at = r
+            chk_list = checks_by_case.get(c_id, [])
+            total_chk = len(chk_list)
+            submitted_chk = 0
+            pending_review_chk = 0
+
+            for c in chk_list:
+                st = (c.get('status') or '').strip().lower()
+                c_type = (c.get('type') or '').lower()
+
+                # Checks submitted count
+                if st and st not in ['not initiated', 'ni', 'wip', 'reassigned']:
+                    submitted_chk += 1
+                elif c_type == 'chargesheet':
+                    adv_st = (c.get('advocate_status') or '').strip().lower()
+                    if adv_st and adv_st not in ['not initiated', 'ni', 'wip']:
+                        submitted_chk += 1
+
+                # Reviewable checks: Claimant, Insured, Driver with Under Verification / Submitted
+                if c_type in ['claimant', 'insured', 'driver', 'insured_cum_driver', 'insured cum driver']:
+                    if st in ['under verification', 'submitted']:
+                        pending_review_chk += 1
+
+            # Only display cases in which checks are submitted by business partner but not reviewed yet
+            if pending_review_chk == 0:
+                continue
+
+            total_pending_checks += pending_review_chk
+
+            # Calculate due date
+            eff_due_date = None
+            if due_date:
+                if isinstance(due_date, str):
+                    try:
+                        eff_due_date = dt.strptime(due_date, '%Y-%m-%d').date()
+                    except ValueError:
+                        pass
+                elif hasattr(due_date, 'date') and not isinstance(due_date, str):
+                    eff_due_date = due_date.date()
+                else:
+                    eff_due_date = due_date
+
+            if not eff_due_date:
+                ref_date = None
+                if receive_date:
+                    if isinstance(receive_date, str):
+                        try:
+                            ref_date = dt.strptime(receive_date, '%Y-%m-%d').date()
+                        except ValueError:
+                            pass
+                    elif hasattr(receive_date, 'date') and not isinstance(receive_date, str):
+                        ref_date = receive_date.date()
+                    else:
+                        ref_date = receive_date
+                elif created_at:
+                    ref_date = created_at.date() if hasattr(created_at, 'date') else None
+
+                if ref_date:
+                    eff_due_date = ref_date + timedelta(days=30)
+                else:
+                    eff_due_date = today + timedelta(days=30)
+
+            days_remaining = (eff_due_date - today).days
+
+            # Format vendor name (clean special characters)
+            vendor_name = assigned_vendor_by_case.get(c_id) or client_name or '—'
+            vendor_clean = vendor_name.replace('\ufffd', '').replace('–', '-').strip()
+            if ' - ' in vendor_clean:
+                vendor_clean = vendor_clean.split(' - ')[0].strip()
+
+            if days_remaining < 0:
+                abs_days = abs(days_remaining)
+                tat_text = f'{abs_days}d overdue' if abs_days > 1 else '1d overdue'
+                tat_status = 'Beyond TAT'
+            elif 0 <= days_remaining <= 3:
+                if days_remaining == 0:
+                    tat_text = '0d left'
+                else:
+                    tat_text = f'{days_remaining}d left'
+                tat_status = 'Approaching TAT'
+            else:
+                tat_text = f'{days_remaining}d left'
+                tat_status = 'Within TAT'
+
+            item = {
+                'id': c_id,
+                'case_number': c_number or f'Case #{c_id}',
+                'vendor_name': vendor_clean,
+                'checks_submitted': submitted_chk,
+                'total_checks': total_chk,
+                'checks_display': f'{submitted_chk}/{total_chk}' if total_chk > 0 else '0/0',
+                'tat_status': tat_status,
+                'tat_text': tat_text,
+                'days_remaining': days_remaining,
+            }
+
+            if tat_status == 'Beyond TAT':
+                beyond_list.append(item)
+            elif tat_status == 'Approaching TAT':
+                approaching_list.append(item)
+            else:
+                within_list.append(item)
+
+        beyond_list.sort(key=lambda x: x['days_remaining'])
+        approaching_list.sort(key=lambda x: x['days_remaining'])
+        within_list.sort(key=lambda x: x['days_remaining'])
+
+        top_reviews = (beyond_list + approaching_list + within_list)[:10]
+        total_pending_cases = len(beyond_list) + len(approaching_list) + len(within_list)
+
+        return {
+            'total_pending_checks': total_pending_checks,
+            'immediate_attention_count': len(beyond_list),
+            'beyond_tat_count': len(beyond_list),
+            'approaching_tat_count': len(approaching_list),
+            'normal_count': len(within_list),
+            'within_tat_count': len(within_list),
+            'total_pending_reviews': total_pending_cases,
+            'top_reviews': top_reviews,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch vendor review queue: {e}")
+        return {
+            "total_pending_checks": 0,
+            "immediate_attention_count": 0,
+            "beyond_tat_count": 0,
+            "approaching_tat_count": 0,
+            "normal_count": 0,
+            "within_tat_count": 0,
+            "total_pending_reviews": 0,
+            "top_reviews": [],
+        }
+
+
+@router.get(
     "/dashboard/case-volume",
     response=List[CaseVolumeSchema],
     summary="Get Case Volume Data",
@@ -3540,25 +4186,22 @@ def get_audit_logs(
     request: HttpRequest,
     event_type: Optional[str] = None,
     actor: Optional[str] = None,
+    client_name: Optional[str] = None,
     date_range: str = "all",
+    include_archived: bool = False,
     search: Optional[str] = None,
     limit: int = 500,
 ):
-    """Get aggregated audit logs for admin portal."""
+    """Get aggregated audit logs for admin portal (defaults to active 90-day window, with archive access on demand)."""
     if not is_admin_or_super_admin(request.user):
         return []
+
+    if date_range and str(date_range).lower() == "archived":
+        include_archived = True
 
     safe_limit = max(1, min(int(limit or 500), 2000))
     activities: List[dict] = []
     ninety_day_cutoff = timezone.now() - timedelta(days=90)
-
-    # Determine if user is super admin — super admins see everything,
-    # regular case managers only see logs related to their own cases.
-    user_is_super = (
-        request.user.role == 'SUPER_ADMIN'
-        or (getattr(request.user, 'sub_role', '') or '').upper() == 'SUPER_ADMIN'
-    )
-    cm_user_id = None if user_is_super else request.user.id
 
     def _normalize_event_time(event_time_value):
         """Normalize timestamp values to timezone-aware datetimes for safe sorting."""
@@ -3581,11 +4224,11 @@ def get_audit_logs(
 
         return parsed
 
-    def _add_event(event_time, event_type_value, actor_value, description, case_number="", source="System"):
+    def _add_event(event_time, event_type_value, actor_value, description, case_number="", client_name="", source="System", is_archived=False):
         normalized_event_time = _normalize_event_time(event_time)
         if not normalized_event_time:
             return
-        if normalized_event_time < ninety_day_cutoff:
+        if not include_archived and not is_archived and normalized_event_time < ninety_day_cutoff:
             return
         activities.append(
             {
@@ -3594,61 +4237,163 @@ def get_audit_logs(
                 "actor": actor_value or "System",
                 "description": description,
                 "case_number": case_number or None,
+                "client_name": client_name or None,
+                "is_archived": is_archived,
                 "source": source,
             }
         )
 
     try:
         with connections['default'].cursor() as cursor:
-            # Case creation events
-            if cm_user_id:
+            # 1. Primary: Detailed case activity logs (tracks case creation, vendor assignment, reviews, status changes, uploads)
+            try:
                 cursor.execute(
                     """
                     SELECT
-                        ic.case_number,
-                        ic.created_at,
-                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
-                    FROM insurance_case ic
-                    LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
-                    WHERE ic.created_at IS NOT NULL
-                      AND ic.created_by_id = %s
-                    ORDER BY ic.created_at DESC
-                    LIMIT %s
-                    """,
-                    [cm_user_id, safe_limit],
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT
-                        ic.case_number,
-                        ic.created_at,
-                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
-                    FROM insurance_case ic
-                    LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
-                    WHERE ic.created_at IS NOT NULL
-                    ORDER BY ic.created_at DESC
+                        cal.created_at,
+                        cal.event_type,
+                        COALESCE(NULLIF(cal.actor_name, ''), 'System') AS actor_name,
+                        cal.description,
+                        COALESCE(NULLIF(c.case_number, ''), NULLIF(cal.case_number, ''), '') AS case_number,
+                        COALESCE(NULLIF(c.client_name, ''), NULLIF(ic.client_name, ''), '') AS client_name,
+                        COALESCE(NULLIF(cal.source, ''), 'Cases') AS source
+                    FROM case_activity_logs cal
+                    LEFT JOIN cases c ON c.id = cal.case_id
+                    LEFT JOIN insurance_case ic ON ic.case_number = c.case_number OR ic.case_number = cal.case_number
+                    WHERE cal.created_at IS NOT NULL
+                    ORDER BY cal.created_at DESC
                     LIMIT %s
                     """,
                     [safe_limit],
                 )
-            for case_number, created_at, actor_name in cursor.fetchall():
-                _add_event(
-                    created_at,
-                    "CASE_CREATED",
-                    actor_name,
-                    f"Case {case_number} created",
-                    case_number,
-                    "Cases",
-                )
+                for created_at, event_type_val, actor_name, desc, case_number, client_nm, source in cursor.fetchall():
+                    _add_event(
+                        created_at,
+                        event_type_val,
+                        actor_name,
+                        desc,
+                        case_number,
+                        client_nm,
+                        source,
+                        is_archived=False,
+                    )
+            except Exception as e:
+                logger.warning(f"Error fetching case_activity_logs: {e}")
 
-            # User creation events — only for super admins
-            if not cm_user_id:
+            # If include_archived is True, also query archive tables
+            if include_archived:
+                try:
+                    cursor.execute(
+                        """
+                        SELECT
+                            cala.created_at,
+                            cala.event_type,
+                            COALESCE(NULLIF(cala.actor_name, ''), 'System') AS actor_name,
+                            cala.description,
+                            COALESCE(NULLIF(c.case_number, ''), NULLIF(cala.case_number, ''), '') AS case_number,
+                            COALESCE(NULLIF(c.client_name, ''), NULLIF(ic.client_name, ''), '') AS client_name,
+                            COALESCE(NULLIF(cala.source, ''), 'Archive') AS source
+                        FROM case_activity_logs_archive cala
+                        LEFT JOIN cases c ON c.id = cala.case_id
+                        LEFT JOIN insurance_case ic ON ic.case_number = c.case_number OR ic.case_number = cala.case_number
+                        WHERE cala.created_at IS NOT NULL
+                        ORDER BY cala.created_at DESC
+                        LIMIT %s
+                        """,
+                        [safe_limit],
+                    )
+                    for created_at, event_type_val, actor_name, desc, case_number, client_nm, source in cursor.fetchall():
+                        _add_event(
+                            created_at,
+                            event_type_val,
+                            actor_name,
+                            desc,
+                            case_number,
+                            client_nm,
+                            source,
+                            is_archived=True,
+                        )
+                except Exception as e:
+                    logger.warning(f"Error fetching case_activity_logs_archive: {e}")
+
+                try:
+                    cursor.execute(
+                        """
+                        SELECT
+                            uala.created_at,
+                            uala.action,
+                            COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
+                            uala.details
+                        FROM users_activitylog_archive uala
+                        LEFT JOIN users_customuser cu ON cu.id = uala.user_id
+                        WHERE uala.created_at IS NOT NULL
+                          AND uala.action NOT IN ('LOGIN', 'LOGOUT', 'FORCE_LOGOUT')
+                        ORDER BY uala.created_at DESC
+                        LIMIT %s
+                        """,
+                        [safe_limit],
+                    )
+                    for created_at, action, actor_name, details in cursor.fetchall():
+                        cn = ""
+                        if details:
+                            import re
+                            match = re.search(r'Case\s+([A-Za-z0-9_\-]+)', details)
+                            if match:
+                                cn = match.group(1)
+                        _add_event(
+                            created_at,
+                            action,
+                            actor_name,
+                            details,
+                            cn,
+                            "",
+                            "Archive",
+                            is_archived=True,
+                        )
+                except Exception as e:
+                    logger.warning(f"Error fetching users_activitylog_archive: {e}")
+
+            # 2. Case creation events from cases / insurance_case tables (ensures cases created prior to log clearing are still listed)
+            try:
+                cursor.execute(
+                    """
+                    SELECT
+                        c.case_number,
+                        c.created_at,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
+                        COALESCE(NULLIF(c.client_name, ''), NULLIF(ic.client_name, ''), '') AS client_name
+                    FROM cases c
+                    LEFT JOIN insurance_case ic ON ic.case_number = c.case_number
+                    LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
+                    WHERE c.created_at IS NOT NULL
+                    ORDER BY c.created_at DESC
+                    LIMIT %s
+                    """,
+                    [safe_limit],
+                )
+                for case_number, created_at, actor_name, client_nm in cursor.fetchall():
+                    _add_event(
+                        created_at,
+                        "CASE_CREATED",
+                        actor_name,
+                        f"Case {case_number} created",
+                        case_number,
+                        client_nm,
+                        "Cases",
+                        is_archived=False,
+                    )
+            except Exception as e:
+                logger.warning(f"Error fetching case creation logs: {e}")
+
+            # 3. User creation events
+            try:
                 cursor.execute(
                     """
                     SELECT
                         username,
                         email,
+                        first_name,
+                        last_name,
                         role,
                         sub_role,
                         date_joined
@@ -3659,51 +4404,61 @@ def get_audit_logs(
                     """,
                     [safe_limit],
                 )
-                for username, email, role, sub_role, date_joined in cursor.fetchall():
+                for username, email, first_name, last_name, role, sub_role, date_joined in cursor.fetchall():
                     role_label = sub_role or role or "USER"
+                    name = f"{first_name or ''} {last_name or ''}".strip() or username or email
                     _add_event(
                         date_joined,
                         "USER_CREATED",
                         "Super Admin/System",
-                        f"User '{username or email}' created with role {role_label}",
+                        f"User '{name}' created with role {role_label}",
+                        "",
                         "",
                         "User Management",
+                        is_archived=False,
                     )
+            except Exception as e:
+                logger.warning(f"Error fetching user creation logs: {e}")
 
-            # Activity Log events (e.g. deletions)
-            cursor.execute(
-                """
-                SELECT
-                    al.created_at,
-                    al.action,
-                    COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
-                    al.details
-                FROM users_activitylog al
-                LEFT JOIN users_customuser cu ON cu.id = al.user_id
-                WHERE al.created_at IS NOT NULL
-                  AND al.action NOT IN ('LOGIN', 'LOGOUT', 'FORCE_LOGOUT')
-                ORDER BY al.created_at DESC
-                LIMIT %s
-                """,
-                [safe_limit],
-            )
-            for created_at, action, actor_name, details in cursor.fetchall():
-                cn = ""
-                if details:
-                    import re
-                    match = re.search(r'Case\s+([A-Za-z0-9_\-]+)', details)
-                    if match:
-                        cn = match.group(1)
-                _add_event(
-                    created_at,
-                    action,
-                    actor_name,
-                    details,
-                    cn,
-                    "Cases" if "CASE" in action else "Activity Logs",
+            # 4. Activity Log events (e.g. user updates, client creations, case deletions)
+            try:
+                cursor.execute(
+                    """
+                    SELECT
+                        al.created_at,
+                        al.action,
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
+                        al.details
+                    FROM users_activitylog al
+                    LEFT JOIN users_customuser cu ON cu.id = al.user_id
+                    WHERE al.created_at IS NOT NULL
+                      AND al.action NOT IN ('LOGIN', 'LOGOUT', 'FORCE_LOGOUT')
+                    ORDER BY al.created_at DESC
+                    LIMIT %s
+                    """,
+                    [safe_limit],
                 )
+                for created_at, action, actor_name, details in cursor.fetchall():
+                    cn = ""
+                    if details:
+                        import re
+                        match = re.search(r'Case\s+([A-Za-z0-9_\-]+)', details)
+                        if match:
+                            cn = match.group(1)
+                    _add_event(
+                        created_at,
+                        action,
+                        actor_name,
+                        details,
+                        cn,
+                        "",
+                        "Cases" if "CASE" in action else "Activity Logs",
+                        is_archived=False,
+                    )
+            except Exception as e:
+                logger.warning(f"Error fetching activity log: {e}")
 
-            # Vendor assignment events from check tables
+            # 5. Vendor assignment events from check tables
             assignment_tables = [
                 ("claimant_checks", "Claimant Check"),
                 ("insured_checks", "Insured Check"),
@@ -3726,90 +4481,54 @@ def get_audit_logs(
                     continue
 
                 try:
-                    if cm_user_id:
-                        cursor.execute(
-                            f"""
-                            SELECT
-                                c.case_number,
-                                t.{event_time_column} AS event_time,
-                                uv.company_name,
-                                COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
-                            FROM {table_name} t
-                            JOIN cases c ON c.id = t.case_id
-                            JOIN users_vendor uv ON uv.id = t.assigned_vendor_id
-                            LEFT JOIN insurance_case ic ON ic.case_number = c.case_number
-                            LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
-                            WHERE t.assigned_vendor_id IS NOT NULL
-                              AND t.{event_time_column} IS NOT NULL
-                              AND ic.created_by_id = %s
-                            ORDER BY t.{event_time_column} DESC
-                            LIMIT %s
-                            """,
-                            [cm_user_id, safe_limit],
-                        )
-                    else:
-                        cursor.execute(
-                            f"""
-                            SELECT
-                                c.case_number,
-                                t.{event_time_column} AS event_time,
-                                uv.company_name,
-                                COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
-                            FROM {table_name} t
-                            JOIN cases c ON c.id = t.case_id
-                            JOIN users_vendor uv ON uv.id = t.assigned_vendor_id
-                            LEFT JOIN insurance_case ic ON ic.case_number = c.case_number
-                            LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
-                            WHERE t.assigned_vendor_id IS NOT NULL
-                              AND t.{event_time_column} IS NOT NULL
-                            ORDER BY t.{event_time_column} DESC
-                            LIMIT %s
-                            """,
-                            [safe_limit],
-                        )
+                    cursor.execute(
+                        f"""
+                        SELECT
+                            c.case_number,
+                            t.{event_time_column} AS event_time,
+                            uv.company_name,
+                            COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name,
+                            COALESCE(NULLIF(c.client_name, ''), NULLIF(ic.client_name, ''), '') AS client_name
+                        FROM {table_name} t
+                        JOIN cases c ON c.id = t.case_id
+                        JOIN users_vendor uv ON uv.id = t.assigned_vendor_id
+                        LEFT JOIN insurance_case ic ON ic.case_number = c.case_number
+                        LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
+                        WHERE t.assigned_vendor_id IS NOT NULL
+                          AND t.{event_time_column} IS NOT NULL
+                        ORDER BY t.{event_time_column} DESC
+                        LIMIT %s
+                        """,
+                        [safe_limit],
+                    )
 
-                    for case_number, event_time, vendor_name, cm_name in cursor.fetchall():
+                    for case_number, event_time, vendor_name, cm_name, client_nm in cursor.fetchall():
                         _add_event(
                             event_time,
                             "VENDOR_ASSIGNED",
                             cm_name,
                             f"Vendor '{vendor_name}' assigned to {check_label}",
                             case_number,
+                            client_nm,
                             "Vendor Assignment",
+                            is_archived=False,
                         )
                 except Exception as table_exc:
                     logger.warning(f"Skipping vendor assignment logs for table {table_name}: {table_exc}")
 
-            # QC assignment events
-            if cm_user_id:
+            # 6. QC assignment events from reports table
+            try:
                 cursor.execute(
                     """
                     SELECT
-                        ic.case_number,
+                        COALESCE(c.case_number, ic.case_number, CAST(r.case_id AS TEXT)) AS case_number,
                         r.assigned_at,
                         COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name,
-                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name,
+                        COALESCE(NULLIF(c.client_name, ''), NULLIF(ic.client_name, ''), '') AS client_name
                     FROM reports r
-                    JOIN insurance_case ic ON ic.id = r.case_id
-                    LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
-                    LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
-                    WHERE r.assigned_at IS NOT NULL
-                      AND ic.created_by_id = %s
-                    ORDER BY r.assigned_at DESC
-                    LIMIT %s
-                    """,
-                    [cm_user_id, safe_limit],
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT
-                        ic.case_number,
-                        r.assigned_at,
-                        COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name,
-                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS cm_name
-                    FROM reports r
-                    JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN cases c ON c.id = r.case_id OR c.case_number = ic.case_number
                     LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
                     LEFT JOIN users_customuser cu ON cu.id = ic.created_by_id
                     WHERE r.assigned_at IS NOT NULL
@@ -3818,43 +4537,32 @@ def get_audit_logs(
                     """,
                     [safe_limit],
                 )
-            for case_number, assigned_at, qc_name, cm_name in cursor.fetchall():
-                _add_event(
-                    assigned_at,
-                    "QC_ASSIGNED",
-                    cm_name,
-                    f"Report assigned to qc '{qc_name}'",
-                    case_number,
-                    "Legal Review",
-                )
+                for case_number, assigned_at, qc_name, cm_name, client_nm in cursor.fetchall():
+                    _add_event(
+                        assigned_at,
+                        "QC_ASSIGNED",
+                        cm_name,
+                        f"Report assigned to qc '{qc_name}'",
+                        case_number,
+                        client_nm,
+                        "Legal Review",
+                        is_archived=False,
+                    )
+            except Exception as e:
+                logger.warning(f"Error fetching QC assignments: {e}")
 
-            # AI report generation events
-            if cm_user_id:
+            # 7. AI report generation events
+            try:
                 cursor.execute(
                     """
                     SELECT
-                        ic.case_number,
+                        COALESCE(c.case_number, ic.case_number, CAST(r.case_id AS TEXT)) AS case_number,
                         r.created_at,
-                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
+                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name,
+                        COALESCE(NULLIF(c.client_name, ''), NULLIF(ic.client_name, ''), '') AS client_name
                     FROM reports r
-                    JOIN insurance_case ic ON ic.id = r.case_id
-                    LEFT JOIN users_customuser cu ON cu.id = r.created_by_id
-                    WHERE r.created_at IS NOT NULL
-                      AND ic.created_by_id = %s
-                    ORDER BY r.created_at DESC
-                    LIMIT %s
-                    """,
-                    [cm_user_id, safe_limit],
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT
-                        ic.case_number,
-                        r.created_at,
-                        COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''), cu.username, 'System') AS actor_name
-                    FROM reports r
-                    JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN cases c ON c.id = r.case_id OR c.case_number = ic.case_number
                     LEFT JOIN users_customuser cu ON cu.id = r.created_by_id
                     WHERE r.created_at IS NOT NULL
                     ORDER BY r.created_at DESC
@@ -3862,46 +4570,33 @@ def get_audit_logs(
                     """,
                     [safe_limit],
                 )
-            for case_number, created_at, actor_name in cursor.fetchall():
-                _add_event(
-                    created_at,
-                    "AI_REPORT_GENERATED",
-                    actor_name,
-                    f"AI case review report generated for case {case_number}",
-                    case_number,
-                    "Reports",
-                )
+                for case_number, created_at, actor_name, client_nm in cursor.fetchall():
+                    _add_event(
+                        created_at,
+                        "AI_REPORT_GENERATED",
+                        actor_name,
+                        f"AI case review report generated for case {case_number}",
+                        case_number,
+                        client_nm,
+                        "Reports",
+                        is_archived=False,
+                    )
+            except Exception as e:
+                logger.warning(f"Error fetching AI report logs: {e}")
 
-            # QC review decision events (accept/reject)
-            if cm_user_id:
+            # 8. QC review decision events (accept/reject)
+            try:
                 cursor.execute(
                     """
                     SELECT
-                        ic.case_number,
+                        COALESCE(c.case_number, ic.case_number, CAST(r.case_id AS TEXT)) AS case_number,
                         r.reviewed_at,
                         r.status,
-                        COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name
+                        COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name,
+                        COALESCE(NULLIF(c.client_name, ''), NULLIF(ic.client_name, ''), '') AS client_name
                     FROM reports r
-                    JOIN insurance_case ic ON ic.id = r.case_id
-                    LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
-                    WHERE r.reviewed_at IS NOT NULL
-                      AND r.status IN ('ACCEPTED', 'REJECTED')
-                      AND ic.created_by_id = %s
-                    ORDER BY r.reviewed_at DESC
-                    LIMIT %s
-                    """,
-                    [cm_user_id, safe_limit],
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT
-                        ic.case_number,
-                        r.reviewed_at,
-                        r.status,
-                        COALESCE(NULLIF(TRIM(CONCAT(lu.first_name, ' ', lu.last_name)), ''), lu.username, 'QC') AS qc_name
-                    FROM reports r
-                    JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN insurance_case ic ON ic.id = r.case_id
+                    LEFT JOIN cases c ON c.id = r.case_id OR c.case_number = ic.case_number
                     LEFT JOIN users_customuser lu ON lu.id = r.assigned_qc_id
                     WHERE r.reviewed_at IS NOT NULL
                       AND r.status IN ('ACCEPTED', 'REJECTED')
@@ -3910,65 +4605,34 @@ def get_audit_logs(
                     """,
                     [safe_limit],
                 )
-            for case_number, reviewed_at, review_status, qc_name in cursor.fetchall():
-                status_upper = str(review_status or "").upper()
-                is_accepted = status_upper == "ACCEPTED"
-                _add_event(
-                    reviewed_at,
-                    "QC_ACCEPTED_REPORT" if is_accepted else "QC_REJECTED_REPORT",
-                    qc_name,
-                    f"QC '{qc_name}' {'approved' if is_accepted else 'rejected'} report for case {case_number}",
-                    case_number,
-                    "Legal Review",
-                )
+                for case_number, reviewed_at, review_status, qc_name, client_nm in cursor.fetchall():
+                    status_upper = str(review_status or "").upper()
+                    is_accepted = status_upper == "ACCEPTED"
+                    _add_event(
+                        reviewed_at,
+                        "QC_ACCEPTED_REPORT" if is_accepted else "QC_REJECTED_REPORT",
+                        qc_name,
+                        f"QC '{qc_name}' {'approved' if is_accepted else 'rejected'} report for case {case_number}",
+                        case_number,
+                        client_nm,
+                        "Legal Review",
+                        is_archived=False,
+                    )
+            except Exception as e:
+                logger.warning(f"Error fetching QC review decision logs: {e}")
 
-            # case_activity_logs events
-            if cm_user_id:
-                cursor.execute(
-                    """
-                    SELECT
-                        created_at,
-                        event_type,
-                        actor_name,
-                        description,
-                        case_number,
-                        source
-                    FROM case_activity_logs
-                    WHERE created_at IS NOT NULL
-                      AND case_id IN (
-                          SELECT id FROM insurance_case WHERE created_by_id = %s
-                      )
-                    ORDER BY created_at DESC
-                    LIMIT %s
-                    """,
-                    [cm_user_id, safe_limit],
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT
-                        created_at,
-                        event_type,
-                        actor_name,
-                        description,
-                        case_number,
-                        source
-                    FROM case_activity_logs
-                    WHERE created_at IS NOT NULL
-                    ORDER BY created_at DESC
-                    LIMIT %s
-                    """,
-                    [safe_limit],
-                )
-            for created_at, event_type_val, actor_name, desc, case_number, source in cursor.fetchall():
-                _add_event(
-                    created_at,
-                    event_type_val,
-                    actor_name,
-                    desc,
-                    case_number,
-                    source,
-                )
+        # Deduplicate overlapping events (same event_type, case_number, and timestamp within 1 minute)
+        seen_keys = set()
+        unique_activities = []
+        for item in activities:
+            ts_bucket = item["event_time"].strftime("%Y-%m-%d %H:%M") if item.get("event_time") else ""
+            dedup_key = (item["event_type"], item.get("case_number") or "", ts_bucket)
+            if dedup_key in seen_keys:
+                continue
+            seen_keys.add(dedup_key)
+            unique_activities.append(item)
+
+        activities = unique_activities
 
         # Sort latest first globally
         activities.sort(key=lambda item: item["event_time"], reverse=True)
@@ -3987,12 +4651,20 @@ def get_audit_logs(
                 if actor_query in (item.get("actor") or "").lower()
             ]
 
+        if client_name and client_name.lower() != "all":
+            client_query = client_name.lower()
+            activities = [
+                item for item in activities
+                if item.get("client_name") and client_query in item["client_name"].lower()
+            ]
+
         if search:
             term = search.lower()
             activities = [
                 item for item in activities
                 if term in (item.get("description") or "").lower()
                 or term in (item.get("case_number") or "").lower()
+                or term in (item.get("client_name") or "").lower()
                 or term in (item.get("actor") or "").lower()
             ]
 
@@ -4000,18 +4672,16 @@ def get_audit_logs(
             now_date = timezone.now().date()
             if date_range.lower() == "today":
                 min_date = now_date
+                activities = [item for item in activities if item["event_time"].date() >= min_date]
             elif date_range.lower() == "week":
                 min_date = now_date - timedelta(days=7)
+                activities = [item for item in activities if item["event_time"].date() >= min_date]
             elif date_range.lower() == "month":
                 min_date = now_date - timedelta(days=30)
-            else:
-                min_date = None
-
-            if min_date:
-                activities = [
-                    item for item in activities
-                    if item["event_time"].date() >= min_date
-                ]
+                activities = [item for item in activities if item["event_time"].date() >= min_date]
+            elif date_range.lower() == "archived":
+                min_date = now_date - timedelta(days=90)
+                activities = [item for item in activities if item["event_time"].date() < min_date or item.get("is_archived")]
 
         return activities[:safe_limit]
 
@@ -4645,8 +5315,10 @@ _REASSIGN_CHECK_TABLE_MAP: dict = {
     "/cases/incident-db/{case_id}/check/{check_type}/reassign",
     response={
         200: ReassignVendorResponse,
+        400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        500: ErrorResponse,
     },
     summary="Reassign vendor for a check",
     description="Update assigned_vendor_id on a specific check row. Admin access required.",
@@ -4659,111 +5331,155 @@ def reassign_check_vendor(
     payload: ReassignVendorSchema,
 ):
     """Reassign (or unassign) a vendor on a check row and fire notifications."""
-    # 1. Admin-only guard
-    if not is_admin_or_super_admin(request.user):
-        return 403, {"error": "Admin access required"}
+    try:
+        # 1. Admin-only guard
+        if not is_admin_or_super_admin(request.user):
+            return 403, {"error": "Admin access required"}
 
-    # 2. Validate check_type
-    table = _REASSIGN_CHECK_TABLE_MAP.get(check_type.lower())
-    if not table:
-        return 404, {"error": f"Unknown check_type '{check_type}'"}
+        # 2. Validate check_type
+        table = _REASSIGN_CHECK_TABLE_MAP.get(check_type.lower())
+        if not table:
+            return 404, {"error": f"Unknown check_type '{check_type}'"}
 
-    new_vendor_id = payload.vendor_id
+        new_vendor_id = payload.vendor_id
 
-    new_vendor_name = None
-    # 3. Validate vendor_id if provided
-    if new_vendor_id is not None:
-        with connections["default"].cursor() as cursor:
-            cursor.execute(
-                "SELECT id, company_name FROM users_vendor WHERE id = %s AND is_active = TRUE",
-                [new_vendor_id],
-            )
-            vendor_row = cursor.fetchone()
-            if not vendor_row:
-                return 404, {"error": f"Vendor {new_vendor_id} not found or not active"}
-            new_vendor_name = vendor_row[1]
-
-    with connections["default"].cursor() as cursor:
-        # 4. Fetch existing check row (validates case_id + check_type combo)
-        cursor.execute(
-            f"SELECT assigned_vendor_id FROM {table} WHERE case_id = %s",
-            [case_id],
-        )
-        row = cursor.fetchone()
-        if row is None:
-            return 404, {"error": f"No {check_type} check found for case {case_id}"}
-        previous_vendor_id = row[0]
-        
-        previous_vendor_name = None
-        if previous_vendor_id is not None:
-            cursor.execute("SELECT company_name FROM users_vendor WHERE id = %s", [previous_vendor_id])
-            prev_row = cursor.fetchone()
-            if prev_row:
-                previous_vendor_name = prev_row[0]
-
-        # 5. Fetch case_number for notification messages
-        cursor.execute(
-            "SELECT case_number FROM insurance_case WHERE id = %s",
-            [case_id],
-        )
-        case_row = cursor.fetchone()
-        case_number = case_row[0] if case_row and case_row[0] else str(case_id)
-
-        # 6. Update assigned_vendor_id and check_status
-        new_status = 'WIP' if new_vendor_id else 'Not Initiated'
-        if table == 'chargesheets':
-            cursor.execute(
-                f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, advocate_status = 'Not Initiated', updated_at = NOW() WHERE case_id = %s",
-                [new_vendor_id, new_status, case_id],
-            )
-        else:
-            cursor.execute(
-                f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
-                [new_vendor_id, new_status, case_id],
-            )
-            # If insured cum driver, sync to driver_checks
-            cursor.execute("SELECT insured_cum_driver FROM insured_checks WHERE case_id = %s", [case_id])
-            icd_r = cursor.fetchone()
-            if check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or (table == 'insured_checks' and icd_r and icd_r[0]):
+        new_vendor_name = None
+        # 3. Validate vendor_id if provided
+        if new_vendor_id is not None:
+            with connections["default"].cursor() as cursor:
                 cursor.execute(
-                    "UPDATE driver_checks SET assigned_vendor_id = %s, check_status = %s, updated_at = NOW() WHERE case_id = %s",
+                    "SELECT id, company_name FROM users_vendor WHERE id = %s AND is_active = TRUE",
+                    [new_vendor_id],
+                )
+                vendor_row = cursor.fetchone()
+                if not vendor_row:
+                    return 404, {"error": f"Vendor {new_vendor_id} not found or not active"}
+                new_vendor_name = vendor_row[1]
+
+        with connections["default"].cursor() as cursor:
+            # 4. Fetch existing check row (validates case_id + check_type combo)
+            cursor.execute(
+                f"SELECT assigned_vendor_id FROM {table} WHERE case_id = %s",
+                [case_id],
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return 404, {"error": f"No {check_type} check found for case {case_id}"}
+            previous_vendor_id = row[0]
+            
+            previous_vendor_name = None
+            if previous_vendor_id is not None:
+                try:
+                    cursor.execute("SELECT company_name FROM users_vendor WHERE id = %s", [previous_vendor_id])
+                    prev_row = cursor.fetchone()
+                    if prev_row:
+                        previous_vendor_name = prev_row[0]
+                except Exception:
+                    pass
+
+            # 5. Fetch case_number for notification messages (from cases table first, fallback to insurance_case)
+            case_number = str(case_id)
+            try:
+                cursor.execute("SELECT case_number FROM cases WHERE id = %s", [case_id])
+                c_row = cursor.fetchone()
+                if c_row and c_row[0]:
+                    case_number = c_row[0]
+                else:
+                    cursor.execute("SELECT case_number FROM insurance_case WHERE id = %s", [case_id])
+                    ic_row = cursor.fetchone()
+                    if ic_row and ic_row[0]:
+                        case_number = ic_row[0]
+            except Exception:
+                pass
+
+            # 6. Update assigned_vendor_id and check_status
+            new_status = 'WIP' if new_vendor_id else 'Not Initiated'
+            has_updated_at = _column_exists(table, "updated_at")
+            updated_at_clause = ", updated_at = NOW()" if has_updated_at else ""
+
+            if table == 'chargesheets':
+                has_advocate_status = _column_exists("chargesheets", "advocate_status")
+                adv_clause = ", advocate_status = 'Not Initiated'" if has_advocate_status else ""
+                cursor.execute(
+                    f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s{adv_clause}{updated_at_clause} WHERE case_id = %s",
                     [new_vendor_id, new_status, case_id],
                 )
+            else:
+                cursor.execute(
+                    f"UPDATE {table} SET assigned_vendor_id = %s, check_status = %s{updated_at_clause} WHERE case_id = %s",
+                    [new_vendor_id, new_status, case_id],
+                )
+                # If insured cum driver, sync to driver_checks
+                try:
+                    is_icd = False
+                    if _column_exists("insured_checks", "insured_cum_driver"):
+                        cursor.execute("SELECT insured_cum_driver FROM insured_checks WHERE case_id = %s", [case_id])
+                        icd_r = cursor.fetchone()
+                        if icd_r and icd_r[0]:
+                            is_icd = True
+                    if check_type.lower() in ('insured_cum_driver', 'insured-cum-driver') or (table == 'insured_checks' and is_icd):
+                        d_has_updated_at = _column_exists("driver_checks", "updated_at")
+                        d_updated_clause = ", updated_at = NOW()" if d_has_updated_at else ""
+                        cursor.execute(
+                            f"UPDATE driver_checks SET assigned_vendor_id = %s, check_status = %s{d_updated_clause} WHERE case_id = %s",
+                            [new_vendor_id, new_status, case_id],
+                        )
+                except Exception as icd_err:
+                    logger.warning(f"Failed to sync insured_cum_driver to driver_checks: {icd_err}")
 
-    # 7. Fire-and-forget notifications (errors are swallowed inside notify_reassignment)
-    if previous_vendor_id != new_vendor_id:
-        from users.services.notification_service import notify_reassignment
-        notify_reassignment(
-            case_id=case_id,
-            check_type=check_type.lower(),
-            old_vendor_id=previous_vendor_id,
-            new_vendor_id=new_vendor_id,
-            case_number=case_number,
-        )
-        
-        actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
-        _record_case_log(
-            case_id=case_id,
-            case_number=case_number,
-            event_type='VENDOR_REASSIGNED',
-            check_type=check_type,
-            field_name='assigned_vendor_id',
-            old_value=previous_vendor_id,
-            new_value=new_vendor_id,
-            description=f"Vendor reassigned from '{previous_vendor_name or previous_vendor_id or 'None'}' to '{new_vendor_name or new_vendor_id or 'None'}'",
-            actor_id=request.user.id,
-            actor_name=actor_name,
-            actor_role=getattr(request.user, 'role', ''),
-            source='Cases'
-        )
+            # Automatically sync case full_case_status (Not Initiated if 0 assigned checks, WIP if >= 1)
+            try:
+                from users.incident_case_db import sync_case_full_status_from_checks
+                sync_case_full_status_from_checks(case_id, cursor=cursor)
+            except Exception as sync_err:
+                logger.warning(f"Failed to sync case full_case_status: {sync_err}")
 
-    return 200, {
-        "case_id": case_id,
-        "check_type": check_type,
-        "previous_vendor_id": previous_vendor_id,
-        "new_vendor_id": new_vendor_id,
-        "message": "Vendor reassignment successful",
-    }
+        # 7. Fire-and-forget notifications (errors are swallowed inside notify_reassignment)
+        if previous_vendor_id != new_vendor_id:
+            try:
+                from users.services.notification_service import notify_reassignment
+                notify_reassignment(
+                    case_id=case_id,
+                    check_type=check_type.lower(),
+                    old_vendor_id=previous_vendor_id,
+                    new_vendor_id=new_vendor_id,
+                    case_number=case_number,
+                )
+            except Exception as notif_err:
+                logger.warning(f"Failed to send vendor reassignment notification: {notif_err}")
+            
+            try:
+                actor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                _record_case_log(
+                    case_id=case_id,
+                    case_number=case_number,
+                    event_type='VENDOR_REASSIGNED',
+                    check_type=check_type,
+                    field_name='assigned_vendor_id',
+                    old_value=previous_vendor_id,
+                    new_value=new_vendor_id,
+                    description=f"Vendor reassigned from '{previous_vendor_name or previous_vendor_id or 'None'}' to '{new_vendor_name or new_vendor_id or 'None'}'",
+                    actor_id=request.user.id,
+                    actor_name=actor_name,
+                    actor_role=getattr(request.user, 'role', ''),
+                    source='Cases'
+                )
+            except Exception as log_err:
+                logger.warning(f"Failed to record case log for vendor reassignment: {log_err}")
+
+        return 200, {
+            "case_id": case_id,
+            "check_type": check_type,
+            "previous_vendor_id": previous_vendor_id,
+            "new_vendor_id": new_vendor_id,
+            "message": "Vendor reassignment successful",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to reassign vendor for case_id={case_id}, check_type={check_type}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return 500, {"error": f"Failed to reassign vendor: {str(e)}"}
 
 
 class AdminReviewCheckSchema(Schema):

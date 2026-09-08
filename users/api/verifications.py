@@ -169,6 +169,8 @@ class CreateVerificationSchema(Schema):
     claimant_contact: Optional[str] = None
     claimant_address: Optional[str] = None
     income: Optional[float] = None
+    income_per_annum: Optional[float] = None
+    income_per_month: Optional[float] = None
     fir_number_claimant: Optional[str] = None
     court_name: Optional[str] = None
     mv_act: Optional[str] = None
@@ -333,7 +335,9 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                 claimant_name=payload.claimant_name or '',
                 claimant_contact=payload.claimant_contact or '',
                 claimant_address=payload.claimant_address or '',
-                income=payload.income,
+                income=payload.income_per_annum or payload.income,
+                income_per_annum=payload.income_per_annum or payload.income,
+                income_per_month=payload.income_per_month,
                 fir_number_claimant=payload.fir_number_claimant or '',
                 court_name=payload.court_name or '',
                 mv_act=payload.mv_act or '',
@@ -402,7 +406,9 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         claimant_name=payload.claimant_name or '',
                         claimant_contact=payload.claimant_contact or '',
                         claimant_address=payload.claimant_address or '',
-                        claimant_income=payload.income,
+                        claimant_income=payload.income_per_annum or payload.income,
+                        income_per_annum=payload.income_per_annum or payload.income,
+                        income_per_month=payload.income_per_month,
                         check_status=payload.check_status,
                         statement=payload.statement or '',
                         triggers=payload.triggers or '',
@@ -514,6 +520,8 @@ def create_verification(request: HttpRequest, payload: CreateVerificationSchema)
                         lat=check_lat,
                         lng=check_lng,
                     )
+                from users.incident_case_db import sync_case_full_status_from_checks
+                sync_case_full_status_from_checks(db2_case_id)
             except Exception as db2_err:
                 logger.error(f"Failed to write verification to incident_case_db: {db2_err}")
                 # Non-fatal: primary record already saved

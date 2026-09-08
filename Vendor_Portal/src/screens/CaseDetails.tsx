@@ -81,6 +81,8 @@ const checkFieldLabels: Record<string, Record<string, string>> = {
     claimant_name: 'Claimant Name',
     claimant_contact: 'Contact',
     claimant_address: 'Address',
+    income_per_annum: 'Income Per Annum',
+    income_per_month: 'Income Per Month',
     claimant_income: 'Income',
     statement: 'Statement',
     triggers: 'Triggers',
@@ -198,13 +200,23 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   const CHARGESHEET_STATUS_OPTIONS = [
     'Not Initiated',
+    'not found',
     'Applied for CS',
     'CS Recieved to adv',
     'Dispatched',
-    'not found',
   ];
 
-  const [selectedChargesheetStatus, setSelectedChargesheetStatus] = useState<string>('Applied for CS');
+  const getChargesheetStatusIndex = (status: string | null | undefined): number => {
+    const s = String(status || '').trim().toLowerCase();
+    if (!s || s === 'not initiated' || s === 'wip') return 0;
+    if (s === 'not found') return 1;
+    if (s === 'applied for cs') return 2;
+    if (s === 'cs recieved to adv' || s === 'cs received to adv') return 3;
+    if (s === 'dispatched') return 4;
+    return 0;
+  };
+
+  const [selectedChargesheetStatus, setSelectedChargesheetStatus] = useState<string>('Not Initiated');
   const [advocateRemark, setAdvocateRemark] = useState<string>('');
   const [rtoRemark, setRtoRemark] = useState<string>('');
   const [isSavingStatus, setIsSavingStatus] = useState<boolean>(false);
@@ -212,6 +224,8 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   const checkAdvocateStatus = data?.check?.advocate_status;
   const checkStatus = data?.check?.check_status;
+  const currentSavedStatus = checkAdvocateStatus || checkStatus || 'Not Initiated';
+  const currentSavedIndex = getChargesheetStatusIndex(currentSavedStatus);
   const checkAdvocateRemark = data?.check?.advocate_remark;
   const vendorFeedback = data?.check?.vendor_feedback;
   const checkRemarks = data?.check?.remarks;
@@ -223,6 +237,8 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
       setSelectedChargesheetStatus(checkAdvocateStatus);
     } else if (checkStatus) {
       setSelectedChargesheetStatus(checkStatus);
+    } else {
+      setSelectedChargesheetStatus('Not Initiated');
     }
     if (checkAdvocateRemark) {
       setAdvocateRemark(checkAdvocateRemark);
@@ -237,13 +253,35 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   }, [checkAdvocateStatus, checkStatus, checkAdvocateRemark, vendorFeedback, checkRemarks, qRtoRemark, qVendorFeedback]);
 
   const handleUpdateChargesheetStatus = (newStatus: string) => {
+    const newIdx = getChargesheetStatusIndex(newStatus);
+    if (newIdx < currentSavedIndex) {
+      showToast({
+        type: 'warning',
+        title: 'One-Way Flow',
+        message: 'You cannot select a previous status in the sequence.',
+      });
+      return;
+    }
     setSelectedChargesheetStatus(newStatus);
-    const isPhotoRequired = (newStatus === 'Applied for CS' || newStatus === 'CS Recieved to adv' || newStatus === 'Dispatched');
-    if (isPhotoRequired && evidencePhotos.length === 0 && pendingPhotos.length === 0) {
+    const isPhotoRequired = (
+      newStatus === 'Applied for CS' ||
+      newStatus === 'CS Recieved to adv' ||
+      newStatus === 'Dispatched' ||
+      newStatus.toLowerCase() === 'applied for cs' ||
+      newStatus.toLowerCase() === 'cs recieved to adv' ||
+      newStatus.toLowerCase() === 'cs received to adv' ||
+      newStatus.toLowerCase() === 'dispatched'
+    );
+    const existingPhotosForStatus =
+      newStatus.toLowerCase() === 'applied for cs' ? appliedCsPhotos :
+      (newStatus.toLowerCase().includes('cs rec') ? csReceivedPhotos :
+      (newStatus.toLowerCase() === 'dispatched' ? dispatchedPhotos : []));
+
+    if (isPhotoRequired && existingPhotosForStatus.length === 0 && pendingPhotos.length === 0) {
       showToast({
         type: 'info',
         title: 'Photo Required',
-        message: `Please upload a photo below for status '${newStatus}'.`,
+        message: `Please upload a photo below for status '${newStatus === 'not found' ? 'Not Found' : newStatus}'.`,
       });
     }
   };
@@ -509,8 +547,14 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
   const showUploadErrorModal = (err: any, fallbackTitle = 'Upload Failed') => {
     console.log(`${fallbackTitle}:`, err);
-    const errorMsg = err?.details?.error || err?.message || 'Failed to upload photo.';
-    const isLocationError = errorMsg.toLowerCase().includes('location') || errorMsg.toLowerCase().includes('mismatch');
+    let errorMsg = err?.details?.error || err?.message || 'Failed to upload photo.';
+    if (typeof errorMsg !== 'string') {
+      errorMsg = JSON.stringify(errorMsg);
+    }
+    const isLocationError = errorMsg.toLowerCase().includes('location') || errorMsg.toLowerCase().includes('mismatch') || errorMsg.toLowerCase().includes('gps');
+    
+    setUploading(false);
+
     if (isLocationError) {
       showDialog({
         type: 'error',
@@ -518,8 +562,9 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         message: errorMsg,
         actions: [{ text: 'OK' }],
       });
+      showToast({ type: 'error', title: 'Location Mismatch', message: errorMsg, duration: 6000 });
     } else {
-      showToast({ type: 'error', title: fallbackTitle, message: errorMsg });
+      showToast({ type: 'error', title: fallbackTitle, message: errorMsg, duration: 4000 });
     }
   };
 
@@ -1198,7 +1243,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <MaterialCommunityIcons name="list-status" size={20} color="#0F5FA8" />
                   <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F5FA8' }}>
-                    {selectedChargesheetStatus || 'Select Status'}
+                    {selectedChargesheetStatus === 'not found' ? 'Not Found' : (selectedChargesheetStatus || 'Select Status')}
                   </Text>
                 </View>
                 {isSavingStatus ? (
@@ -1211,7 +1256,10 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
               {showStatusModal && (
                 <View style={{ marginTop: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
                   {CHARGESHEET_STATUS_OPTIONS.map((opt) => {
-                    const isSelected = selectedChargesheetStatus === opt;
+                    const optIndex = getChargesheetStatusIndex(opt);
+                    const isSelected = selectedChargesheetStatus === opt || selectedChargesheetStatus.toLowerCase() === opt.toLowerCase();
+                    const isPrevious = optIndex < currentSavedIndex;
+
                     return (
                       <TouchableOpacity
                         key={opt}
@@ -1221,18 +1269,33 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                           justifyContent: 'space-between',
                           paddingHorizontal: 16,
                           paddingVertical: 12,
-                          backgroundColor: isSelected ? '#F0F9FF' : '#FFFFFF',
+                          backgroundColor: isSelected ? '#F0F9FF' : (isPrevious ? '#F8FAFC' : '#FFFFFF'),
                           borderBottomWidth: 1,
                           borderBottomColor: '#F1F5F9',
+                          opacity: isPrevious ? 0.45 : 1,
                         }}
+                        disabled={isPrevious}
                         onPress={() => {
+                          if (isPrevious) return;
                           setShowStatusModal(false);
                           handleUpdateChargesheetStatus(opt);
                         }}
                       >
-                        <Text style={{ fontSize: 15, fontWeight: isSelected ? '600' : '400', color: isSelected ? '#0F5FA8' : '#334155' }}>
-                          {opt}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          {isPrevious && (
+                            <MaterialCommunityIcons name="lock-outline" size={16} color="#94A3B8" />
+                          )}
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              fontWeight: isSelected ? '600' : '400',
+                              color: isPrevious ? '#94A3B8' : (isSelected ? '#0F5FA8' : '#334155'),
+                              textDecorationLine: isPrevious ? 'line-through' : 'none',
+                            }}
+                          >
+                            {opt === 'not found' ? 'Not Found' : opt}
+                          </Text>
+                        </View>
                         {isSelected && <MaterialCommunityIcons name="check" size={20} color="#0F5FA8" />}
                       </TouchableOpacity>
                     );
@@ -1242,7 +1305,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             </View>
           )}
 
-          {normalizedCheckType === 'chargesheet' && selectedChargesheetStatus === 'not found' && (
+          {normalizedCheckType === 'chargesheet' && (selectedChargesheetStatus === 'not found' || selectedChargesheetStatus.toLowerCase() === 'not found') && (
             <View style={[styles.section, { marginTop: 16 }]}>
               <Text style={styles.sectionTitle}>Advocate Remark</Text>
               <TextInput
@@ -1266,12 +1329,14 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             </View>
           )}
 
-          {normalizedCheckType === 'chargesheet' && selectedChargesheetStatus === 'Applied for CS' && (() => {
+          {normalizedCheckType === 'chargesheet' && (selectedChargesheetStatus === 'Applied for CS' || selectedChargesheetStatus.toLowerCase() === 'applied for cs') && (() => {
             const photos = appliedCsPhotos;
             const category = 'applied_cs';
             const sectionTitle = 'Applied for CS - Photos';
+            const isLocked = currentSavedIndex >= 2 && photos.length > 0;
 
             const handleUploadFromGallery = async () => {
+              if (isLocked) return;
               const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
               if (status !== 'granted') {
                 showToast({ type: 'error', title: 'Permission Denied', message: 'We need access to your photos.' });
@@ -1303,6 +1368,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             };
 
             const handleTakePhoto = async () => {
+              if (isLocked) return;
               const { status } = await ImagePicker.requestCameraPermissionsAsync();
               if (status !== 'granted') {
                 showToast({ type: 'error', title: 'Permission Denied', message: 'We need camera access.' });
@@ -1337,6 +1403,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             };
 
             const handleDelete = async (photo: any) => {
+              if (isLocked) return;
               const fname = getEvidencePhotoName(photo);
               setDeletingPhotoName(fname);
               try {
@@ -1363,18 +1430,20 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                       <View key={`applied-${getEvidencePhotoName(photo)}-${idx}`} style={styles.photoCard}>
                         <View style={styles.photoImageWrapper}>
                           <Image source={{ uri: getEvidencePhotoUri(photo, apiHost) }} style={styles.photoImage} resizeMode="cover" />
-                          <TouchableOpacity
-                            style={[styles.removePhotoButton, deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled]}
-                            onPress={() => handleDelete(photo)}
-                            disabled={deletingPhotoName === getEvidencePhotoName(photo)}
-                            activeOpacity={0.8}
-                          >
-                            {deletingPhotoName === getEvidencePhotoName(photo) ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <Text style={styles.removePhotoButtonText}>×</Text>
-                            )}
-                          </TouchableOpacity>
+                          {!isLocked && (
+                            <TouchableOpacity
+                              style={[styles.removePhotoButton, deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled]}
+                              onPress={() => handleDelete(photo)}
+                              disabled={deletingPhotoName === getEvidencePhotoName(photo)}
+                              activeOpacity={0.8}
+                            >
+                              {deletingPhotoName === getEvidencePhotoName(photo) ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={styles.removePhotoButtonText}>×</Text>
+                              )}
+                            </TouchableOpacity>
+                          )}
                         </View>
                         <Text style={styles.photoName} numberOfLines={1}>{getEvidencePhotoName(photo)}</Text>
                         <Text style={styles.photoDate}>{photo.uploaded_at ? new Date(photo.uploaded_at).toLocaleDateString() : ''}</Text>
@@ -1382,24 +1451,35 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                     ))}
                   </View>
                 )}
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]} onPress={handleUploadFromGallery} disabled={uploading} activeOpacity={0.8}>
-                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>From Gallery</Text></>)}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]} onPress={handleTakePhoto} disabled={uploading} activeOpacity={0.8}>
-                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>Take Photo</Text></>)}
-                  </TouchableOpacity>
-                </View>
+                {isLocked ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 }}>
+                    <MaterialCommunityIcons name="lock" size={16} color="#16A34A" />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#166534' }}>
+                      Photos submitted and locked
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                    <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]} onPress={handleUploadFromGallery} disabled={uploading} activeOpacity={0.8}>
+                      {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>From Gallery</Text></>)}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]} onPress={handleTakePhoto} disabled={uploading} activeOpacity={0.8}>
+                      {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>Take Photo</Text></>)}
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             );
           })()}
 
-          {normalizedCheckType === 'chargesheet' && selectedChargesheetStatus === 'CS Recieved to adv' && (() => {
+          {normalizedCheckType === 'chargesheet' && (selectedChargesheetStatus === 'CS Recieved to adv' || selectedChargesheetStatus.toLowerCase() === 'cs recieved to adv' || selectedChargesheetStatus.toLowerCase() === 'cs received to adv') && (() => {
             const photos = csReceivedPhotos;
             const category = 'cs_received';
             const sectionTitle = 'CS Received to Adv - Photos';
+            const isLocked = currentSavedIndex >= 3 && photos.length > 0;
 
             const handleUploadFromGallery = async () => {
+              if (isLocked) return;
               const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
               if (status !== 'granted') {
                 showToast({ type: 'error', title: 'Permission Denied', message: 'We need access to your photos.' });
@@ -1431,6 +1511,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             };
 
             const handleTakePhoto = async () => {
+              if (isLocked) return;
               const { status } = await ImagePicker.requestCameraPermissionsAsync();
               if (status !== 'granted') {
                 showToast({ type: 'error', title: 'Permission Denied', message: 'We need camera access.' });
@@ -1465,6 +1546,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             };
 
             const handleDelete = async (photo: any) => {
+              if (isLocked) return;
               const fname = getEvidencePhotoName(photo);
               setDeletingPhotoName(fname);
               try {
@@ -1491,18 +1573,20 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                       <View key={`cs-rec-${getEvidencePhotoName(photo)}-${idx}`} style={styles.photoCard}>
                         <View style={styles.photoImageWrapper}>
                           <Image source={{ uri: getEvidencePhotoUri(photo, apiHost) }} style={styles.photoImage} resizeMode="cover" />
-                          <TouchableOpacity
-                            style={[styles.removePhotoButton, deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled]}
-                            onPress={() => handleDelete(photo)}
-                            disabled={deletingPhotoName === getEvidencePhotoName(photo)}
-                            activeOpacity={0.8}
-                          >
-                            {deletingPhotoName === getEvidencePhotoName(photo) ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <Text style={styles.removePhotoButtonText}>×</Text>
-                            )}
-                          </TouchableOpacity>
+                          {!isLocked && (
+                            <TouchableOpacity
+                              style={[styles.removePhotoButton, deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled]}
+                              onPress={() => handleDelete(photo)}
+                              disabled={deletingPhotoName === getEvidencePhotoName(photo)}
+                              activeOpacity={0.8}
+                            >
+                              {deletingPhotoName === getEvidencePhotoName(photo) ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={styles.removePhotoButtonText}>×</Text>
+                              )}
+                            </TouchableOpacity>
+                          )}
                         </View>
                         <Text style={styles.photoName} numberOfLines={1}>{getEvidencePhotoName(photo)}</Text>
                         <Text style={styles.photoDate}>{photo.uploaded_at ? new Date(photo.uploaded_at).toLocaleDateString() : ''}</Text>
@@ -1510,24 +1594,35 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                     ))}
                   </View>
                 )}
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]} onPress={handleUploadFromGallery} disabled={uploading} activeOpacity={0.8}>
-                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>From Gallery</Text></>)}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]} onPress={handleTakePhoto} disabled={uploading} activeOpacity={0.8}>
-                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>Take Photo</Text></>)}
-                  </TouchableOpacity>
-                </View>
+                {isLocked ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 }}>
+                    <MaterialCommunityIcons name="lock" size={16} color="#16A34A" />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#166534' }}>
+                      Photos submitted and locked
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                    <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]} onPress={handleUploadFromGallery} disabled={uploading} activeOpacity={0.8}>
+                      {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>From Gallery</Text></>)}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]} onPress={handleTakePhoto} disabled={uploading} activeOpacity={0.8}>
+                      {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>Take Photo</Text></>)}
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             );
           })()}
 
-          {normalizedCheckType === 'chargesheet' && selectedChargesheetStatus === 'Dispatched' && (() => {
+          {normalizedCheckType === 'chargesheet' && (selectedChargesheetStatus === 'Dispatched' || selectedChargesheetStatus.toLowerCase() === 'dispatched') && (() => {
             const photos = dispatchedPhotos;
             const category = 'dispatched';
             const sectionTitle = 'Dispatched - Photos';
+            const isLocked = currentSavedIndex >= 4 && photos.length > 0;
 
             const handleUploadFromGallery = async () => {
+              if (isLocked) return;
               const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
               if (status !== 'granted') {
                 showToast({ type: 'error', title: 'Permission Denied', message: 'We need access to your photos.' });
@@ -1559,6 +1654,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             };
 
             const handleTakePhoto = async () => {
+              if (isLocked) return;
               const { status } = await ImagePicker.requestCameraPermissionsAsync();
               if (status !== 'granted') {
                 showToast({ type: 'error', title: 'Permission Denied', message: 'We need camera access.' });
@@ -1608,6 +1704,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             };
 
             const handleDelete = async (photo: any) => {
+              if (isLocked) return;
               const fname = getEvidencePhotoName(photo);
               setDeletingPhotoName(fname);
               try {
@@ -1634,18 +1731,20 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                       <View key={`dispatched-${getEvidencePhotoName(photo)}-${idx}`} style={styles.photoCard}>
                         <View style={styles.photoImageWrapper}>
                           <Image source={{ uri: getEvidencePhotoUri(photo, apiHost) }} style={styles.photoImage} resizeMode="cover" />
-                          <TouchableOpacity
-                            style={[styles.removePhotoButton, deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled]}
-                            onPress={() => handleDelete(photo)}
-                            disabled={deletingPhotoName === getEvidencePhotoName(photo)}
-                            activeOpacity={0.8}
-                          >
-                            {deletingPhotoName === getEvidencePhotoName(photo) ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <Text style={styles.removePhotoButtonText}>×</Text>
-                            )}
-                          </TouchableOpacity>
+                          {!isLocked && (
+                            <TouchableOpacity
+                              style={[styles.removePhotoButton, deletingPhotoName === getEvidencePhotoName(photo) && styles.removePhotoButtonDisabled]}
+                              onPress={() => handleDelete(photo)}
+                              disabled={deletingPhotoName === getEvidencePhotoName(photo)}
+                              activeOpacity={0.8}
+                            >
+                              {deletingPhotoName === getEvidencePhotoName(photo) ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={styles.removePhotoButtonText}>×</Text>
+                              )}
+                            </TouchableOpacity>
+                          )}
                         </View>
                         <Text style={styles.photoName} numberOfLines={1}>{getEvidencePhotoName(photo)}</Text>
                         <Text style={styles.photoDate}>{photo.uploaded_at ? new Date(photo.uploaded_at).toLocaleDateString() : ''}</Text>
@@ -1653,25 +1752,49 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                     ))}
                   </View>
                 )}
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]} onPress={handleUploadFromGallery} disabled={uploading} activeOpacity={0.8}>
-                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>From Gallery</Text></>)}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]} onPress={handleTakePhoto} disabled={uploading} activeOpacity={0.8}>
-                    {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>Take Photo</Text></>)}
-                  </TouchableOpacity>
-                </View>
+                {isLocked ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 }}>
+                    <MaterialCommunityIcons name="lock" size={16} color="#16A34A" />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#166534' }}>
+                      Photos submitted and locked
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                    <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: PRIMARY_BLUE }]} onPress={handleUploadFromGallery} disabled={uploading} activeOpacity={0.8}>
+                      {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="image-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>From Gallery</Text></>)}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.smallActionButton, { flex: 1, backgroundColor: '#2E9B62' }]} onPress={handleTakePhoto} disabled={uploading} activeOpacity={0.8}>
+                      {uploading ? <ActivityIndicator color="#fff" size="small" /> : (<><MaterialCommunityIcons name="camera-outline" size={16} color="#FFFFFF" /><Text style={styles.smallActionButtonText}>Take Photo</Text></>)}
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             );
           })()}
 
-
-
           {normalizedCheckType === 'chargesheet' && (() => {
-            const isPhotoRequired = (selectedChargesheetStatus === 'Applied for CS' || selectedChargesheetStatus === 'CS Recieved to adv' || selectedChargesheetStatus === 'Dispatched');
-            const statusPhotos = selectedChargesheetStatus === 'Applied for CS' ? appliedCsPhotos : (selectedChargesheetStatus === 'CS Recieved to adv' ? csReceivedPhotos : dispatchedPhotos);
+            const isPhotoRequired = (
+              selectedChargesheetStatus === 'Applied for CS' ||
+              selectedChargesheetStatus === 'CS Recieved to adv' ||
+              selectedChargesheetStatus === 'Dispatched' ||
+              selectedChargesheetStatus.toLowerCase() === 'applied for cs' ||
+              selectedChargesheetStatus.toLowerCase() === 'cs recieved to adv' ||
+              selectedChargesheetStatus.toLowerCase() === 'cs received to adv' ||
+              selectedChargesheetStatus.toLowerCase() === 'dispatched'
+            );
+            const statusPhotos = (selectedChargesheetStatus === 'Applied for CS' || selectedChargesheetStatus.toLowerCase() === 'applied for cs')
+              ? appliedCsPhotos
+              : ((selectedChargesheetStatus === 'CS Recieved to adv' || selectedChargesheetStatus.toLowerCase() === 'cs recieved to adv' || selectedChargesheetStatus.toLowerCase() === 'cs received to adv')
+                ? csReceivedPhotos
+                : dispatchedPhotos);
             const hasPhoto = statusPhotos.length > 0;
-            const isSubmitDisabled = uploading || (isPhotoRequired && !hasPhoto);
+            const selectedIdx = getChargesheetStatusIndex(selectedChargesheetStatus);
+            const isAlreadySubmitted = (
+              selectedChargesheetStatus.toLowerCase() === currentSavedStatus.toLowerCase() &&
+              (isPhotoRequired ? (hasPhoto && currentSavedIndex >= selectedIdx) : (currentSavedIndex === selectedIdx && selectedIdx > 0))
+            );
+            const isSubmitDisabled = uploading || (isPhotoRequired && !hasPhoto) || isAlreadySubmitted;
 
             return (
               <View style={[styles.section, { marginTop: 16 }]}>
@@ -1712,14 +1835,25 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <View style={styles.uploadButtonContent}>
-                      <MaterialCommunityIcons name="content-save-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.uploadButtonText}>Submit</Text>
+                      <MaterialCommunityIcons
+                        name={isAlreadySubmitted ? "check-circle-outline" : "content-save-outline"}
+                        size={20}
+                        color="#FFFFFF"
+                      />
+                      <Text style={styles.uploadButtonText}>
+                        {isAlreadySubmitted ? "Submitted" : "Submit"}
+                      </Text>
                     </View>
                   )}
                 </TouchableOpacity>
-                {isPhotoRequired && !hasPhoto && (
+                {isPhotoRequired && !hasPhoto && !isAlreadySubmitted && (
                   <Text style={{ fontSize: 13, color: '#E53E3E', textAlign: 'center', marginTop: 8, fontWeight: '500' }}>
-                    Please upload a photo above to enable Submit for status '{selectedChargesheetStatus}'.
+                    Please upload a photo above to enable Submit for status '{selectedChargesheetStatus === 'not found' ? 'Not Found' : selectedChargesheetStatus}'.
+                  </Text>
+                )}
+                {isAlreadySubmitted && (
+                  <Text style={{ fontSize: 13, color: '#16A34A', textAlign: 'center', marginTop: 8, fontWeight: '500' }}>
+                    Status '{selectedChargesheetStatus === 'not found' ? 'Not Found' : selectedChargesheetStatus}' is submitted and photos are locked.
                   </Text>
                 )}
               </View>
@@ -2396,15 +2530,15 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
         </ScrollView>
 
         {/* Full-screen Loading Indicator while Photo/Evidence is uploading */}
-        <Modal visible={uploading} transparent animationType="fade" statusBarTranslucent>
-          <View style={styles.loadingModalOverlay}>
+        {uploading && (
+          <View style={styles.loadingModalOverlay} pointerEvents="auto">
             <View style={styles.loadingModalCard}>
               <ActivityIndicator size="large" color="#0F5FA8" style={{ marginBottom: 14 }} />
               <Text style={styles.loadingModalTitle}>Processing & Uploading Photo...</Text>
               <Text style={styles.loadingModalSubTitle}>Validating photo location & uploading evidence</Text>
             </View>
           </View>
-        </Modal>
+        )}
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -3030,11 +3164,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   loadingModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+    zIndex: 99999,
+    elevation: 9999,
   },
   loadingModalCard: {
     backgroundColor: '#FFFFFF',

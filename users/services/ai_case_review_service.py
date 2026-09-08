@@ -155,6 +155,23 @@ class AICaseReviewService:
         if statements_info:
             sections.append("=== AVAILABLE STATEMENTS ===\n" + "\n".join(statements_info))
 
+        # Chargesheet Details (if available)
+        if case_context.get('has_chargesheet') or case_context.get('chargesheet_data'):
+            cs = case_context.get('chargesheet_data') or {}
+            cs_info = []
+            if cs.get('court_name'): cs_info.append(f"Court Name: {cs['court_name']}")
+            if cs.get('fir_number'): cs_info.append(f"FIR Number: {cs['fir_number']}")
+            if cs.get('fir_delay_days') is not None and cs.get('fir_delay_days') != '': cs_info.append(f"FIR Delay: {cs['fir_delay_days']} days")
+            if cs.get('mv_act'): cs_info.append(f"Motor Vehicle Act (MV Act): {cs['mv_act']}")
+            if cs.get('ipc'): cs_info.append(f"IPC Sections: {cs['ipc']}")
+            if cs.get('bsn_section'): cs_info.append(f"BSN Section: {cs['bsn_section']}")
+            if cs.get('triggers'): cs_info.append(f"Triggers / Observations: {cs['triggers']}")
+            if cs.get('advocate_status'): cs_info.append(f"Advocate Status: {cs['advocate_status']}")
+            if cs.get('negative_status'): cs_info.append(f"Negative Status: {cs['negative_status']}")
+            if cs.get('statement'): cs_info.append(f"Chargesheet Summary / Remarks: {cs['statement']}")
+            if cs_info:
+                sections.append("=== CHARGESHEET DETAILS ===\n" + "\n".join(cs_info))
+
         # Vendor Evidence
         vendor_evidence = case_context.get('vendor_evidence') or []
         if vendor_evidence:
@@ -222,7 +239,12 @@ class AICaseReviewService:
 
         normalized_text = (statement_text or "").strip()
         has_spot_check = case_context.get("has_spot_check", False)
-        if not normalized_text and not has_spot_check:
+        has_chargesheet = case_context.get("has_chargesheet", False)
+        has_rti_check = case_context.get("has_rti_check", False)
+        has_rto_check = case_context.get("has_rto_check", False)
+        has_non_statement_check = has_spot_check or has_chargesheet or has_rti_check or has_rto_check
+
+        if not normalized_text and not has_non_statement_check:
             raise AICaseReviewGenerationError("No vendor statements were provided for report generation.")
 
         prompt = self.build_prompt(case_context, normalized_text)

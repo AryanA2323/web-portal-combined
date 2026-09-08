@@ -153,9 +153,17 @@ const ApprovalsPage = () => {
                           label={req.status}
                           size="small"
                           sx={{
-                            fontWeight: 700, fontSize: '11px',
-                            bgcolor: req.status === 'PENDING' ? '#fef3c7' : req.status === 'APPROVED' ? '#dcfce7' : '#fee2e2',
-                            color: req.status === 'PENDING' ? '#d97706' : req.status === 'APPROVED' ? '#166534' : '#991b1b',
+                            fontWeight: 800,
+                            fontSize: '13px',
+                            height: '28px',
+                            borderRadius: '8px',
+                            border: '1.5px solid',
+                            bgcolor: req.status === 'PENDING' ? '#fff7ed' : req.status === 'APPROVED' ? '#f0fdf4' : '#fef2f2',
+                            color: req.status === 'PENDING' ? '#ea580c' : req.status === 'APPROVED' ? '#16a34a' : '#dc2626',
+                            borderColor: req.status === 'PENDING' ? '#ea580c' : req.status === 'APPROVED' ? '#16a34a' : '#dc2626',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                            letterSpacing: '0.2px',
+                            px: 0.5,
                           }}
                         />
                       </TableCell>

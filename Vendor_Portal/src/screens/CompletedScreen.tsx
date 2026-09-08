@@ -27,6 +27,7 @@ const checkStatusColors: Record<string, { solid: string; soft: string; icon: key
   'CS Recieved to adv': { solid: '#6E59CF', soft: '#F1EFFC', icon: 'file-check-outline' },
   Dispatched: { solid: '#2F7A8E', soft: '#EBF4F6', icon: 'truck-delivery-outline' },
   'not found': { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
+  'Not Found': { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
   Completed: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   Verified: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   'Unable to Verify': { solid: '#EF4444', soft: '#FEE2E2', icon: 'close-octagon-outline' },

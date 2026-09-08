@@ -4,7 +4,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { renderTimeViewClock } from '@mui/x-date-pickers/timeViewRenderers';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -100,46 +100,163 @@ const resolveMediaUrl = (url) => {
 
 // Full case status colors (incident_case_db values)
 const fullCaseStatusColors = {
-  'WIP': '#f6ad55',
-  'Pending CS': '#ed8936',
-  'Closed': '#48bb78',
-  'IR-Writing': '#4299e1',
-  'NI': '#a0aec0',
-  'Withdraw': '#f56565',
-  'QC-1': '#9f7aea',
-  'Pending Additional Docs': '#ed8936',
-  'Connected Pending': '#b794f4',
-  'RCU Pending': '#76e4f7',
+  'Not Initiated': '#475569',
+  'WIP': '#c2410c',
+  'Pending CS': '#c2410c',
+  'Closed': '#15803d',
+  'IR-Writing': '#1d4ed8',
+  'NI': '#475569',
+  'Withdraw': '#b91c1c',
+  'QC-1': '#6b21a8',
+  'Pending Additional Docs': '#c2410c',
+  'Connected Pending': '#6b21a8',
+  'RCU Pending': '#0e7490',
   'Portal Upload': '#17539C',
 };
 
 // Investigation report status colors
 const irStatusColors = {
-  'Open': '#4299e1',
-  'Approval': '#f6ad55',
-  'Stop': '#f56565',
-  'QC': '#9f7aea',
-  'Dispatch': '#48bb78',
+  'Open': '#1d4ed8',
+  'Approval': '#c2410c',
+  'Stop': '#b91c1c',
+  'QC': '#6b21a8',
+  'Dispatch': '#15803d',
 };
 
 // Verification check_status colors
 const checkStatusColors = {
-  'Not Initiated': '#a0aec0',
-  'WIP': '#f6ad55',
-  'Under Verification': '#0284c7',
-  'Verified': '#2e7d32',
-  'Accepted': '#2e7d32',
-  'Reassigned': '#e11d48',
-  'Closed': '#48bb78',
-  'Stop': '#f56565',
+  'Not Initiated': '#475569',
+  'WIP': '#c2410c',
+  'Under Verification': '#0369a1',
+  'Verified': '#15803d',
+  'Accepted': '#15803d',
+  'Reassigned': '#be123c',
+  'Closed': '#15803d',
+  'Stop': '#b91c1c',
 };
 
 // Investigation type chip colors
 const investigationTypeColors = {
   'Full Case': '#17539C',
-  'Partial Case': '#9f7aea',
-  'Reassessment': '#4299e1',
-  'Connected Case': '#76e4f7',
+  'Partial Case': '#9333ea',
+  'Reassessment': '#0284c7',
+  'Connected Case': '#4f46e5',
+};
+
+// Icon representing submitted checks status
+const DocumentCheckIcon = ({ color = '#16a34a', type = 'check', size = 26 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 28"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    style={{ display: 'block', flexShrink: 0 }}
+  >
+    <path
+      d="M15 2H6.5C4.567 2 3 3.567 3 5.5V22.5C3 24.433 4.567 26 6.5 26H17.5C19.433 26 21 24.433 21 22.5V8L15 2Z"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M15 2V8H21"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {type === 'check' ? (
+      <path
+        d="M7.5 15.5L10.5 18.5L16.5 12"
+        stroke={color}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    ) : (
+      <>
+        <path
+          d="M7.5 14H16.5"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <path
+          d="M7.5 18H13.5"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </>
+    )}
+  </svg>
+);
+
+// Render Checks Submitted column cell with icon and count pill
+const renderChecksSubmittedCell = (subItems = []) => {
+  const totalChecks = subItems.length;
+  const submittedChecks = subItems.filter((sub) => {
+    const status = (sub.check_status || '').trim().toLowerCase();
+    const advocateStatus = (sub.advocate_status || '').trim().toLowerCase();
+
+    if (!status || status === 'not initiated' || status === 'ni' || status === 'wip' || status === 'reassigned') {
+      if (sub.type === 'Chargesheet' && advocateStatus && advocateStatus !== 'not initiated' && advocateStatus !== 'wip' && advocateStatus !== 'ni') {
+        return true;
+      }
+      return false;
+    }
+    return true;
+  }).length;
+
+  let iconColor = '#64748b';
+  let iconType = 'check';
+  let badgeBg = '#f1f5f9';
+  let badgeTextColor = '#334155';
+
+  if (totalChecks > 0 && submittedChecks === totalChecks) {
+    iconColor = '#16a34a';
+    iconType = 'check';
+    badgeBg = '#e8f8ee';
+    badgeTextColor = '#15803d';
+  } else if (submittedChecks > 0) {
+    iconColor = '#eab308';
+    iconType = submittedChecks >= 4 ? 'check' : 'lines';
+    badgeBg = '#fef9c3';
+    badgeTextColor = '#854d0e';
+  } else {
+    iconColor = '#64748b';
+    iconType = 'check';
+    badgeBg = '#f1f5f9';
+    badgeTextColor = '#334155';
+  }
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.25 }}>
+      <DocumentCheckIcon color={iconColor} type={iconType} size={24} />
+      <Box
+        sx={{
+          bgcolor: badgeBg,
+          color: badgeTextColor,
+          fontWeight: 700,
+          fontSize: '13px',
+          px: 1.25,
+          py: 0.2,
+          minWidth: '44px',
+          height: '24px',
+          borderRadius: '9999px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxSizing: 'border-box',
+          letterSpacing: '0.2px',
+        }}
+      >
+        {`${submittedChecks}/${totalChecks}`}
+      </Box>
+    </Box>
+  );
 };
 
 const QUESTIONNAIRE_LABELS = {
@@ -283,14 +400,185 @@ const parseQuestionnaire = (rawVal) => {
   return null;
 };
 
+const INDIAN_STATES_MAP = {
+  'andaman and nicobar islands': 'Andaman & Nicobar',
+  'andaman and nicobar': 'Andaman & Nicobar',
+  'andhra pradesh': 'Andhra Pradesh',
+  'arunachal pradesh': 'Arunachal Pradesh',
+  'assam': 'Assam',
+  'bihar': 'Bihar',
+  'chandigarh': 'Chandigarh',
+  'chhattisgarh': 'Chhattisgarh',
+  'dadra and nagar haveli and daman and diu': 'Dadra & Nagar Haveli and Daman & Diu',
+  'dadra and nagar haveli': 'Dadra & Nagar Haveli',
+  'daman and diu': 'Daman & Diu',
+  'delhi': 'Delhi',
+  'nct of delhi': 'Delhi',
+  'goa': 'Goa',
+  'gujarat': 'Gujarat',
+  'haryana': 'Haryana',
+  'himachal pradesh': 'Himachal Pradesh',
+  'jammu and kashmir': 'Jammu & Kashmir',
+  'jammu & kashmir': 'Jammu & Kashmir',
+  'jharkhand': 'Jharkhand',
+  'karnataka': 'Karnataka',
+  'kerala': 'Kerala',
+  'ladakh': 'Ladakh',
+  'lakshadweep': 'Lakshadweep',
+  'madhya pradesh': 'Madhya Pradesh',
+  'maharashtra': 'Maharashtra',
+  'manipur': 'Manipur',
+  'meghalaya': 'Meghalaya',
+  'mizoram': 'Mizoram',
+  'nagaland': 'Nagaland',
+  'odisha': 'Odisha',
+  'orissa': 'Odisha',
+  'puducherry': 'Puducherry',
+  'pondicherry': 'Puducherry',
+  'punjab': 'Punjab',
+  'rajasthan': 'Rajasthan',
+  'sikkim': 'Sikkim',
+  'tamil nadu': 'Tamil Nadu',
+  'telangana': 'Telangana',
+  'tripura': 'Tripura',
+  'uttar pradesh': 'Uttar Pradesh',
+  'uttarakhand': 'Uttarakhand',
+  'uttaranchal': 'Uttarakhand',
+  'west bengal': 'West Bengal',
+};
+
+const STATE_NAMES = Object.keys(INDIAN_STATES_MAP).sort((a, b) => b.length - a.length);
+
+const formatDistrictState = (location) => {
+  if (!location || location === '—' || location === '-' || String(location).trim() === '') {
+    return '—';
+  }
+
+  let text = String(location).trim();
+
+  // Remove country 'India'
+  text = text.replace(/,\s*India\s*$/i, '').replace(/\bIndia\b/i, '');
+  // Remove 6-digit pin codes
+  text = text.replace(/[\s–,-]+[0-9]{6}\b/g, '');
+  text = text.replace(/,\s*[0-9]{6}\b/g, '');
+  // Remove trailing commas, spaces, dashes
+  text = text.replace(/[\s–,-]+$/, '').trim();
+
+  if (!text) return '—';
+
+  // Special case: New Delhi
+  if (/\bNew Delhi\b/i.test(text)) {
+    return 'New Delhi, Delhi';
+  }
+
+  // Check if any state is present
+  let detectedState = null;
+  let canonicalState = null;
+
+  for (const st of STATE_NAMES) {
+    const regex = new RegExp('(?:^|[,\\s–-])(' + st.replace('&', '[&and]') + ')(?:$|[,\\s–-])', 'i');
+    if (regex.test(text)) {
+      detectedState = st;
+      canonicalState = INDIAN_STATES_MAP[st];
+      break;
+    }
+  }
+
+  const parts = text.split(/[,–]+/).map(p => p.trim()).filter(Boolean);
+
+  // If explicit 'District <Name>' or 'Dist. <Name>' is mentioned anywhere
+  let explicitDistrict = null;
+  for (const p of parts) {
+    const m = p.match(/(?:District|Dist\.?)\s+([A-Za-z\s]+)/i);
+    if (m && m[1]) {
+      explicitDistrict = m[1].replace(/District/gi, '').trim();
+      break;
+    }
+  }
+
+  if (canonicalState) {
+    // If text only mentions the UT/State (e.g. Chandigarh, Delhi, Goa)
+    if (parts.length === 1 || text.toLowerCase() === detectedState.toLowerCase()) {
+      return canonicalState;
+    }
+
+    // Find district candidate
+    let districtCandidate = explicitDistrict;
+
+    if (!districtCandidate) {
+      // Find the index of the part containing the state
+      let statePartIdx = -1;
+      for (let i = 0; i < parts.length; i++) {
+        if (new RegExp(detectedState.replace('&', '[&and]'), 'i').test(parts[i])) {
+          statePartIdx = i;
+          break;
+        }
+      }
+
+      if (statePartIdx > 0) {
+        // Take the element right before the state
+        let cand = parts[statePartIdx - 1];
+        // Clean out Taluka, Post, Village prefixes if attached
+        cand = cand.replace(/^(?:Taluka|Tal\.?|Village|Vill\.?|Post|P\.O\.?|City|Town)\s+/i, '');
+        cand = cand.replace(/(?:District|Dist\.?)\s+/i, '');
+        cand = cand.replace(/District/gi, '').trim();
+        districtCandidate = cand;
+      } else if (statePartIdx === 0 && parts.length > 1) {
+        let cand = parts[1];
+        cand = cand.replace(/^(?:Taluka|Tal\.?|Village|Vill\.?|Post|P\.O\.?|City|Town)\s+/i, '');
+        cand = cand.replace(/(?:District|Dist\.?)\s+/i, '');
+        cand = cand.replace(/District/gi, '').trim();
+        districtCandidate = cand;
+      }
+    }
+
+    // Special check for UTs where city/district is the UT itself (e.g. Chandigarh)
+    const isUT = ['Chandigarh', 'Delhi', 'Goa', 'Puducherry', 'Ladakh', 'Lakshadweep', 'Dadra & Nagar Haveli and Daman & Diu', 'Andaman & Nicobar'].includes(canonicalState);
+    if (isUT && (!districtCandidate || /^(?:Phase|Sector|Plot|Industrial|Ward|Block)\b/i.test(districtCandidate))) {
+      return canonicalState;
+    }
+
+    if (districtCandidate) {
+      districtCandidate = districtCandidate.trim();
+      // If districtCandidate equals state name (e.g. 'Delhi', 'Chandigarh')
+      if (districtCandidate.toLowerCase() === canonicalState.toLowerCase() ||
+          districtCandidate.toLowerCase() === detectedState.toLowerCase()) {
+        return canonicalState;
+      }
+      return `${districtCandidate}, ${canonicalState}`;
+    }
+
+    return canonicalState;
+  }
+
+  // If no known state matched but explicit district was found
+  if (explicitDistrict) {
+    return explicitDistrict;
+  }
+
+  // If multiple parts exist, take the last two (likely District, State or Area, City)
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1].replace(/(?:District|Dist\.?)\s+/i, '').replace(/District/gi, '').trim();
+    const secondLast = parts[parts.length - 2].replace(/^(?:Taluka|Tal\.?|Village|Vill\.?)\s+/i, '').replace(/(?:District|Dist\.?)\s+/i, '').replace(/District/gi, '').trim();
+    if (last && secondLast && last.toLowerCase() !== secondLast.toLowerCase()) {
+      return `${secondLast}, ${last}`;
+    }
+    return last || secondLast || text;
+  }
+
+  return parts[0] ? parts[0].replace(/(?:District|Dist\.?)\s+/i, '').trim() : text;
+};
+
 const CasesPage = ({ isClosedView = false }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [cases, setCases] = useState([]);
   const [stats, setStats] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [fullCaseStatusFilter, setFullCaseStatusFilter] = useState(isClosedView ? 'Closed' : 'all');
   const [investigationTypeFilter, setInvestigationTypeFilter] = useState('all');
+  const [reviewStatusFilter, setReviewStatusFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalCases, setTotalCases] = useState(0);
@@ -676,14 +964,39 @@ const CasesPage = ({ isClosedView = false }) => {
   };
   
   // Fetch data on mount
+  // Sync URL search params with filter
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const statusParam = params.get('status');
+    const searchParam = location.state?.search || params.get('search');
+    const reviewParam = params.get('review_pending') || params.get('review_status');
+
+    if (statusParam === 'pending_review' || reviewParam === 'true' || reviewParam === 'pending_review') {
+      setReviewStatusFilter('pending_review');
+      setFullCaseStatusFilter('all');
+    } else {
+      if (statusParam) {
+        setFullCaseStatusFilter(statusParam);
+      } else if (isClosedView) {
+        setFullCaseStatusFilter('Closed');
+      }
+    }
+
+    if (searchParam) {
+      setSearchTerm(searchParam);
+    }
+  }, [location.search, location.state, isClosedView]);
+
   useEffect(() => {
     fetchData(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, fullCaseStatusFilter, investigationTypeFilter]);
+  }, [page, rowsPerPage, fullCaseStatusFilter, investigationTypeFilter, reviewStatusFilter]);
 
   const fetchData = async (isAutoRefresh = false) => {
     try {
       if (!isAutoRefresh) setLoading(true);
+
+      const isReviewPending = reviewStatusFilter === 'pending_review' || fullCaseStatusFilter === 'pending_review';
 
       const [statsRes, casesRes] = await Promise.all([
         api.get('/dashboard/stats'),
@@ -691,7 +1004,9 @@ const CasesPage = ({ isClosedView = false }) => {
           params: {
             page: page + 1,
             page_size: rowsPerPage,
-            full_case_status: fullCaseStatusFilter !== 'all' ? fullCaseStatusFilter : undefined,
+            full_case_status: (fullCaseStatusFilter !== 'all' && fullCaseStatusFilter !== 'overdue' && fullCaseStatusFilter !== 'pending_review') ? fullCaseStatusFilter : undefined,
+            is_overdue: fullCaseStatusFilter === 'overdue' ? true : undefined,
+            review_pending: isReviewPending ? true : undefined,
             investigation_type: investigationTypeFilter !== 'all' ? investigationTypeFilter : undefined,
             search: searchTerm || undefined,
           },
@@ -723,7 +1038,7 @@ const CasesPage = ({ isClosedView = false }) => {
     }
   };
 
-  // Build stats data from API response
+  // Build stats data from API response with hyperlinks/click handlers for filtering
   const statsData = stats ? [
     {
       title: 'Total Cases',
@@ -731,6 +1046,16 @@ const CasesPage = ({ isClosedView = false }) => {
       change: stats.total_change || 0,
       icon: FolderOpen,
       iconBgColor: '#e3f2fd',
+      onClick: () => {
+        if (isClosedView) {
+          navigate('/case_manager/cases');
+        } else {
+          setFullCaseStatusFilter('all');
+          setInvestigationTypeFilter('all');
+          setSearchTerm('');
+          setPage(0);
+        }
+      },
     },
     {
       title: 'WIP Cases',
@@ -738,6 +1063,14 @@ const CasesPage = ({ isClosedView = false }) => {
       change: stats.active_change || 0,
       icon: Schedule,
       iconBgColor: '#fff3e0',
+      onClick: () => {
+        if (isClosedView) {
+          navigate('/case_manager/cases?status=WIP');
+        } else {
+          setFullCaseStatusFilter('WIP');
+          setPage(0);
+        }
+      },
     },
     {
       title: 'Closed Cases',
@@ -745,7 +1078,9 @@ const CasesPage = ({ isClosedView = false }) => {
       change: stats.closed_change || 0,
       icon: CheckCircle,
       iconBgColor: '#e8f5e9',
-      onClick: () => navigate('/case_manager/closed-cases'),
+      onClick: () => {
+        navigate('/case_manager/closed-cases');
+      },
     },
     {
       title: 'Overdue Cases',
@@ -753,6 +1088,14 @@ const CasesPage = ({ isClosedView = false }) => {
       change: stats.overdue_change || 0,
       icon: Warning,
       iconBgColor: '#ffebee',
+      onClick: () => {
+        if (isClosedView) {
+          navigate('/case_manager/cases?status=overdue');
+        } else {
+          setFullCaseStatusFilter('overdue');
+          setPage(0);
+        }
+      },
     },
   ] : [];
 
@@ -881,6 +1224,49 @@ const CasesPage = ({ isClosedView = false }) => {
       setFullCaseLoading(false);
     }
   };
+
+  // Auto-open Full Case Modal if navigated with target case ID
+  useEffect(() => {
+    const targetCaseId = location.state?.openCaseId || new URLSearchParams(location.search).get('openCaseId');
+    if (targetCaseId) {
+      openFullCaseModal(targetCaseId);
+    }
+  }, [location.state, location.search]);
+
+  // Auto-expand case checks dropdown & scroll to case if navigated with target expandCaseId
+  useEffect(() => {
+    const expandId = location.state?.expandCaseId || new URLSearchParams(location.search).get('expandCaseId');
+    if (expandId) {
+      const numId = parseInt(expandId, 10);
+      setExpandedCases(prev => ({
+        ...prev,
+        [expandId]: true,
+        ...(numId ? { [numId]: true } : {}),
+      }));
+
+      const scrollToTarget = () => {
+        const el = document.getElementById(`case-row-${expandId}`) || (numId ? document.getElementById(`case-row-${numId}`) : null);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return true;
+        }
+        return false;
+      };
+
+      if (!scrollToTarget()) {
+        const t1 = setTimeout(scrollToTarget, 100);
+        const t2 = setTimeout(scrollToTarget, 300);
+        const t3 = setTimeout(scrollToTarget, 600);
+        const t4 = setTimeout(scrollToTarget, 1000);
+        return () => {
+          clearTimeout(t1);
+          clearTimeout(t2);
+          clearTimeout(t3);
+          clearTimeout(t4);
+        };
+      }
+    }
+  }, [location.state, location.search, cases, loading]);
 
   // Open vendor assignment modal for a sub-check
   const openVendorModal = async (caseId, checkType, currentVendorId = '') => {
@@ -1073,7 +1459,7 @@ const CasesPage = ({ isClosedView = false }) => {
 
   return (
     <CaseManagerLayout disablePadding>
-      {/* Top Header Section - Increased Height for Square Stat Cards */}
+      {/* Top Header Section */}
       <Box
         sx={{
           minHeight: 110,
@@ -1082,51 +1468,36 @@ const CasesPage = ({ isClosedView = false }) => {
           px: { xs: 2, md: 3 },
           borderRadius: '0 0 16px 16px',
           boxSizing: 'border-box',
-          background: 'linear-gradient(120deg, #f0f9ff 0%, #e0e7ff 25%, #bae6fd 55%, #c7d2fe 80%, #e0f2fe 100%)',
-          boxShadow: '0 4px 16px rgba(148, 163, 184, 0.10)',
+          bgcolor: '#2566b4',
+          boxShadow: '0 4px 16px rgba(37, 102, 180, 0.20)',
           display: 'flex',
           flexDirection: { xs: 'column', md: 'row' },
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: 1.5,
           position: 'relative',
-          overflow: 'hidden',
-          border: '1px solid rgba(226, 232, 240, 0.9)',
+          border: '1px solid #1e5597',
           borderTop: 'none',
         }}
       >
-        {/* Multi-Tone Ambient Glowing Mesh Accents */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.18) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(56, 189, 248, 0.22) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(167, 139, 250, 0.15) 0%, transparent 50%)',
-            zIndex: 1,
-            pointerEvents: 'none',
-          }}
-        />
-
         {/* Left Side: Title */}
-        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box
             sx={{
               width: 44,
               height: 44,
               borderRadius: '12px',
-              background: isClosedView ? 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)' : 'linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%)',
+              bgcolor: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: isClosedView ? '0 4px 12px rgba(72,187,120,0.15)' : '0 4px 12px rgba(99,102,241,0.15)',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
             }}
           >
             {isClosedView ? (
-              <CheckCircle sx={{ fontSize: 26, color: '#27ae60' }} />
+              <CheckCircle sx={{ fontSize: 26, color: '#16a34a' }} />
             ) : (
-              <FolderOpen sx={{ fontSize: 26, color: '#4f46e5' }} />
+              <FolderOpen sx={{ fontSize: 26, color: '#17539C' }} />
             )}
           </Box>
           <Typography
@@ -1135,9 +1506,7 @@ const CasesPage = ({ isClosedView = false }) => {
               fontWeight: 800,
               fontSize: { xs: '1.5rem', md: '1.9rem' },
               letterSpacing: '-0.8px',
-              background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: '#ffffff',
               whiteSpace: 'nowrap',
             }}
           >
@@ -1236,7 +1605,10 @@ const CasesPage = ({ isClosedView = false }) => {
                     sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' } }}
                   >
                     <MenuItem value="all">All Statuses</MenuItem>
+                    <MenuItem value="pending_review">Review Pending</MenuItem>
+                    <MenuItem value="Not Initiated">Not Initiated</MenuItem>
                     <MenuItem value="WIP">WIP</MenuItem>
+                    <MenuItem value="overdue">Overdue Cases (Past TAT)</MenuItem>
                     <MenuItem value="Pending CS">Pending CS</MenuItem>
                     <MenuItem value="Closed">Closed</MenuItem>
                     <MenuItem value="IR-Writing">IR-Writing</MenuItem>
@@ -1248,6 +1620,19 @@ const CasesPage = ({ isClosedView = false }) => {
                   </Select>
                 </FormControl>
               )}
+
+              {/* Review Status Filter */}
+              <FormControl size="small" sx={{ minWidth: 175 }}>
+                <Select
+                  value={reviewStatusFilter}
+                  onChange={(e) => { setReviewStatusFilter(e.target.value); setPage(0); }}
+                  displayEmpty
+                  sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' } }}
+                >
+                  <MenuItem value="all">All Review Statuses</MenuItem>
+                  <MenuItem value="pending_review">Review Pending (Submitted Checks)</MenuItem>
+                </Select>
+              </FormControl>
 
               {/* Investigation Type Filter */}
               <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -1273,6 +1658,7 @@ const CasesPage = ({ isClosedView = false }) => {
                   setSearchTerm('');
                   setFullCaseStatusFilter(isClosedView ? 'Closed' : 'all');
                   setInvestigationTypeFilter('all');
+                  setReviewStatusFilter('all');
                   setPage(0);
                 }}
                 sx={{
@@ -1328,26 +1714,41 @@ const CasesPage = ({ isClosedView = false }) => {
 
           {/* Table */}
           <TableContainer sx={{ border: '1px solid #e0e0e0', borderRadius: '8px' }}>
-            <Table sx={{ minWidth: 1200, tableLayout: 'fixed', '& .MuiTableCell-root': { borderRight: '1px solid #edf2f7', py: 1 } }}>
+            <Table
+              sx={{
+                minWidth: 1440,
+                tableLayout: 'fixed',
+                '& .MuiTableCell-root': {
+                  borderRight: '1px solid #edf2f7',
+                },
+                '& .MuiTableHead-root .MuiTableCell-root': {
+                  py: 1.15,
+                },
+                '& .MuiTableBody-root .MuiTableCell-root': {
+                  py: 0.9,
+                },
+              }}
+            >
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#f8f9fa' }}>
-                  <TableCell padding="checkbox" sx={{ width: 50 }}>
+                  <TableCell padding="checkbox" sx={{ width: 50 }} align="center">
                     <Checkbox
                       indeterminate={selected.length > 0 && selected.length < cases.length}
                       checked={cases.length > 0 && selected.length === cases.length}
                       onChange={handleSelectAll}
                     />
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 40 }}></TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 50 }}>#</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 170 }}>Case Number</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 130 }}>Claim Number</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 220 }}>Client Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 150 }}>Investigation Type</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 120 }}>Category</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 120 }}>Case Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 90 }}>TAT Days</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: '15px', width: 120, textAlign: 'center', borderRight: 'none' }}>Logs</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 40 }}></TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 50 }}>#</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 190, minWidth: 180, whiteSpace: 'nowrap' }}>Case Number</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 130 }}>Claim Number</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 210 }}>Client Name</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 150 }}>Investigation Type</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 110 }}>Category</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 175, minWidth: 165 }}>Checks Submitted</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 155, minWidth: 145 }}>Case Status</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 85 }}>TAT Days</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, fontSize: '14.5px', width: 125, minWidth: 120, borderRight: 'none', whiteSpace: 'nowrap' }}>Logs</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1362,142 +1763,173 @@ const CasesPage = ({ isClosedView = false }) => {
                   return (
                     <React.Fragment key={row.id}>
                       <TableRow
+                        id={`case-row-${row.id}`}
                         hover
                         sx={{ '&:last-child td': { border: 0 } }}
                       >
-                        <TableCell padding="checkbox">
+                        <TableCell padding="checkbox" align="center">
                           <Checkbox checked={isItemSelected} onChange={() => handleSelect(row.id)} />
                         </TableCell>
 
                         {/* Expand toggle */}
-                        <TableCell sx={{ width: 40, p: 0 }}>
+                        <TableCell align="center" sx={{ width: 40, p: 0 }}>
                           {subItems.length > 0 && (
                             <IconButton size="small" onClick={() => toggleCaseExpansion(row.id)}>
-                              {isExpanded ? <ExpandMore /> : <ChevronRight />}
+                              {isExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
                             </IconButton>
                           )}
                         </TableCell>
 
                         {/* Sequential # */}
-                        <TableCell>
-                          <Typography sx={{ color: '#17539C', fontWeight: 700, fontSize: '15px' }}>
+                        <TableCell align="center">
+                          <Typography align="center" sx={{ color: '#17539C', fontWeight: 700, fontSize: '14.5px' }}>
                             {row.seq_num}
                           </Typography>
                         </TableCell>
 
                         {/* Case Number */}
-                        <TableCell>
+                        <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                           <Typography
+                            align="center"
                             onClick={() => openFullCaseModal(row.id)}
                             sx={{
-                              fontWeight: 500,
-                              fontSize: '15px',
-                              color: '#4f46e5',
+                              fontWeight: 700,
+                              color: '#17539C',
+                              fontSize: '14.5px',
+                              whiteSpace: 'nowrap',
                               cursor: 'pointer',
-                              textDecoration: 'none',
-                              '&:hover': { color: '#3730a3' },
+                              '&:hover': { textDecoration: 'underline' },
                             }}
-                            title="Click to view full case details, recordings, documents & evidence"
                           >
                             {row.case_number || '—'}
                           </Typography>
                         </TableCell>
 
                         {/* Claim Number */}
-                        <TableCell>
-                          <Typography sx={{ fontWeight: 600, fontSize: '15px' }}>
+                        <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+                          <Typography align="center" sx={{ fontWeight: 600, fontSize: '14.5px', whiteSpace: 'nowrap' }}>
                             {row.claim_number || '—'}
                           </Typography>
                         </TableCell>
 
                         {/* Client Name */}
-                        <TableCell>
-                          <Typography sx={{ fontSize: '15px' }}>{displayClientName(row.client_name)}</Typography>
+                        <TableCell align="center">
+                          <Typography align="center" sx={{ fontSize: '14.5px' }}>{displayClientName(row.client_name)}</Typography>
                         </TableCell>
 
                         {/* Investigation Type */}
-                        <TableCell>
-                          <Chip
-                            label={row.investigation_type || '—'}
-                            size="small"
-                            sx={{
-                              backgroundColor: `${ctColor}18`,
-                              color: ctColor,
-                              fontWeight: 600,
-                              fontSize: '13px',
-                              height: '26px',
-                              borderRadius: '6px',
-                            }}
-                          />
+                        <TableCell align="center">
+                          <Typography align="center" sx={{ fontSize: '14.5px' }}>{row.investigation_type || '—'}</Typography>
                         </TableCell>
 
                         {/* Category */}
-                        <TableCell>
-                          <Typography sx={{ fontSize: '15px' }}>{row.category || '—'}</Typography>
+                        <TableCell align="center">
+                          <Typography align="center" sx={{ fontSize: '14.5px' }}>{row.category || '—'}</Typography>
+                        </TableCell>
+
+                        {/* Checks Submitted */}
+                        <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+                          {renderChecksSubmittedCell(subItems)}
                         </TableCell>
 
                         {/* Full Case Status */}
-                        <TableCell>
-                          <Chip
-                            label={row.full_case_status || '—'}
-                            size="small"
-                            sx={{
-                              backgroundColor: `${fcColor}20`,
-                              color: fcColor,
-                              fontWeight: 600,
-                              fontSize: '13px',
-                              height: '26px',
-                              borderRadius: '6px',
-                            }}
-                          />
+                        <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                            <Chip
+                              label={row.full_case_status || '—'}
+                              size="small"
+                              sx={{
+                                backgroundColor: `${fcColor}18`,
+                                color: fcColor,
+                                fontWeight: 800,
+                                fontSize: '12px',
+                                height: '25px',
+                                borderRadius: '7px',
+                                border: `1.5px solid ${fcColor}`,
+                                boxShadow: `0 1px 3px ${fcColor}20`,
+                                letterSpacing: '0.1px',
+                                px: 0.5,
+                                maxWidth: 'none',
+                                '& .MuiChip-label': {
+                                  px: 0.75,
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'visible',
+                                },
+                              }}
+                            />
+                          </Box>
                         </TableCell>
 
                         {/* TAT Days */}
-                        <TableCell>
-                          <Typography sx={{ fontSize: '15px', textAlign: 'center' }}>
+                        <TableCell align="center">
+                          <Typography align="center" sx={{ fontSize: '14.5px' }}>
                             {row.tat_days ?? '—'}
                           </Typography>
                         </TableCell>
 
                         {/* Logs */}
-                        <TableCell sx={{ textAlign: 'center' }}>
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            startIcon={<History sx={{ fontSize: 16 }} />}
-                            sx={{
-                              textTransform: 'none',
-                              fontSize: '13px',
-                              fontWeight: 600,
-                              borderRadius: '8px',
-                              py: 0.4,
-                              px: 1.5,
-                              borderColor: '#17539C',
-                              color: '#17539C',
-                              '&:hover': {
-                                borderColor: '#5a67d8',
-                                backgroundColor: 'rgba(102, 126, 234, 0.08)',
-                              },
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenCaseLogs(row.id, row.case_number);
-                            }}
-                          >
-                            Case Logs
-                          </Button>
+                        <TableCell align="center" sx={{ whiteSpace: 'nowrap', width: 125, minWidth: 120 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<History sx={{ fontSize: 15 }} />}
+                              sx={{
+                                textTransform: 'none',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                borderRadius: '7px',
+                                py: 0.25,
+                                px: 1,
+                                whiteSpace: 'nowrap',
+                                minWidth: '95px',
+                                borderColor: '#17539C',
+                                color: '#17539C',
+                                '&:hover': {
+                                  borderColor: '#5a67d8',
+                                  backgroundColor: 'rgba(102, 126, 234, 0.08)',
+                                },
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenCaseLogs(row.id, row.case_number);
+                              }}
+                            >
+                              Case Logs
+                            </Button>
+                          </Box>
                         </TableCell>
                       </TableRow>
 
                       {/* ── Sub-items (verification checks) ── */}
                       {subItems.length > 0 && (
-                        <TableRow>
+                        <TableRow
+                          sx={{
+                            backgroundColor: '#f5f7ff',
+                            ...(isExpanded
+                              ? {}
+                              : {
+                                  height: 0,
+                                  border: 'none',
+                                  '& > *': { py: 0, p: 0, height: 0, border: 'none', fontSize: 0, lineHeight: 0 },
+                                }),
+                          }}
+                        >
                           <TableCell
-                            colSpan={11}
-                            sx={{ py: 0, borderBottom: isExpanded ? '1px solid #e0e0e0' : 'none', p: 0 }}
+                            colSpan={12}
+                            sx={{
+                              p: 0,
+                              py: 0,
+                              borderBottom: isExpanded ? '1px solid #e0e0e0' : 'none',
+                              borderRight: 'none',
+                              borderTop: 'none',
+                              fontSize: isExpanded ? 'inherit' : 0,
+                              lineHeight: isExpanded ? 'inherit' : 0,
+                              height: isExpanded ? 'auto' : 0,
+                            }}
                           >
                             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                              <Box sx={{ backgroundColor: '#f5f7ff', borderLeft: '4px solid #17539C', p: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <Box sx={{ backgroundColor: '#f5f7ff', borderLeft: '4px solid #ea580c', p: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 {(() => {
                                   const headers = ['Sub ID', 'Type', 'Subject Details', 'Location', 'Status', 'Assigned Partner', 'Action / Review'];
                                   const colWidths = ['8%', '10%', '16%', '16%', '16%', '19%', '15%'];
@@ -1563,20 +1995,55 @@ const CasesPage = ({ isClosedView = false }) => {
 
                                                 {/* LOCATION */}
                                                 <TableCell align="center" sx={{ fontSize: '14px', color: '#555' }}>
-                                                  <Typography align="center" noWrap title={sub.location} sx={{ fontSize: 'inherit', maxWidth: '100%', mx: 'auto' }}>
-                                                    {sub.location || '—'}
-                                                  </Typography>
+                                                  <Tooltip title={sub.location && sub.location !== '—' ? sub.location : ''} arrow placement="top">
+                                                    <Typography align="center" noWrap title={sub.location} sx={{ fontSize: 'inherit', maxWidth: '100%', mx: 'auto', cursor: sub.location && sub.location !== '—' ? 'help' : 'inherit' }}>
+                                                      {formatDistrictState(sub.location)}
+                                                    </Typography>
+                                                  </Tooltip>
                                                 </TableCell>
 
                                                 {/* STATUS & SPECIFIC STATUS */}
                                                 <TableCell align="center">
-                                                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                                                    <Chip label={sub.check_status} size="small" sx={{ backgroundColor: `${sc}22`, color: sc, fontWeight: 700, fontSize: '13px', height: '26px', borderRadius: '6px' }} />
+                                                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75 }}>
+                                                    <Chip
+                                                      label={sub.check_status}
+                                                      size="small"
+                                                      sx={{
+                                                        backgroundColor: `${sc}18`,
+                                                        color: sc,
+                                                        fontWeight: 800,
+                                                        fontSize: '12.5px',
+                                                        height: '28px',
+                                                        borderRadius: '8px',
+                                                        border: `1.5px solid ${sc}`,
+                                                        boxShadow: `0 1px 3px ${sc}20`,
+                                                        letterSpacing: '0.1px',
+                                                        px: 0.5,
+                                                        maxWidth: 'none',
+                                                        '& .MuiChip-label': {
+                                                          px: 0.75,
+                                                          whiteSpace: 'nowrap',
+                                                          overflow: 'visible',
+                                                        },
+                                                      }}
+                                                    />
                                                     
                                                     {/* Mode specific sub-statuses */}
                                                     {mode === 'chargesheet' && sub.advocate_status && (
                                                       <Tooltip title="Legal Partner Status">
-                                                        <Chip label={sub.advocate_status} size="small" sx={{ fontSize: '11px', height: '20px', bgcolor: '#f1f5f9', color: '#475569' }} />
+                                                        <Chip
+                                                          label={sub.advocate_status}
+                                                          size="small"
+                                                          sx={{
+                                                            fontSize: '12px',
+                                                            height: '22px',
+                                                            fontWeight: 700,
+                                                            bgcolor: '#f1f5f9',
+                                                            color: '#334155',
+                                                            border: '1.5px solid #cbd5e1',
+                                                            borderRadius: '6px',
+                                                          }}
+                                                        />
                                                       </Tooltip>
                                                     )}
                                                     {mode === 'other' && sub.negative_status && (
@@ -1585,12 +2052,14 @@ const CasesPage = ({ isClosedView = false }) => {
                                                           label={sub.negative_status} 
                                                           size="small" 
                                                           sx={{ 
-                                                            fontSize: '11px', 
-                                                            height: '20px', 
+                                                            fontSize: '12px', 
+                                                            height: '22px', 
+                                                            fontWeight: 700,
                                                             bgcolor: (sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable') ? '#fee2e2' : '#fff7ed', 
                                                             color: (sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable') ? '#b91c1c' : '#c2410c',
-                                                            border: '1px solid',
-                                                            borderColor: (sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable') ? '#fca5a5' : '#fed7aa'
+                                                            border: '1.5px solid',
+                                                            borderColor: (sub.negative_status === 'Non co-operative' || sub.negative_status === 'Non Traceable') ? '#ef4444' : '#f97316',
+                                                            borderRadius: '6px',
                                                           }} 
                                                         />
                                                       </Tooltip>
@@ -3272,17 +3741,39 @@ const CasesPage = ({ isClosedView = false }) => {
                 {statusLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Open Case'}
               </Button>
             ) : (
-              <Button
-                onClick={() => {
-                  setStatusConfirmAction('Closed');
-                  setStatusConfirmOpen(true);
-                }}
-                variant="contained"
-                disabled={statusLoading}
-                sx={{ textTransform: 'none', bgcolor: '#e53e3e', '&:hover': { bgcolor: '#c53030' }, borderRadius: '8px', px: 3 }}
+              <Tooltip
+                title={
+                  !fullCaseData?.case?.has_approved_report
+                    ? 'Case cannot be closed until the report is approved by QA and available in Reports.'
+                    : ''
+                }
+                arrow
               >
-                {statusLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Close Case'}
-              </Button>
+                <span>
+                  <Button
+                    onClick={() => {
+                      setStatusConfirmAction('Closed');
+                      setStatusConfirmOpen(true);
+                    }}
+                    variant="contained"
+                    disabled={statusLoading || !fullCaseData?.case?.has_approved_report}
+                    sx={{
+                      textTransform: 'none',
+                      bgcolor: '#e53e3e',
+                      '&:hover': { bgcolor: '#c53030' },
+                      borderRadius: '8px',
+                      px: 3,
+                      '&.Mui-disabled': {
+                        bgcolor: '#e2e8f0',
+                        color: '#94a3b8',
+                        cursor: 'not-allowed',
+                      }
+                    }}
+                  >
+                    {statusLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Close Case'}
+                  </Button>
+                </span>
+              </Tooltip>
             )}
           </DialogActions>
         </Dialog>

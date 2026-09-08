@@ -30,7 +30,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import companyLogo from '../../SS_logo.jpg';
 
-const DRAWER_WIDTH = 240;
+const DRAWER_WIDTH = 275;
 
 const allMenuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: Dashboard, path: '/case_manager/dashboard' },
@@ -38,7 +38,7 @@ const allMenuItems = [
   { id: 'users', label: 'Users', icon: People, path: '/case_manager/users' },
   { id: 'clients', label: 'Clients', icon: Store, path: '/case_manager/clients' },
   { id: 'ai-case-review', label: 'AI Case Review', icon: AutoAwesome, path: '/case_manager/ai-case-review' },
-  { id: 'legal-review', label: 'Legal Review', icon: Gavel, path: '/case_manager/legal-review' },
+  { id: 'legal-review', label: 'Quality Analyst Review', icon: Gavel, path: '/case_manager/legal-review' },
   { id: 'closed-cases', label: 'Closed Cases', icon: CheckCircle, path: '/case_manager/closed-cases' },
   { id: 'reports', label: 'Reports', icon: Assessment, path: '/case_manager/reports' },
   { id: 'super-admin-logs', label: 'Logs', icon: History, path: '/super-admin/logs' },
@@ -134,7 +134,7 @@ const CaseManagerSidebar = () => {
                   },
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 40 }}>
+                <ListItemIcon sx={{ minWidth: 36 }}>
                   <Icon
                     sx={{
                       color: isActive ? '#17539C' : '#666',
@@ -148,6 +148,7 @@ const CaseManagerSidebar = () => {
                     fontSize: '14px',
                     fontWeight: isActive ? 600 : 400,
                     color: isActive ? '#17539C' : '#333',
+                    whiteSpace: 'nowrap',
                   }}
                 />
               </ListItemButton>

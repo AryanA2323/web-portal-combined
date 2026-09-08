@@ -19,6 +19,8 @@ import api from '../../services/api';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 import { useAuth } from '../../context';
 import { NotificationBell } from '../../components/case_manager';
+import AgingAnalysisModule from '../../components/dashboard/AgingAnalysisModule';
+import VendorReviewQueueModule from '../../components/dashboard/VendorReviewQueueModule';
 
 const getUserDisplayName = (u) => {
   if (!u) return 'Case Manager';
@@ -57,6 +59,8 @@ const CaseManagerDashboard = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
+  const [agingData, setAgingData] = useState(null);
+  const [vendorReviewQueueData, setVendorReviewQueueData] = useState(null);
 
   useEffect(() => {
     fetchDashboardData(false);
@@ -66,8 +70,15 @@ const CaseManagerDashboard = () => {
     try {
       if (!isAutoRefresh) setLoading(true);
 
-      const statsRes = await api.get('/dashboard/stats').catch(() => ({ data: null }));
+      const [statsRes, agingRes, queueRes] = await Promise.all([
+        api.get('/dashboard/stats').catch(() => ({ data: null })),
+        api.get('/dashboard/aging-analysis').catch(() => ({ data: null })),
+        api.get('/dashboard/vendor-review-queue').catch(() => ({ data: null })),
+      ]);
+
       if (statsRes?.data) setStats(statsRes.data);
+      if (agingRes?.data) setAgingData(agingRes.data);
+      if (queueRes?.data) setVendorReviewQueueData(queueRes.data);
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
     } finally {
@@ -497,7 +508,7 @@ const CaseManagerDashboard = () => {
                   },
                 }}
               >
-                {/* Top Section: Icon and Title */}
+                {/* Top Section: Icon and Number on top, Title below */}
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.75, mb: 1.5 }}>
                   {/* Left Icon Pill */}
                   <Box
@@ -515,30 +526,33 @@ const CaseManagerDashboard = () => {
                     <IconComponent sx={{ fontSize: 23, color: card.iconColor }} />
                   </Box>
 
-                  {/* Title & Large Number */}
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                  {/* Large Number on top, Title below (Horizontally aligned across all 4 cards) */}
+                  <Box sx={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ height: 36, display: 'flex', alignItems: 'center' }}>
+                      <Typography
+                        variant="h4"
+                        sx={{
+                          fontSize: '32px',
+                          fontWeight: 800,
+                          color: '#0f172a',
+                          letterSpacing: '-0.5px',
+                          lineHeight: 1,
+                        }}
+                      >
+                        {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
+                      </Typography>
+                    </Box>
                     <Typography
                       sx={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: '#64748b',
+                        fontSize: '14.5px',
+                        fontWeight: 700,
+                        color: '#475569',
                         lineHeight: 1.2,
-                        mb: 0.4,
+                        mt: 0.75,
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {card.title}
-                    </Typography>
-                    <Typography
-                      variant="h4"
-                      sx={{
-                        fontSize: '28px',
-                        fontWeight: 800,
-                        color: '#0f172a',
-                        letterSpacing: '-0.5px',
-                        lineHeight: 1.1,
-                      }}
-                    >
-                      {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
                     </Typography>
                   </Box>
                 </Box>
@@ -573,6 +587,24 @@ const CaseManagerDashboard = () => {
               </Paper>
             );
           })}
+        </Box>
+
+        {/* ========================================================================= */}
+        {/* 3. AGING ANALYSIS & TAT HEALTH MODULE (Half-Width)                         */}
+        {/* ========================================================================= */}
+        <Box
+          sx={{
+            width: '100%',
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              md: 'repeat(2, 1fr)',
+            },
+            gap: { xs: 2, md: 2.5, lg: 3 },
+          }}
+        >
+          <AgingAnalysisModule data={agingData} loading={loading} />
+          <VendorReviewQueueModule data={vendorReviewQueueData} loading={loading} />
         </Box>
       </Box>
     </CaseManagerLayout>

@@ -55,16 +55,16 @@ import AlertMessage from '../../components/common/AlertMessage';
 const REPORT_STORAGE_KEY = 'aiCaseReviewReports';
 
 const irStatusColors = {
-  Open: '#4299e1',
-  Approval: '#f6ad55',
-  Stop: '#f56565',
-  QC: '#9f7aea',
-  Dispatch: '#48bb78',
+  Open: '#0284c7',
+  Approval: '#ea580c',
+  Stop: '#dc2626',
+  QC: '#9333ea',
+  Dispatch: '#16a34a',
 };
 
 const reportStatusColors = {
-  'Report Generated': '#48bb78',
-  'Report Not Generated': '#ff922b',
+  'Report Generated': '#16a34a',
+  'Report Not Generated': '#ea580c',
 };
 
 
@@ -198,10 +198,8 @@ const AICaseReviewPage = () => {
   const [success, setSuccess] = useState('');
   const [cases, setCases] = useState([]);
   const [totalCases, setTotalCases] = useState(0);
-  const [vendors, setVendors] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [investigationTypeFilter, setInvestigationTypeFilter] = useState('all');
-  const [vendorFilter, setVendorFilter] = useState('all');
   const [reportFilter, setReportFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -222,14 +220,13 @@ const AICaseReviewPage = () => {
 
 
   useEffect(() => {
-    fetchVendors();
     fetchQCs();
   }, []);
 
   useEffect(() => {
     fetchCases(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, statusFilter, investigationTypeFilter, vendorFilter, vendors]);
+  }, [page, rowsPerPage, statusFilter, investigationTypeFilter]);
 
   const fetchQCs = async (isAutoRefresh = false) => {
     try {
@@ -237,15 +234,6 @@ const AICaseReviewPage = () => {
       setQCs(response.data || []);
     } catch (err) {
       console.error('Failed to fetch qcs:', err);
-    }
-  };
-
-  const fetchVendors = async (isAutoRefresh = false) => {
-    try {
-      const response = await api.get('/check-vendors');
-      setVendors(response.data || []);
-    } catch (err) {
-      console.error('Failed to fetch vendors:', err);
     }
   };
 
@@ -260,10 +248,6 @@ const AICaseReviewPage = () => {
             page_size: rowsPerPage,
             investigation_report_status: statusFilter !== 'all' ? statusFilter : undefined,
             investigation_type: investigationTypeFilter !== 'all' ? investigationTypeFilter : undefined,
-            assigned_vendor_name:
-              vendorFilter !== 'all'
-                ? vendors.find((vendor) => String(vendor.id) === String(vendorFilter))?.company_name || undefined
-                : undefined,
           },
         }),
         api.get('/reports').catch(() => ({ data: [] })),
@@ -301,7 +285,6 @@ const AICaseReviewPage = () => {
   };
 
   useAutoRefresh(fetchCases);
-  useAutoRefresh(fetchVendors);
   useAutoRefresh(fetchQCs);
 
   const rows = useMemo(() => {
@@ -361,6 +344,12 @@ const AICaseReviewPage = () => {
         change: 0,
         icon: Description,
         iconBgColor: '#e3f2fd',
+        onClick: () => {
+          setStatusFilter('all');
+          setReportFilter('all');
+          setInvestigationTypeFilter('all');
+          setPage(0);
+        },
       },
       {
         title: 'Generated Reports',
@@ -368,6 +357,10 @@ const AICaseReviewPage = () => {
         change: 0,
         icon: AutoAwesome,
         iconBgColor: '#ede7f6',
+        onClick: () => {
+          setReportFilter('generated');
+          setPage(0);
+        },
       },
       {
         title: 'Assigned Business Partners',
@@ -382,6 +375,10 @@ const AICaseReviewPage = () => {
         change: 0,
         icon: CheckCircle,
         iconBgColor: '#e8f5e9',
+        onClick: () => {
+          setStatusFilter('Dispatch');
+          setPage(0);
+        },
       },
     ];
   }, [rows, reportsByCase, totalCases]);
@@ -426,7 +423,6 @@ const AICaseReviewPage = () => {
   const handleClearFilters = () => {
     setStatusFilter('all');
     setInvestigationTypeFilter('all');
-    setVendorFilter('all');
     setReportFilter('all');
     setPage(0);
   };
@@ -972,48 +968,33 @@ const AICaseReviewPage = () => {
           px: { xs: 2, md: 3 },
           borderRadius: '0 0 16px 16px',
           boxSizing: 'border-box',
-          background: 'linear-gradient(120deg, #faf5ff 0%, #f3e8ff 30%, #e0e7ff 65%, #ede9fe 100%)',
-          boxShadow: '0 4px 16px rgba(148, 163, 184, 0.08)',
+          bgcolor: '#2566b4',
+          boxShadow: '0 4px 16px rgba(37, 102, 180, 0.20)',
           display: 'flex',
           flexDirection: { xs: 'column', md: 'row' },
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: 1.5,
           position: 'relative',
-          overflow: 'hidden',
-          border: '1px solid rgba(226, 232, 240, 0.9)',
+          border: '1px solid #1e5597',
           borderTop: 'none',
         }}
       >
-        {/* Multi-Tone Ambient Glowing Mesh Accents */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'radial-gradient(circle at 10% 20%, rgba(168, 85, 247, 0.18) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.20) 0%, transparent 40%)',
-            zIndex: 1,
-            pointerEvents: 'none',
-          }}
-        />
-
         {/* Left Side: Title & AI Icon */}
-        <Box sx={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box
             sx={{
               width: 44,
               height: 44,
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, #f3e8ff 0%, #ddd6fe 100%)',
+              bgcolor: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(147, 51, 234, 0.15)',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
             }}
           >
-            <AutoAwesome sx={{ fontSize: 26, color: '#7e22ce' }} />
+            <AutoAwesome sx={{ fontSize: 26, color: '#17539C' }} />
           </Box>
           <Typography
             variant="h3"
@@ -1021,9 +1002,7 @@ const AICaseReviewPage = () => {
               fontWeight: 800,
               fontSize: { xs: '1.5rem', md: '1.9rem' },
               letterSpacing: '-0.8px',
-              background: 'linear-gradient(135deg, #0f172a 0%, #581c87 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: '#ffffff',
               whiteSpace: 'nowrap',
             }}
           >
@@ -1133,25 +1112,6 @@ const AICaseReviewPage = () => {
                 <MenuItem value="Partial Case">Partial Case</MenuItem>
                 <MenuItem value="Reassessment">Reassessment</MenuItem>
                 <MenuItem value="Connected Case">Connected Case</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <Select
-                value={vendorFilter}
-                onChange={(e) => setVendorFilter(e.target.value)}
-                displayEmpty
-                sx={{
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' },
-                }}
-              >
-                <MenuItem value="all">All Business Partners</MenuItem>
-                {vendors.map((vendor) => (
-                  <MenuItem key={vendor.id} value={String(vendor.id)}>
-                    {vendor.company_name}
-                  </MenuItem>
-                ))}
               </Select>
             </FormControl>
 
@@ -1304,12 +1264,16 @@ const AICaseReviewPage = () => {
                           label={row.investigation_report_status || 'Open'}
                           size="small"
                           sx={{
-                            backgroundColor: `${irColor}15`,
+                            backgroundColor: `${irColor}18`,
                             color: irColor,
-                            fontWeight: 500,
-                            fontSize: '12px',
-                            height: '26px',
-                            borderRadius: '6px',
+                            fontWeight: 800,
+                            fontSize: '13px',
+                            height: '28px',
+                            borderRadius: '8px',
+                            border: `1.5px solid ${irColor}`,
+                            boxShadow: `0 1px 3px ${irColor}20`,
+                            letterSpacing: '0.2px',
+                            px: 0.5,
                             '& .MuiChip-icon': { color: irColor },
                           }}
                         />
@@ -1320,12 +1284,16 @@ const AICaseReviewPage = () => {
                           label={row.reportStatus}
                           size="small"
                           sx={{
-                            backgroundColor: `${reportColor}15`,
+                            backgroundColor: `${reportColor}18`,
                             color: reportColor,
-                            fontWeight: 500,
-                            fontSize: '12px',
-                            height: '26px',
-                            borderRadius: '6px',
+                            fontWeight: 800,
+                            fontSize: '13px',
+                            height: '28px',
+                            borderRadius: '8px',
+                            border: `1.5px solid ${reportColor}`,
+                            boxShadow: `0 1px 3px ${reportColor}20`,
+                            letterSpacing: '0.2px',
+                            px: 0.5,
                             '& .MuiChip-icon': { color: reportColor },
                           }}
                         />

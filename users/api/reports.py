@@ -500,6 +500,15 @@ def _verified_incident_case_info() -> dict:
         'driver_checks',
         'spot_checks',
     ]
+    all_check_tables = [
+        'claimant_checks',
+        'insured_checks',
+        'driver_checks',
+        'spot_checks',
+        'chargesheets',
+        'rti_checks',
+        'rto_checks',
+    ]
 
     try:
         with connections['default'].cursor() as cursor:
@@ -537,7 +546,7 @@ def _verified_incident_case_info() -> dict:
 
             # Also exclude cases that have NO checks at all
             cases_with_checks = set()
-            for table in check_tables:
+            for table in all_check_tables:
                 try:
                     cursor.execute(
                         f"SELECT DISTINCT case_id FROM {table} WHERE case_id IN ({ph})",

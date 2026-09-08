@@ -236,10 +236,10 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
 
         // Fallbacks for common checkInfo field aliases
         if (val == null || String(val).trim() === '') {
-          if (field.key === 'monthly_income' && checkInfo?.claimant_income) {
-            val = checkInfo.claimant_income;
-          } else if (field.key === 'deceased_injury_income' && checkInfo?.claimant_income) {
-            val = checkInfo.claimant_income;
+          if (field.key === 'monthly_income' && (checkInfo?.income_per_month || checkInfo?.claimant_income)) {
+            val = checkInfo.income_per_month || checkInfo.claimant_income;
+          } else if (field.key === 'deceased_injury_income' && (checkInfo?.income_per_annum || checkInfo?.claimant_income)) {
+            val = checkInfo.income_per_annum || checkInfo.claimant_income;
           } else if (field.key === 'deceased_injury_name' && checkInfo?.claimant_name) {
             val = checkInfo.claimant_name;
           } else if (normType === 'insured_cum_driver') {

@@ -1,5 +1,7 @@
 import { Paper, Typography, Box } from '@mui/material';
 
+const ORANGE_TOP_COLOR = '#ea580c';
+
 const StatCard = ({
   title,
   value,
@@ -14,98 +16,100 @@ const StatCard = ({
   dense = false,
   sx: customSx = {},
 }) => {
-  const getThemeColor = () => {
-    if (accentColor) return accentColor;
-    if (iconColor && iconColor !== '#2563eb') return iconColor;
-    if (iconBgColor === '#e3f2fd') return '#1d4ed8'; // Blue (Total Cases / Reports)
-    if (iconBgColor === '#ede7f6') return '#7e22ce'; // Purple (Generated Reports)
-    if (iconBgColor === '#fff3e0') return '#c2410c'; // Amber/Orange (WIP / Assigned Business Partners)
-    if (iconBgColor === '#e8f5e9') return '#15803d'; // Green (Closed / Dispatch Cases)
-    if (iconBgColor === '#ffebee') return '#dc2626'; // Red (Overdue / Rejected)
-    return iconColor || '#1d4ed8';
-  };
-
-  const themeColor = getThemeColor();
-
   if (compact) {
     return (
       <Paper
         onClick={onClick}
         elevation={0}
         sx={{
-          py: 1.25,
+          pt: 1.5,
+          pb: 1.25,
           px: 1,
           width: '100%',
-          minHeight: { xs: 78, sm: 84, md: 88 },
+          minHeight: { xs: 80, sm: 84, md: 88 },
           height: '100%',
           borderRadius: '16px',
           border: '1px solid rgba(226, 232, 240, 0.9)',
-          borderTop: `3.5px solid ${themeColor}`,
+          borderTop: `3.5px solid ${ORANGE_TOP_COLOR}`,
           bgcolor: '#ffffff',
           boxShadow: '0 2px 10px rgba(0, 0, 0, 0.04)',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
           alignItems: 'center',
+          justifyContent: 'flex-start',
           cursor: onClick ? 'pointer' : 'default',
           transition: 'all 0.2s ease-in-out',
           '&:hover': {
             boxShadow: '0 6px 18px rgba(0, 0, 0, 0.08)',
             borderColor: '#cbd5e1',
-            borderTopColor: themeColor,
+            borderTopColor: ORANGE_TOP_COLOR,
             transform: onClick ? 'translateY(-2px)' : 'translateY(-1px)',
           },
           ...customSx,
         }}
       >
-        <Box sx={{ width: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 800,
-              mb: 0.5,
-              fontSize: { xs: '22px', sm: '25px', md: '28px' },
-              color: themeColor,
-              lineHeight: 1,
-              letterSpacing: '-0.5px',
-            }}
-          >
-            {typeof value === 'number' ? value.toLocaleString() : (value ?? 0)}
-          </Typography>
-
-          <Typography
-            variant="body2"
-            sx={{
-              color: '#334155',
-              fontWeight: 600,
-              fontSize: { xs: '11px', sm: '11.5px', md: '12px' },
-              lineHeight: 1.25,
-              whiteSpace: 'normal',
-              wordBreak: 'normal',
-              overflowWrap: 'break-word',
-              textAlign: 'center',
-              letterSpacing: '-0.2px',
-              maxWidth: '100%',
-            }}
-          >
-            {title}
-          </Typography>
-
-          {subtitle && (
+        <Box
+          sx={{
+            width: '100%',
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+          }}
+        >
+          {/* Top: Large Stat Number (Consistent height so all numbers align horizontally across cards) */}
+          <Box sx={{ height: { xs: 28, sm: 30, md: 32 }, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 0.75 }}>
             <Typography
-              variant="caption"
+              variant="h4"
               sx={{
-                color: '#94a3b8',
-                fontSize: '11px',
-                fontWeight: 500,
-                mt: 0.2,
+                fontWeight: 800,
+                fontSize: { xs: '22px', sm: '25px', md: '28px' },
+                color: '#0f172a',
+                lineHeight: 1,
+                letterSpacing: '-0.5px',
               }}
             >
-              {subtitle}
+              {typeof value === 'number' ? value.toLocaleString() : (value ?? 0)}
             </Typography>
-          )}
+          </Box>
+
+          {/* Bottom: Title Label (Consistent height so all titles align horizontally across cards) */}
+          <Box sx={{ minHeight: { xs: 30, md: 34 }, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', px: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: '#475569',
+                fontWeight: 700,
+                fontSize: { xs: '12px', sm: '12.5px', md: '13.5px' },
+                lineHeight: 1.25,
+                whiteSpace: 'normal',
+                wordBreak: 'normal',
+                overflowWrap: 'break-word',
+                textAlign: 'center',
+                letterSpacing: '-0.2px',
+              }}
+            >
+              {title}
+            </Typography>
+          </Box>
         </Box>
+
+        {subtitle && (
+          <Typography
+            variant="caption"
+            sx={{
+              color: '#94a3b8',
+              fontSize: '11px',
+              fontWeight: 500,
+              mt: 0.25,
+              textAlign: 'center',
+            }}
+          >
+            {subtitle}
+          </Typography>
+        )}
       </Paper>
     );
   }
@@ -121,8 +125,8 @@ const StatCard = ({
         height: '100%',
         minHeight: dense ? '82px' : '100px',
         borderRadius: dense ? '14px' : '16px',
-        borderLeft: `4px solid ${themeColor}`,
-        borderTop: '1px solid #f1f5f9',
+        borderTop: `3.5px solid ${ORANGE_TOP_COLOR}`,
+        borderLeft: '1px solid #f1f5f9',
         borderRight: '1px solid #f1f5f9',
         borderBottom: '1px solid #f1f5f9',
         bgcolor: '#ffffff',
@@ -136,6 +140,7 @@ const StatCard = ({
         transition: 'all 0.25s ease-in-out',
         '&:hover': {
           boxShadow: '0 10px 25px rgba(0, 0, 0, 0.08)',
+          borderTopColor: ORANGE_TOP_COLOR,
           transform: 'translateY(-2px)',
         },
         ...customSx,
@@ -161,31 +166,33 @@ const StatCard = ({
         </Box>
       )}
 
-      {/* Middle Stat Text Block */}
-      <Box sx={{ flex: 1, minWidth: 0, zIndex: 1 }}>
-        {/* Large Stat Number */}
-        <Typography
-          variant="h4"
-          sx={{
-            fontWeight: 500,
-            fontSize: dense ? '28px' : '32px',
-            color: themeColor,
-            lineHeight: 1.1,
-            letterSpacing: '-0.5px',
-          }}
-        >
-          {typeof value === 'number' ? value.toLocaleString() : value}
-        </Typography>
+      {/* Middle Stat Text Block - Number on top, Title below, perfectly aligned across cards */}
+      <Box sx={{ flex: 1, minWidth: 0, zIndex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        {/* Large Stat Number on top */}
+        <Box sx={{ height: dense ? 30 : 36, display: 'flex', alignItems: 'center' }}>
+          <Typography
+            variant="h4"
+            sx={{
+              fontWeight: 800,
+              fontSize: dense ? '26px' : '32px',
+              color: '#0f172a',
+              lineHeight: 1.1,
+              letterSpacing: '-0.5px',
+            }}
+          >
+            {typeof value === 'number' ? value.toLocaleString() : value}
+          </Typography>
+        </Box>
 
-        {/* Title Label */}
+        {/* Title Label below */}
         <Typography
           variant="body2"
           sx={{
-            color: '#1e293b',
-            fontWeight: 600,
-            fontSize: dense ? '13px' : '14px',
+            color: '#475569',
+            fontWeight: 700,
+            fontSize: dense ? '14px' : '15.5px',
             lineHeight: 1.25,
-            mt: 0.5,
+            mt: 0.75,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -194,7 +201,6 @@ const StatCard = ({
           {title}
         </Typography>
 
-        {/* Subtitle */}
         {subtitle && (
           <Typography
             variant="caption"
@@ -226,7 +232,7 @@ const StatCard = ({
             justifyContent: 'center',
           }}
         >
-          <Icon sx={{ fontSize: dense ? 44 : 56, color: themeColor }} />
+          <Icon sx={{ fontSize: dense ? 44 : 56, color: ORANGE_TOP_COLOR }} />
         </Box>
       )}
     </Paper>
