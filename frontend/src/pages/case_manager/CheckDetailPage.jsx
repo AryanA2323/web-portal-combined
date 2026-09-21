@@ -204,9 +204,21 @@ const STATUS_CFG = {
   Approved: { color: '#2e7d32', bg: '#e8f5e9' },
   Rejected: { color: '#c62828', bg: '#ffebee' },
   'Under Review': { color: '#e65100', bg: '#fff3e0' },
+  'Under Verification': { color: '#0369a1', bg: '#e0f2fe' },
+  'Ready for Report': { color: '#0d9488', bg: '#ccfbf1' },
+  'Report Generated': { color: '#7c3aed', bg: '#ede9fe' },
+  'QA Verification': { color: '#d97706', bg: '#fef3c7' },
+  'Completed': { color: '#16a34a', bg: '#dcfce7' },
   Cancelled: { color: '#37474f', bg: '#eceff1' },
   'On Hold': { color: '#6a1b9a', bg: '#f3e5f5' },
   'Not Started': { color: '#78909c', bg: '#eceff1' },
+  'Not Initiated': { color: '#475569', bg: '#f1f5f9' },
+  'Pending CS': { color: '#c2410c', bg: '#ffedd5' },
+  'IR-Writing': { color: '#1d4ed8', bg: '#dbeafe' },
+  'QC-1': { color: '#6b21a8', bg: '#f3e8ff' },
+  'Portal Upload': { color: '#17539C', bg: '#e0f2fe' },
+  'Withdraw': { color: '#b91c1c', bg: '#fee2e2' },
+  'Pending Additional Docs': { color: '#c2410c', bg: '#ffedd5' },
 };
 
 const pill = (val) => {

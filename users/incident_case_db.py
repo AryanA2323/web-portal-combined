@@ -38,7 +38,7 @@ VALID_SLA = {'AT', 'WT'}
 VALID_FULL_CASE_STATUS = {
     'WIP', 'Pending CS', 'Completed', 'Closed', 'Open', 'IR-Writing', 'NI', 'Withdraw',
     'QC-1', 'Pending Additional Docs', 'Connected Pending', 'RCU Pending', 'Portal Upload',
-    'Not Initiated',
+    'Not Initiated', 'Under Verification', 'Ready for Report', 'Report Generated', 'QA Verification',
 }
 VALID_INVESTIGATION_REPORT = {'Open', 'Approval', 'Stop', 'QC', 'Dispatch'}
 VALID_CHECK_STATUS = {
@@ -1092,13 +1092,20 @@ def delete_case(case_id):
 
 def sync_case_full_status_from_checks(case_id: int, cursor=None) -> str:
     """
-    Recalculates and updates full_case_status for a case based on check assignments:
-    - If assigned checks >= 1 and current status in ('Not Initiated', 'NI', '', None):
-        Transition status to 'WIP'
-    - If assigned checks == 0 and current status in ('WIP', 'Not Initiated', 'NI', 'Open', '', None):
-        Transition status to 'Not Initiated'
-    Does not alter closed / terminal states (e.g. 'Closed', 'Withdraw', 'Completed').
-    Returns the effective status.
+    Recalculates and updates full_case_status for a case based on its functional workflow state:
+    1. Preserves manual terminal statuses ('Closed', 'Withdraw', 'Completed').
+    2. Checks report status from reports table:
+       - 'ACCEPTED' -> 'Portal Upload' (QC approved, ready to upload/dispatch)
+       - 'PENDING' or 'UNDER_REVIEW' -> 'QC-1' (Report submitted, awaiting QC)
+    3. Checks check assignments and statuses across all check tables:
+       - 0 assigned checks -> 'Not Initiated'
+       - If assigned checks > 0:
+         - If ALL assigned checks are submitted/verified ('Under Verification', 'Verified', 'Completed', 'Unable to Verify'):
+           - If at least 1 check is 'Under Verification' -> 'Under Verification' (partner submitted, CM review required)
+           - If all checks are verified/completed/unable to verify -> 'IR-Writing' (checks verified, ready for/in report drafting)
+         - If any assigned chargesheet is in ('Applied for CS', 'not found') and other checks are completed:
+           -> 'Pending CS'
+         - Otherwise -> 'WIP' (field investigation in progress)
     """
     close_cursor = False
     if cursor is None:
@@ -1113,42 +1120,78 @@ def sync_case_full_status_from_checks(case_id: int, cursor=None) -> str:
             return 'Not Initiated'
         current_status, case_number = row[0], row[1]
 
-        # Do not override terminal statuses
-        if current_status in ('Closed', 'Withdraw', 'Completed', 'Portal Upload'):
+        # Do not override terminal or specific manual exception statuses
+        if current_status in ('Closed', 'Withdraw', 'Completed', 'Pending Additional Docs', 'Connected Pending', 'RCU Pending'):
             return current_status
 
-        # Count total assigned checks across all 7 check tables
+        # 1. Check reports table for this case
         cursor.execute("""
-            SELECT (
-                (SELECT COUNT(*) FROM claimant_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
-                (SELECT COUNT(*) FROM insured_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
-                (SELECT COUNT(*) FROM driver_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
-                (SELECT COUNT(*) FROM spot_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
-                (SELECT COUNT(*) FROM chargesheets WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
-                (SELECT COUNT(*) FROM rti_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL) +
-                (SELECT COUNT(*) FROM rto_checks WHERE case_id = %s AND assigned_vendor_id IS NOT NULL)
-            ) AS assigned_count
-        """, [case_id] * 7)
-        assigned_row = cursor.fetchone()
-        assigned_count = assigned_row[0] if assigned_row else 0
+            SELECT r.status 
+            FROM reports r
+            JOIN insurance_case ic ON ic.id = r.case_id
+            WHERE ic.case_number = %s
+            ORDER BY r.id DESC LIMIT 1
+        """, [case_number])
+        report_row = cursor.fetchone()
+        latest_report_status = (report_row[0] or '').upper() if report_row else None
 
-        target_status = 'WIP' if assigned_count > 0 else 'Not Initiated'
+        if latest_report_status == 'ACCEPTED':
+            target_status = 'Completed'
+        elif latest_report_status in ('ASSIGNED', 'REASSIGNED'):
+            target_status = 'QA Verification'
+        elif latest_report_status in ('PENDING', 'REJECTED'):
+            target_status = 'Report Generated'
+        else:
+            # 2. Check all assigned checks and their statuses
+            cursor.execute("""
+                SELECT check_status, assigned_vendor_id, 'claimant' FROM claimant_checks WHERE case_id = %s
+                UNION ALL
+                SELECT check_status, assigned_vendor_id, 'insured' FROM insured_checks WHERE case_id = %s
+                UNION ALL
+                SELECT check_status, assigned_vendor_id, 'driver' FROM driver_checks WHERE case_id = %s
+                UNION ALL
+                SELECT check_status, assigned_vendor_id, 'spot' FROM spot_checks WHERE case_id = %s
+                UNION ALL
+                SELECT check_status, assigned_vendor_id, 'chargesheet' FROM chargesheets WHERE case_id = %s
+                UNION ALL
+                SELECT check_status, assigned_vendor_id, 'rti' FROM rti_checks WHERE case_id = %s
+                UNION ALL
+                SELECT check_status, assigned_vendor_id, 'rto' FROM rto_checks WHERE case_id = %s
+            """, [case_id] * 7)
+            check_rows = cursor.fetchall()
+            assigned_checks = [r for r in check_rows if r[1] is not None]
+            assigned_count = len(assigned_checks)
+
+            if assigned_count == 0:
+                target_status = 'Not Initiated'
+            else:
+                submitted_set = {'under verification', 'verified', 'completed', 'unable to verify'}
+                all_submitted = all((r[0] or '').strip().lower() in submitted_set for r in assigned_checks)
+                has_under_verification = any((r[0] or '').strip().lower() == 'under verification' for r in assigned_checks)
+                all_verified = all((r[0] or '').strip().lower() in {'verified', 'completed', 'unable to verify'} for r in assigned_checks)
+
+                if all_submitted and has_under_verification:
+                    target_status = 'Under Verification'
+                elif all_verified:
+                    target_status = 'Ready for Report'
+                elif any(r[2] == 'chargesheet' and (r[0] or '').strip().lower() in ('applied for cs', 'not found') for r in assigned_checks):
+                    target_status = 'Pending CS'
+                else:
+                    target_status = 'WIP'
 
         # If transition is needed:
         if current_status != target_status:
-            # Transition only between Not Initiated/NI/Open/WIP
-            if current_status in ('Not Initiated', 'NI', 'WIP', 'Open', '', None):
-                cursor.execute(
-                    "UPDATE cases SET full_case_status = %s, updated_at = NOW() WHERE id = %s",
-                    [target_status, case_id]
-                )
-                try:
-                    from users.models import InsuranceCase
-                    InsuranceCase.objects.filter(case_number=case_number).update(full_case_status=target_status)
-                except Exception:
-                    pass
-                logger.info(f"[incident_case_db] Synced case id={case_id} ({case_number}) status: {current_status} -> {target_status} (assigned_checks={assigned_count})")
-                return target_status
+            cursor.execute(
+                "UPDATE cases SET full_case_status = %s, updated_at = NOW() WHERE id = %s",
+                [target_status, case_id]
+            )
+            try:
+                from users.models import InsuranceCase
+                InsuranceCase.objects.filter(case_number=case_number).update(full_case_status=target_status)
+            except Exception:
+                pass
+            logger.info(f"[incident_case_db] Synced case id={case_id} ({case_number}) status: {current_status} -> {target_status}")
+            return target_status
 
         return current_status
     finally:

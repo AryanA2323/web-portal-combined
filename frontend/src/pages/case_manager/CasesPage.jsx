@@ -40,6 +40,7 @@ import {
   Divider,
   Tooltip,
   Drawer,
+  InputLabel,
 } from '@mui/material';
 import {
   Search,
@@ -102,8 +103,13 @@ const resolveMediaUrl = (url) => {
 const fullCaseStatusColors = {
   'Not Initiated': '#475569',
   'WIP': '#c2410c',
-  'Pending CS': '#c2410c',
+  'Under Verification': '#0284c7',
+  'Ready for Report': '#0d9488',
+  'Report Generated': '#7c3aed',
+  'QA Verification': '#d97706',
+  'Completed': '#16a34a',
   'Closed': '#15803d',
+  'Pending CS': '#c2410c',
   'IR-Writing': '#1d4ed8',
   'NI': '#475569',
   'Withdraw': '#b91c1c',
@@ -1605,18 +1611,19 @@ const CasesPage = ({ isClosedView = false }) => {
                     sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { border: '1px solid #e0e0e0' } }}
                   >
                     <MenuItem value="all">All Statuses</MenuItem>
-                    <MenuItem value="pending_review">Review Pending</MenuItem>
                     <MenuItem value="Not Initiated">Not Initiated</MenuItem>
                     <MenuItem value="WIP">WIP</MenuItem>
-                    <MenuItem value="overdue">Overdue Cases (Past TAT)</MenuItem>
-                    <MenuItem value="Pending CS">Pending CS</MenuItem>
+                    <MenuItem value="Under Verification">Under Verification</MenuItem>
+                    <MenuItem value="Ready for Report">Ready for Report</MenuItem>
+                    <MenuItem value="Report Generated">Report Generated</MenuItem>
+                    <MenuItem value="QA Verification">QA Verification</MenuItem>
+                    <MenuItem value="Completed">Completed</MenuItem>
                     <MenuItem value="Closed">Closed</MenuItem>
-                    <MenuItem value="IR-Writing">IR-Writing</MenuItem>
-                    <MenuItem value="NI">NI</MenuItem>
+                    <MenuItem value="Pending CS">Pending CS</MenuItem>
                     <MenuItem value="Withdraw">Withdraw</MenuItem>
-                    <MenuItem value="QC-1">QC-1</MenuItem>
                     <MenuItem value="Pending Additional Docs">Pending Docs</MenuItem>
-                    <MenuItem value="Portal Upload">Portal Upload</MenuItem>
+                    <MenuItem value="pending_review">Review Pending</MenuItem>
+                    <MenuItem value="overdue">Overdue Cases (Past TAT)</MenuItem>
                   </Select>
                 </FormControl>
               )}
@@ -3724,57 +3731,94 @@ const CasesPage = ({ isClosedView = false }) => {
               </Box>
             )}
           </DialogContent>
-          <DialogActions sx={{ p: 2, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
+          <DialogActions sx={{ p: 2, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
             <Button onClick={() => setFullCaseModalOpen(false)} variant="outlined" sx={{ textTransform: 'none', borderRadius: '8px', px: 3, color: '#64748b', borderColor: '#cbd5e1' }}>
               Cancel
             </Button>
-            {fullCaseData?.case?.full_case_status === 'Closed' ? (
-              <Button
-                onClick={() => {
-                  setStatusConfirmAction('WIP');
-                  setStatusConfirmOpen(true);
-                }}
-                variant="contained"
-                disabled={statusLoading}
-                sx={{ textTransform: 'none', bgcolor: '#48bb78', '&:hover': { bgcolor: '#38a169' }, borderRadius: '8px', px: 3 }}
-              >
-                {statusLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Open Case'}
-              </Button>
-            ) : (
-              <Tooltip
-                title={
-                  !fullCaseData?.case?.has_approved_report
-                    ? 'Case cannot be closed until the report is approved by QA and available in Reports.'
-                    : ''
-                }
-                arrow
-              >
-                <span>
-                  <Button
-                    onClick={() => {
-                      setStatusConfirmAction('Closed');
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <FormControl size="small" sx={{ minWidth: 190 }}>
+                <InputLabel id="case-status-select-label" sx={{ fontSize: '13px' }}>Change Case Status</InputLabel>
+                <Select
+                  labelId="case-status-select-label"
+                  label="Change Case Status"
+                  value={fullCaseData?.case?.full_case_status || ''}
+                  onChange={(e) => {
+                    const newStatus = e.target.value;
+                    if (newStatus && newStatus !== fullCaseData?.case?.full_case_status) {
+                      setStatusConfirmAction(newStatus);
                       setStatusConfirmOpen(true);
-                    }}
-                    variant="contained"
-                    disabled={statusLoading || !fullCaseData?.case?.has_approved_report}
-                    sx={{
-                      textTransform: 'none',
-                      bgcolor: '#e53e3e',
-                      '&:hover': { bgcolor: '#c53030' },
-                      borderRadius: '8px',
-                      px: 3,
-                      '&.Mui-disabled': {
-                        bgcolor: '#e2e8f0',
-                        color: '#94a3b8',
-                        cursor: 'not-allowed',
-                      }
-                    }}
+                    }
+                  }}
+                  disabled={statusLoading}
+                  sx={{ borderRadius: '8px', fontSize: '13px', height: '36px', bgcolor: '#fff' }}
+                >
+                  <MenuItem value="Not Initiated">Not Initiated</MenuItem>
+                  <MenuItem value="WIP">WIP</MenuItem>
+                  <MenuItem value="Under Verification">Under Verification</MenuItem>
+                  <MenuItem value="Ready for Report">Ready for Report</MenuItem>
+                  <MenuItem value="Report Generated">Report Generated</MenuItem>
+                  <MenuItem value="QA Verification">QA Verification</MenuItem>
+                  <MenuItem value="Completed">Completed</MenuItem>
+                  <MenuItem
+                    value="Closed"
+                    disabled={!fullCaseData?.case?.has_approved_report}
                   >
-                    {statusLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Close Case'}
-                  </Button>
-                </span>
-              </Tooltip>
-            )}
+                    Closed {!fullCaseData?.case?.has_approved_report ? '(Requires QA Approval)' : ''}
+                  </MenuItem>
+                  <MenuItem value="Pending CS">Pending CS</MenuItem>
+                  <MenuItem value="Pending Additional Docs">Pending Additional Docs</MenuItem>
+                  <MenuItem value="Withdraw">Withdraw</MenuItem>
+                </Select>
+              </FormControl>
+              {fullCaseData?.case?.full_case_status === 'Closed' ? (
+                <Button
+                  onClick={() => {
+                    setStatusConfirmAction('WIP');
+                    setStatusConfirmOpen(true);
+                  }}
+                  variant="contained"
+                  disabled={statusLoading}
+                  sx={{ textTransform: 'none', bgcolor: '#48bb78', '&:hover': { bgcolor: '#38a169' }, borderRadius: '8px', px: 2.5, height: '36px' }}
+                >
+                  {statusLoading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Re-open Case'}
+                </Button>
+              ) : (
+                <Tooltip
+                  title={
+                    !fullCaseData?.case?.has_approved_report
+                      ? 'Case cannot be closed until the report is approved by QA and available in Reports.'
+                      : ''
+                  }
+                  arrow
+                >
+                  <span>
+                    <Button
+                      onClick={() => {
+                        setStatusConfirmAction('Closed');
+                        setStatusConfirmOpen(true);
+                      }}
+                      variant="contained"
+                      disabled={statusLoading || !fullCaseData?.case?.has_approved_report}
+                      sx={{
+                        textTransform: 'none',
+                        bgcolor: '#e53e3e',
+                        '&:hover': { bgcolor: '#c53030' },
+                        borderRadius: '8px',
+                        px: 2.5,
+                        height: '36px',
+                        '&.Mui-disabled': {
+                          bgcolor: '#e2e8f0',
+                          color: '#94a3b8',
+                          cursor: 'not-allowed',
+                        }
+                      }}
+                    >
+                      {statusLoading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Close Case'}
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+            </Box>
           </DialogActions>
         </Dialog>
 
@@ -3783,7 +3827,7 @@ const CasesPage = ({ isClosedView = false }) => {
           <DialogTitle sx={{ fontWeight: 700, color: '#1e293b' }}>Confirm Status Change</DialogTitle>
           <DialogContent>
             <Typography variant="body1" sx={{ color: '#475569' }}>
-              Are you sure you want to {statusConfirmAction === 'Closed' ? 'close' : 'open'} this case?
+              Are you sure you want to change this case status to <strong>{statusConfirmAction}</strong>?
             </Typography>
           </DialogContent>
           <DialogActions sx={{ p: 2, pt: 0 }}>
@@ -3794,7 +3838,7 @@ const CasesPage = ({ isClosedView = false }) => {
                 setStatusConfirmOpen(false);
               }}
               variant="contained"
-              color={statusConfirmAction === 'Closed' ? 'error' : 'success'}
+              color={statusConfirmAction === 'Closed' ? 'error' : statusConfirmAction === 'WIP' ? 'success' : 'primary'}
             >
               Confirm
             </Button>

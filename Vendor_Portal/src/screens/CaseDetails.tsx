@@ -196,7 +196,14 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingPhotoName, setDeletingPhotoName] = useState<string | null>(null);
-  const isCompleted = data?.check?.check_status === 'Completed' || data?.check?.check_status === 'Verified' || data?.check?.check_status === 'Unable to Verify';
+  const checkStatusRaw = data?.check?.check_status || '';
+  const checkStatusLower = String(checkStatusRaw).trim().toLowerCase();
+  const isUnderVerification = checkStatusLower === 'under verification' || checkStatusLower === 'submitted';
+  const isCompleted = isUnderVerification || [
+    'completed',
+    'verified',
+    'unable to verify',
+  ].includes(checkStatusLower);
 
   const CHARGESHEET_STATUS_OPTIONS = [
     'Not Initiated',
@@ -585,7 +592,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
 
       await apiService.markCheckCompleted(caseId, checkType);
 
-      dispatch(markCheckAsCompleted({ caseId, checkType }));
+      dispatch(markCheckAsCompleted({ caseId, checkType, status: normalizedCheckType === 'rto' ? 'Verified' : 'Under Verification' }));
 
       showDialog({
         type: 'success',
@@ -1067,6 +1074,30 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
             </View>
           )}
 
+          {isUnderVerification && (
+            <View style={[styles.section, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD', borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+              <MaterialCommunityIcons name="clock-check-outline" size={28} color="#0284C7" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sectionEyebrow, { color: '#0284C7', marginBottom: 2 }]}>Under Verification</Text>
+                <Text style={{ fontSize: 13, color: '#0369A1', lineHeight: 18 }}>
+                  This check has been submitted and is currently under verification. Updates and uploads are locked.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {(checkStatusLower === 'completed' || checkStatusLower === 'verified') && (
+            <View style={[styles.section, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+              <MaterialCommunityIcons name="check-decagram" size={28} color="#16A34A" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sectionEyebrow, { color: '#16A34A', marginBottom: 2 }]}>Check Completed</Text>
+                <Text style={{ fontSize: 13, color: '#15803D', lineHeight: 18 }}>
+                  This check has been verified and completed.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {Boolean(checkInfo.triggers) && (
             <View style={[styles.section, { backgroundColor: '#fffbe6', borderColor: '#ffe58f', borderWidth: 1 }]}>
               <Text style={[styles.sectionEyebrow, { color: '#d48806' }]}>Investigation Focus</Text>
@@ -1237,7 +1268,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                   marginTop: 6,
                 }}
                 onPress={() => setShowStatusModal(!showStatusModal)}
-                disabled={isSavingStatus}
+                disabled={isSavingStatus || isCompleted}
                 activeOpacity={0.8}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -2496,7 +2527,7 @@ export default function CaseDetails({ caseId, checkType }: CaseDetailsProps) {
                                     await clearDraftQuestionnaire(caseId, checkType);
                                   }
                                   await apiService.markCheckCompleted(caseId, checkType);
-                                  dispatch(markCheckAsCompleted({ caseId, checkType }));
+                                  dispatch(markCheckAsCompleted({ caseId, checkType, status: normalizedCheckType === 'rto' ? 'Verified' : 'Under Verification' }));
                                   showToast({ type: 'success', title: 'Check Completed', message: 'Check marked as completed.' });
                                   router.back();
                                 } catch (err: any) {

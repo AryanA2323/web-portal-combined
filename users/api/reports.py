@@ -13,7 +13,9 @@ from django.utils import timezone
 from django.db import connections
 from django.db.models import Max, Subquery
 
+import re
 from users.api.cases import _enrich_evidence_metadata
+from users.services.ai_case_review_service import format_all_dates_in_text, format_ordinal_date
 from users.models import Report, InsuranceCase, CustomUser
 
 logger = logging.getLogger(__name__)
@@ -408,6 +410,14 @@ def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> d
     except Exception as exc:
         logger.warning(f"Failed to fetch documents for report {report.id}: {exc}")
 
+    case_year = "2026"
+    if case and case.case_number:
+        m_year = re.search(r'(?:19|20)\d{2}', str(case.case_number))
+        if m_year:
+            case_year = m_year.group(0)
+
+    formatted_report_content = format_all_dates_in_text(report.report_content or '', default_year=case_year)
+
     return {
         'id': report.id,
         'case_id': case.id,
@@ -416,7 +426,7 @@ def report_to_schema(report: Report, request: Optional[HttpRequest] = None) -> d
         'claim_number': case.claim_number,
         'client_name': case.client_name,
         'category': case.category,
-        'report_content': report.report_content,
+        'report_content': formatted_report_content,
         'status': report.status,
         'assigned_qc_id': qc.id if qc else None,
         'assigned_qc_name': f"{qc.first_name} {qc.last_name}".strip() or qc.username if qc else None,
@@ -743,6 +753,18 @@ def create_report(request: HttpRequest, payload: CreateReportSchema):
         created_by=user,
     )
 
+    try:
+        from django.db import connections
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                "UPDATE cases SET full_case_status = 'Report Generated', updated_at = NOW() WHERE case_number = %s AND full_case_status NOT IN ('Closed', 'Withdraw', 'Completed')",
+                [case.case_number]
+            )
+        from users.models import InsuranceCase
+        InsuranceCase.objects.filter(case_number=case.case_number).exclude(full_case_status__in=['Closed', 'Withdraw', 'Completed']).update(full_case_status='Report Generated')
+    except Exception as err:
+        logger.warning(f"Failed to update case full_case_status to Report Generated: {err}")
+
     logger.info(f"Report {report.id} created for case {case.case_number} by {user.username}")
 
     return report_to_schema(report, request)
@@ -864,6 +886,19 @@ def assign_qc(request: HttpRequest, report_id: int, payload: AssignQCSchema):
     report.status = Report.Status.ASSIGNED
     report.save()
 
+    if report.case and report.case.case_number:
+        try:
+            from django.db import connections
+            with connections['default'].cursor() as cursor:
+                cursor.execute(
+                    "UPDATE cases SET full_case_status = 'QA Verification', updated_at = NOW() WHERE case_number = %s AND full_case_status NOT IN ('Closed', 'Withdraw', 'Completed')",
+                    [report.case.case_number]
+                )
+            from users.models import InsuranceCase
+            InsuranceCase.objects.filter(case_number=report.case.case_number).exclude(full_case_status__in=['Closed', 'Withdraw', 'Completed']).update(full_case_status='QA Verification')
+        except Exception as err:
+            logger.warning(f"Failed to update case full_case_status to QA Verification: {err}")
+
     logger.info(f"Report {report.id} assigned to qc {qc.username} by {user.username}")
 
     return report_to_schema(report, request)
@@ -892,7 +927,13 @@ def update_report_content(request: HttpRequest, report_id: int, payload: UpdateR
         # Allow editing ASSIGNED reports too before qc reviews them
         pass
 
-    report.report_content = payload.report_content
+    case_year = "2026"
+    if report.case and report.case.case_number:
+        m_year = re.search(r'(?:19|20)\d{2}', str(report.case.case_number))
+        if m_year:
+            case_year = m_year.group(0)
+
+    report.report_content = format_all_dates_in_text(payload.report_content, default_year=case_year)
     report.updated_at = timezone.now()
     report.save()
 
@@ -942,6 +983,19 @@ def reassign_report(request: HttpRequest, report_id: int, payload: ReassignRepor
     report.save()
 
     logger.info(f"Report {report.id} reassigned from {previous_qc.username if previous_qc else 'None'} to {qc.username} by {user.username}")
+
+    if report.case and report.case.case_number:
+        try:
+            from django.db import connections
+            with connections['default'].cursor() as cursor:
+                cursor.execute(
+                    "UPDATE cases SET full_case_status = 'QA Verification', updated_at = NOW() WHERE case_number = %s AND full_case_status NOT IN ('Closed', 'Withdraw', 'Completed')",
+                    [report.case.case_number]
+                )
+            from users.models import InsuranceCase
+            InsuranceCase.objects.filter(case_number=report.case.case_number).exclude(full_case_status__in=['Closed', 'Withdraw', 'Completed']).update(full_case_status='QA Verification')
+        except Exception as err:
+            logger.warning(f"Failed to update case full_case_status to QA Verification: {err}")
 
     return report_to_schema(report, request)
 
@@ -1047,6 +1101,31 @@ def review_report(request: HttpRequest, report_id: int, payload: ReviewReportSch
     report.reviewed_at = timezone.now()
     report.review_notes = notes
     report.save()
+
+    if action == 'accept' and report.case:
+        try:
+            from django.db import connections
+            with connections['default'].cursor() as cursor:
+                cursor.execute(
+                    "UPDATE cases SET full_case_status = 'Completed', updated_at = NOW() WHERE case_number = %s AND full_case_status NOT IN ('Closed', 'Withdraw')",
+                    [report.case.case_number]
+                )
+            from users.models import InsuranceCase
+            InsuranceCase.objects.filter(case_number=report.case.case_number).exclude(full_case_status__in=['Closed', 'Withdraw']).update(full_case_status='Completed')
+        except Exception as err:
+            logger.warning(f"Failed to update case full_case_status to Completed: {err}")
+    elif action == 'reject' and report.case:
+        try:
+            from django.db import connections
+            with connections['default'].cursor() as cursor:
+                cursor.execute(
+                    "UPDATE cases SET full_case_status = 'Report Generated', updated_at = NOW() WHERE case_number = %s AND full_case_status NOT IN ('Closed', 'Withdraw', 'Completed')",
+                    [report.case.case_number]
+                )
+            from users.models import InsuranceCase
+            InsuranceCase.objects.filter(case_number=report.case.case_number).exclude(full_case_status__in=['Closed', 'Withdraw', 'Completed']).update(full_case_status='Report Generated')
+        except Exception as err:
+            logger.warning(f"Failed to update case full_case_status to Report Generated: {err}")
 
     action_label = "approved" if action == 'accept' else 'rejected'
     logger.info(f"Report {report.id} {action_label} by qc {user.username}")

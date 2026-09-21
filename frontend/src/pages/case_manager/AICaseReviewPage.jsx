@@ -49,6 +49,7 @@ import api from '../../services/api';
 import jsPDF from 'jspdf';
 import { PDFDocument } from 'pdf-lib';
 import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
+import { formatOrdinalDate, formatReportDates } from '../../utils/reportDateUtils';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 import AlertMessage from '../../components/common/AlertMessage';
 
@@ -525,11 +526,12 @@ const AICaseReviewPage = () => {
     if (!activeReport || !activeReportCase) return;
 
     const caseNum = activeReport.caseNumber || activeReportCase.case_number || 'N/A';
+    const caseYear = caseNum.match(/(?:19|20)\d{2}/)?.[0] || '2026';
     const metadata = [
       { label: 'Case Number', value: caseNum },
       { label: 'Claim Number', value: activeReportCase.claim_number || 'N/A' },
       { label: 'Business Partner', value: activeReportCase.vendorName || 'Unassigned' },
-      { label: 'Generated', value: new Date(activeReport.generatedAt).toLocaleString() },
+      { label: 'Generated', value: formatOrdinalDate(activeReport.generatedAt, true) },
       { label: 'Statement Source', value: activeReport.sourceFileName || 'Stored Business Partner Statements' },
       { label: 'Business Partner Statements', value: (activeReport.vendorStatements || []).length },
     ];
@@ -556,7 +558,7 @@ const AICaseReviewPage = () => {
         title: 'AI Case Review Report',
         metadata,
         contentTitle: 'Report Content',
-        content: activeReport.reportText || '',
+        content: formatReportDates(activeReport.reportText || '', caseYear),
         evidenceItems,
       });
       return;
@@ -638,7 +640,7 @@ const AICaseReviewPage = () => {
     y += 8;
 
     // Report body - parse sections
-    const reportText = activeReport.reportText || '';
+    const reportText = formatReportDates(activeReport.reportText || '', caseYear);
     const bodyLines = reportText.split('\n');
     for (const line of bodyLines) {
       const trimmed = line.trim();
@@ -1476,7 +1478,7 @@ const AICaseReviewPage = () => {
                         {item.check_type || 'Check'} | Statement {item.statement_index || index + 1}
                       </Typography>
                       <Typography sx={{ fontSize: '13px', color: '#1e293b', whiteSpace: 'pre-wrap' }}>
-                        {item.statement_text || ''}
+                        {formatReportDates(item.statement_text || '', activeReportCase?.case_number?.match(/(?:19|20)\d{2}/)?.[0])}
                       </Typography>
                     </Box>
                   ))}
@@ -1519,7 +1521,7 @@ const AICaseReviewPage = () => {
                       color: '#1e293b',
                     }}
                   >
-                    {activeReport.reportText}
+                    {formatReportDates(activeReport.reportText, activeReportCase?.case_number?.match(/(?:19|20)\d{2}/)?.[0])}
                   </Typography>
                 </Box>
               )}

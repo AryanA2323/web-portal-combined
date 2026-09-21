@@ -27,6 +27,7 @@ import { NotificationBell } from '../../components/case_manager';
 import jsPDF from 'jspdf';
 import { downloadWordDocument, sanitizeFileName } from '../../utils/reportDownload';
 import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
+import { formatOrdinalDate, formatReportDates } from '../../utils/reportDateUtils';
 import { PDFDocument } from 'pdf-lib';
 
 const getEvidenceImageDataUrl = async (photo) => {
@@ -52,16 +53,9 @@ const formatEvidenceTimestamp = (photo) => {
   if (!rawValue) return '';
 
   const parsed = new Date(rawValue);
-  if (Number.isNaN(parsed.getTime())) return String(rawValue);
+  if (Number.isNaN(parsed.getTime())) return formatReportDates(String(rawValue));
 
-  return parsed.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  }).replace(',', '');
+  return formatOrdinalDate(parsed, true);
 };
 
 const getEvidenceWatermarkLines = (photo) => {
@@ -146,9 +140,7 @@ const ReportsPage = () => {
 
   const formatDate = (value) => {
     if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '-';
-    return date.toLocaleString();
+    return formatOrdinalDate(value);
   };
 
   const handleChangePage = (_, newPage) => {
@@ -213,38 +205,40 @@ const ReportsPage = () => {
         });
       }
 
+      const caseYear = (row.case_number || '').match(/(?:19|20)\d{2}/)?.[0] || '2026';
+      const formattedReportContent = formatReportDates(reportContent, caseYear);
+
       if (format === 'word') {
         downloadWordDocument({
           fileName: `${caseFilePart}-approved-report.doc`,
           title: 'Approved Report',
           metadata,
           contentTitle: 'Report Content',
-          content: reportContent,
+          content: formattedReportContent,
           evidenceItems,
         });
         return;
       }
 
       const doc = new jsPDF();
-      const margin = 16;
-      const pageHeight = doc.internal.pageSize.getHeight();
       const pageWidth = doc.internal.pageSize.getWidth();
-      const textWidth = pageWidth - (margin * 2);
-      let y = 20;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 14;
+      const textWidth = pageWidth - margin * 2;
+      let y = 18;
 
-      const addLine = (text, fontSize = 11, isBold = false) => {
-        doc.setFont('helvetica', isBold ? 'bold' : 'normal');
-        doc.setFontSize(fontSize);
-        const lines = doc.splitTextToSize(String(text), textWidth);
-
-        lines.forEach((line) => {
-          if (y > pageHeight - 14) {
+      const addLine = (text, size = 11, bold = false) => {
+        doc.setFontSize(size);
+        doc.setFont('helvetica', bold ? 'bold' : 'normal');
+        const lines = doc.splitTextToSize(String(text || ''), textWidth);
+        for (const line of lines) {
+          if (y > pageHeight - 16) {
             doc.addPage();
             y = 20;
           }
           doc.text(line, margin, y);
-          y += fontSize * 0.55;
-        });
+          y += size * 0.45 + 2.5;
+        }
       };
 
       addLine('Approved Report', 16, true);
@@ -254,7 +248,7 @@ const ReportsPage = () => {
       y += 3;
       addLine('Report Content', 13, true);
       y += 1;
-      addLine(reportContent, 11, false);
+      addLine(formattedReportContent, 11, false);
 
       if (evidenceItems.length > 0) {
         y += 8;

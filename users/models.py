@@ -657,17 +657,23 @@ class InsuranceCase(models.Model):
     
     # Full Case Status choices
     FULL_CASE_STATUS_CHOICES = [
+        ('Not Initiated', 'Not Initiated'),
         ('WIP', 'WIP'),
-        ('Pending CS', 'Pending CS'),
+        ('Under Verification', 'Under Verification'),
+        ('Ready for Report', 'Ready for Report'),
+        ('Report Generated', 'Report Generated'),
+        ('QA Verification', 'QA Verification'),
+        ('Completed', 'Completed'),
         ('Closed', 'Closed'),
+        ('Pending CS', 'Pending CS'),
         ('IR-Writing', 'IR-Writing'),
-        ('NI', 'NI'),
-        ('Withdraw', 'Withdraw'),
         ('QC-1', 'QC-1'),
+        ('Portal Upload', 'Portal Upload'),
+        ('Withdraw', 'Withdraw'),
+        ('NI', 'NI'),
         ('Pending Additional Docs', 'Pending Additional Docs'),
         ('Connected Pending', 'Connected Pending'),
         ('RCU Pending', 'RCU Pending'),
-        ('Portal Upload', 'Portal Upload'),
     ]
     
     # SLA Status choices

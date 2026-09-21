@@ -43,6 +43,7 @@ import StatCard from './components/StatCard';
 import api from '../../services/api';
 import { NotificationBell } from '../../components/case_manager';
 import { getEvidencePhotoUrl, resolveEvidencePhotoUrl } from '../../utils/mediaUrls';
+import { formatOrdinalDate, formatReportDates } from '../../utils/reportDateUtils';
 import AlertMessage from '../../components/common/AlertMessage';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 
@@ -51,16 +52,9 @@ const formatEvidenceTimestamp = (photo) => {
   if (!rawValue) return '';
 
   const parsed = new Date(rawValue);
-  if (Number.isNaN(parsed.getTime())) return String(rawValue);
+  if (Number.isNaN(parsed.getTime())) return formatReportDates(String(rawValue));
 
-  return parsed.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  }).replace(',', '');
+  return formatOrdinalDate(parsed, true);
 };
 
 const getEvidenceWatermarkLines = (photo) => {
@@ -991,7 +985,7 @@ const LegalReviewPage = () => {
                       color: '#1e293b',
                     }}
                   >
-                    {selectedReport.report_content}
+                    {formatReportDates(selectedReport.report_content, selectedReport.case_number?.match(/(?:19|20)\d{2}/)?.[0])}
                   </Typography>
                 </Box>
               )}

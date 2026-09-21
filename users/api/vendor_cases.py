@@ -1371,7 +1371,7 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
             where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
             extra_cols = ", advocate_status" if table == 'chargesheets' else ""
             cursor.execute(f"""
-                SELECT id, {evidence_column}{extra_cols} FROM {table}
+                SELECT id, {evidence_column}, check_status{extra_cols} FROM {table}
                 WHERE case_id = %s AND {where_vendor}
             """, [case_id, *vendor_params])
             check_row = cursor.fetchone()
@@ -1379,7 +1379,11 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
                 return 404, {"error": "Check not found or not assigned to you"}
             check_id = check_row[0]
             existing_evidence = check_row[1]
-            advocate_status_db = check_row[2] if (table == 'chargesheets' and len(check_row) > 2) else ''
+            check_status_db = (check_row[2] or '').strip().lower()
+            advocate_status_db = check_row[3] if (table == 'chargesheets' and len(check_row) > 3) else ''
+
+            if check_status_db in ('under verification', 'submitted', 'verified', 'completed', 'unable to verify'):
+                return 400, {"error": "This check is under verification and cannot be modified."}
 
             if table == 'chargesheets':
                 def _cs_status_idx(s):
@@ -1460,6 +1464,28 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
     for i, f in enumerate(files):
         # Validate GPS location if case has a location set
         latitude, longitude = extract_gps_from_image(f)
+
+        # Extract EXIF capture timestamp (DateTimeOriginal) from the photo
+        captured_at_iso = None
+        try:
+            f.seek(0)
+            from PIL import Image
+            from PIL.ExifTags import TAGS
+            img = Image.open(f)
+            exif_data = img._getexif()
+            if exif_data:
+                for tag_id, value in exif_data.items():
+                    tag_name = TAGS.get(tag_id, tag_id)
+                    if tag_name in ('DateTimeOriginal', 'DateTimeDigitized', 'DateTime'):
+                        try:
+                            captured_at_iso = datetime.strptime(
+                                str(value), "%Y:%m:%d %H:%M:%S"
+                            ).isoformat()
+                        except (ValueError, TypeError):
+                            captured_at_iso = str(value)
+                        break
+        except Exception as exif_err:
+            logger.debug(f"Could not extract EXIF timestamp from {f.name}: {exif_err}")
         
         # Fallback to form data
         if latitude is None or longitude is None:
@@ -1520,16 +1546,18 @@ def vendor_check_upload_evidence(request: HttpRequest, case_id: int, check_type:
         except Exception as e:
             logger.warning(f"Reverse geocode failed: {e}")
 
+        now_iso = datetime.now().isoformat()
         evidence_entry = {
             "filename": filename,
             "url": photo_url,
-            "uploaded_at": datetime.now().isoformat(),
+            "captured_at": captured_at_iso or now_iso,
+            "uploaded_at": now_iso,
             "location_name": address_text,
             "location_mismatch": False,
         }
         evidence_list.append(evidence_entry)
         uploaded.append(evidence_entry)
-        logger.info(f"[Evidence] Saved {filename} for case={case_id} check={check_type}")
+        logger.info(f"[Evidence] Saved {filename} for case={case_id} check={check_type} captured_at={evidence_entry['captured_at']}")
         
     if errors:
         return 400, {"error": "; ".join(errors)}
@@ -1609,7 +1637,7 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
 
             # Check if statements are required
             from users.api.vendor_cases import _validate_vendor_check_assignment
-            error_response, _, _, _, _ = _validate_vendor_check_assignment(request, case_id, check_type)
+            error_response, _, _, _, _ = _validate_vendor_check_assignment(request, case_id, check_type, allow_locked=True)
             can_add_statement = (error_response is None)
             
             if can_add_statement and check_type != 'spot':
@@ -1625,6 +1653,9 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
             cursor.execute(f"SELECT check_status FROM {table} WHERE id = %s", [check_id])
             old_status_row = cursor.fetchone()
             old_status = old_status_row[0] if old_status_row else ''
+
+            if (old_status or '').strip().lower() in ('under verification', 'submitted', 'verified', 'completed', 'unable to verify'):
+                return 400, {"error": "This check has already been submitted and is under verification."}
 
             cursor.execute(f"""
                 UPDATE {table} SET check_status = %s, updated_at = NOW()
@@ -1666,6 +1697,10 @@ def vendor_check_complete(request: HttpRequest, case_id: int, check_type: str):
                         WHERE case_id = %s
                     """, [case_id])
                     logger.info(f"Insured-cum-driver: also closed {paired_table} for case_id={case_id}")
+
+            # Automatically recalculate and sync case full_case_status
+            from users.incident_case_db import sync_case_full_status_from_checks
+            sync_case_full_status_from_checks(case_id, cursor=cursor)
 
     except Exception as e:
         logger.error(f"Failed to complete check: {e}", exc_info=True)
@@ -1839,7 +1874,7 @@ def vendor_check_questionnaire_save(request: HttpRequest, case_id: int, check_ty
             # Verify the check is assigned to this vendor
             where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
             cursor.execute(
-                f"SELECT id FROM {table} WHERE case_id = %s AND {where_vendor}",
+                f"SELECT id, check_status FROM {table} WHERE case_id = %s AND {where_vendor}",
                 [case_id, *vendor_params],
             )
             row = cursor.fetchone()
@@ -1847,6 +1882,9 @@ def vendor_check_questionnaire_save(request: HttpRequest, case_id: int, check_ty
                 return 404, {"error": "Check not found or not assigned to you"}
 
             check_id = row[0]
+            check_status_db = (row[1] or '').strip().lower()
+            if check_status_db in ('under verification', 'submitted', 'verified', 'completed', 'unable to verify'):
+                return 400, {"error": "This check is under verification and cannot be modified."}
 
             import json
             questionnaire_json = json.dumps(payload.questionnaire)
@@ -1973,7 +2011,7 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
             where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
             extra_cols = ", advocate_status" if table == 'chargesheets' else ""
             cursor.execute(f"""
-                SELECT id, {evidence_column}{extra_cols} FROM {table}
+                SELECT id, {evidence_column}, check_status{extra_cols} FROM {table}
                 WHERE case_id = %s AND {where_vendor}
             """, [case_id, *vendor_params])
             check_row = cursor.fetchone()
@@ -1982,7 +2020,11 @@ def delete_vendor_check_evidence(request: HttpRequest, case_id: int, check_type:
 
             check_id = check_row[0]
             evidence_list = parse_json_list(check_row[1])
-            advocate_status_db = check_row[2] if (table == 'chargesheets' and len(check_row) > 2) else ''
+            check_status_db = (check_row[2] or '').strip().lower()
+            advocate_status_db = check_row[3] if (table == 'chargesheets' and len(check_row) > 3) else ''
+
+            if check_status_db in ('under verification', 'submitted', 'verified', 'completed', 'unable to verify'):
+                return 400, {"error": "This check is under verification and cannot be modified."}
 
             if table == 'chargesheets':
                 def _cs_status_idx(s):
@@ -2066,7 +2108,7 @@ def delete_vendor_check_document(request: HttpRequest, case_id: int, check_type:
         with connections['default'].cursor() as cursor:
             where_vendor, vendor_params = _vendor_assignment_where_clause(vendor_ids, "assigned_vendor_id")
             cursor.execute(f"""
-                SELECT id, vendor_documents FROM {table}
+                SELECT id, vendor_documents, check_status FROM {table}
                 WHERE case_id = %s AND {where_vendor}
             """, [case_id, *vendor_params])
             check_row = cursor.fetchone()
@@ -2074,6 +2116,10 @@ def delete_vendor_check_document(request: HttpRequest, case_id: int, check_type:
                 return 404, {"error": "Check not found or not assigned to you"}
 
             check_id = check_row[0]
+            check_status_db = (check_row[2] or '').strip().lower()
+            if check_status_db in ('under verification', 'submitted', 'verified', 'completed', 'unable to verify'):
+                return 400, {"error": "This check is under verification and cannot be modified."}
+
             docs_list = parse_json_list(check_row[1])
 
             delete_index = next(
@@ -2134,7 +2180,7 @@ def delete_vendor_check_statement(request: HttpRequest, case_id: int, check_type
     try:
         with connections['default'].cursor() as cursor:
             cursor.execute(f"""
-                SELECT id, statement_entries FROM {table}
+                SELECT id, statement_entries, check_status FROM {table}
                 WHERE case_id = %s AND assigned_vendor_id = %s
             """, [case_id, vendor_id])
             check_row = cursor.fetchone()
@@ -2142,6 +2188,10 @@ def delete_vendor_check_statement(request: HttpRequest, case_id: int, check_type
                 return 404, {"error": "Check not found or not assigned to you"}
 
             check_id = check_row[0]
+            check_status_db = (check_row[2] or '').strip().lower()
+            if check_status_db in ('under verification', 'submitted', 'verified', 'completed', 'unable to verify'):
+                return 400, {"error": "This check is under verification and cannot be modified."}
+
             entries_list = parse_json_list(check_row[1])
 
             if index < 1 or index > len(entries_list):
@@ -2658,7 +2708,7 @@ SPEECH_MAX_FILE_MB = int(os.environ.get('SPEECH_MAX_FILE_MB', '15'))
 SPEECH_MAX_FILE_BYTES = SPEECH_MAX_FILE_MB * 1024 * 1024
 
 
-def _validate_vendor_check_assignment(request, case_id: int, check_type: str):
+def _validate_vendor_check_assignment(request, case_id: int, check_type: str, allow_locked: bool = False):
     """
     Validate vendor authentication and check assignment.
 
@@ -2684,13 +2734,16 @@ def _validate_vendor_check_assignment(request, case_id: int, check_type: str):
     try:
         with connections['default'].cursor() as cursor:
             cursor.execute(f"""
-                SELECT id FROM {table_name}
+                SELECT id, check_status FROM {table_name}
                 WHERE case_id = %s AND assigned_vendor_id = %s
             """, [case_id, vendor_id])
             row = cursor.fetchone()
             if not row:
                 return (404, {"error": "Check not found or not assigned to you"}), None, None, None, None
             check_id = row[0]
+            check_status_db = (row[1] or '').strip().lower()
+            if not allow_locked and check_status_db in ('under verification', 'submitted', 'verified', 'completed', 'unable to verify'):
+                return (400, {"error": "This check is under verification and cannot be modified."}), None, None, None, None
     except Exception as e:
         logger.error(f"[Statement] Failed to verify check assignment: {e}")
         return (500, {"error": "Failed to verify check assignment"}), None, None, None, None

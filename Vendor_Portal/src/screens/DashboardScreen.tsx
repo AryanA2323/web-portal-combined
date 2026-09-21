@@ -31,6 +31,8 @@ const checkStatusColors: Record<string, { solid: string; soft: string; icon: key
   'Not Found': { solid: '#D64545', soft: '#FDECEC', icon: 'alert-circle-outline' },
   Completed: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
   Verified: { solid: '#2E9B62', soft: '#E9F8F0', icon: 'check-decagram-outline' },
+  'Under Verification': { solid: '#0284C7', soft: '#E0F2FE', icon: 'file-clock-outline' },
+  Submitted: { solid: '#0284C7', soft: '#E0F2FE', icon: 'file-clock-outline' },
   'Unable to Verify': { solid: '#EF4444', soft: '#FEE2E2', icon: 'close-octagon-outline' },
   Reassigned: { solid: '#D64545', soft: '#FDECEC', icon: 'refresh' },
   'Not Initiated': { solid: '#71839A', soft: '#EEF3F8', icon: 'clock-outline' },
@@ -66,7 +68,8 @@ export default function DashboardScreen() {
   
   const activeChecks = useMemo(() => {
     const filtered = checks.filter((c: any) => {
-      if (c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Unable to Verify') return false;
+      const st = String(c.check_status || '').trim().toLowerCase();
+      if (st === 'completed' || st === 'verified' || st === 'unable to verify' || st === 'under verification' || st === 'submitted') return false;
       if (filterType === 'wip' && c.check_status !== 'WIP') return false;
       if (filterType === 'reassigned' && c.check_status !== 'Reassigned') return false;
       return true;
@@ -146,7 +149,10 @@ export default function DashboardScreen() {
   const summary = useMemo(() => {
     const totalChecks = checks.length;
     const wipChecks = checks.filter((c: any) => c.check_status === 'WIP').length;
-    const completedChecks = checks.filter((c: any) => c.check_status === 'Completed' || c.check_status === 'Verified' || c.check_status === 'Unable to Verify').length;
+    const completedChecks = checks.filter((c: any) => {
+      const st = String(c.check_status || '').trim().toLowerCase();
+      return st === 'completed' || st === 'verified' || st === 'unable to verify' || st === 'under verification' || st === 'submitted';
+    }).length;
     const reassignedChecks = checks.filter((c: any) => c.check_status === 'Reassigned').length;
     const notInitiated = checks.filter((c: any) => c.check_status === 'Not Initiated').length;
     return { totalChecks, wipChecks, completedChecks, reassignedChecks, notInitiated };

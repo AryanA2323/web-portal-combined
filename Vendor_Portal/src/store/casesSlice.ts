@@ -59,10 +59,11 @@ const casesSlice = createSlice({
       state.error = null;
       state.isLoading = false;
     },
-    markCheckAsCompleted: (state, action: PayloadAction<{ caseId: number; checkType: string }>) => {
+    markCheckAsCompleted: (state, action: PayloadAction<{ caseId: number; checkType: string; status?: string }>) => {
+      const targetStatus = action.payload.status || (action.payload.checkType?.toLowerCase().includes('rto') ? 'Verified' : 'Under Verification');
       state.cases = state.cases.map(c => 
         c.case_id === action.payload.caseId && c.check_type === action.payload.checkType 
-          ? { ...c, check_status: 'Completed' } 
+          ? { ...c, check_status: targetStatus } 
           : c
       );
     },

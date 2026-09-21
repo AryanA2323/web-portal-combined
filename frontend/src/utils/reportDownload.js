@@ -1,3 +1,5 @@
+import { formatReportDates } from './reportDateUtils';
+
 export const sanitizeFileName = (value, fallback = 'report') => {
   const normalized = String(value || fallback || 'report')
     .trim()
@@ -18,7 +20,7 @@ const escapeHtml = (value) => String(value ?? '')
 const buildMetadataMarkup = (metadata = []) => metadata
   .filter((item) => item?.label)
   .map((item) => (
-    `<div class="meta-row"><span class="meta-label">${escapeHtml(item.label)}:</span> ${escapeHtml(item.value || '-')}</div>`
+    `<div class="meta-row"><span class="meta-label">${escapeHtml(item.label)}:</span> ${escapeHtml(formatReportDates(String(item.value || '-')))}</div>`
   ))
   .join('');
 
@@ -131,7 +133,7 @@ const buildWordDocumentHtml = ({
       <div class="meta-block">${buildMetadataMarkup(metadata)}</div>
       <div class="section">
         <div class="section-title">${escapeHtml(contentTitle)}</div>
-        <div class="report-content">${escapeHtml(content || '')}</div>
+        <div class="report-content">${escapeHtml(formatReportDates(content || ''))}</div>
       </div>
       ${buildEvidenceMarkup(evidenceItems)}
     </body>

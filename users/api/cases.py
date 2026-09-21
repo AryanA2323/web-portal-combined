@@ -18,7 +18,12 @@ from django.http import HttpRequest
 from django.conf import settings
 from django.utils import timezone
 
-from users.services.ai_case_review_service import AICaseReviewGenerationError, AICaseReviewService
+from users.services.ai_case_review_service import (
+    AICaseReviewGenerationError,
+    AICaseReviewService,
+    format_all_dates_in_text,
+    format_ordinal_date,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1549,7 +1554,7 @@ def _fetch_ai_case_review_case_context(case_id: int) -> dict:
     # Format case_receive_date if present
     case_receive_date = row[8]
     if case_receive_date:
-        case_receive_date = case_receive_date.strftime('%Y-%m-%d') if hasattr(case_receive_date, 'strftime') else str(case_receive_date)
+        case_receive_date = format_ordinal_date(case_receive_date)
 
     def _parse_jsonb_list(value):
         if not value:
@@ -1833,6 +1838,13 @@ def generate_ai_case_review_report(
             c_num = case_context["case_number"]
             c_claim = case_context.get("claim_number") or ""
             c_client = case_context.get("client_name") or ""
+            case_year = "2026"
+            m_year = re.search(r'(?:19|20)\d{2}', str(c_num))
+            if m_year:
+                case_year = m_year.group(0)
+
+            formatted_report_text = format_all_dates_in_text(result["report_text"], default_year=case_year)
+
             ic, _ = InsuranceCase.objects.update_or_create(
                 case_number=c_num,
                 defaults={
@@ -1847,20 +1859,31 @@ def generate_ai_case_review_report(
             Report.objects.filter(case=ic).delete()
             saved_report = Report.objects.create(
                 case=ic,
-                report_content=result["report_text"],
+                report_content=formatted_report_text,
                 status=Report.Status.PENDING,
                 created_by=request.user,
             )
             created_report_id = saved_report.id
             logger.info(f"AI Report {saved_report.id} saved for case {c_num}")
+
+            try:
+                with connections['default'].cursor() as cursor:
+                    cursor.execute(
+                        "UPDATE cases SET full_case_status = 'Report Generated', updated_at = NOW() WHERE case_number = %s AND full_case_status NOT IN ('Closed', 'Withdraw', 'Completed')",
+                        [c_num]
+                    )
+                InsuranceCase.objects.filter(case_number=c_num).exclude(full_case_status__in=['Closed', 'Withdraw', 'Completed']).update(full_case_status='Report Generated')
+            except Exception as st_err:
+                logger.warning(f"Failed to update case status to Report Generated: {st_err}")
         except Exception as save_err:
             logger.error(f"Error saving AI Report in generate_ai_case_review_report: {save_err}")
+            formatted_report_text = format_all_dates_in_text(result["report_text"], default_year=case_year if 'case_year' in locals() else '2026')
 
         return {
             "report_id": created_report_id,
             "case_id": case_context["case_id"],
             "case_number": case_context["case_number"] or "",
-            "report_text": result["report_text"],
+            "report_text": formatted_report_text,
             "statement_excerpt": result["statement_text"][:1000],
             "evidence_photos": vendor_evidence if vendor_evidence else None,
             "vendor_documents": enriched_vendor_docs if enriched_vendor_docs else None,
@@ -1979,7 +2002,8 @@ def update_case_status(request: HttpRequest, case_id: int, payload: UpdateCaseSt
             status = 'Open'
         valid_statuses = [
             'Not Initiated', 'NI', 'WIP', 'Open', 'OPEN', 'Closed', 'Completed',
-            'Pending CS', 'IR-Writing', 'Withdraw', 'QC-1', 'Pending Additional Docs', 'Portal Upload'
+            'Pending CS', 'Under Verification', 'Ready for Report', 'Report Generated',
+            'QA Verification', 'IR-Writing', 'Withdraw', 'QC-1', 'Pending Additional Docs', 'Portal Upload'
         ]
         if status not in valid_statuses:
             raise HttpError(400, f"Invalid status. Must be one of {valid_statuses}")
@@ -5536,6 +5560,12 @@ def review_check(request: HttpRequest, case_id: int, check_type: str, payload: A
                     source='Cases'
                 )
                 
+                try:
+                    from users.incident_case_db import sync_case_full_status_from_checks
+                    sync_case_full_status_from_checks(case_id, cursor=cursor)
+                except Exception as sync_err:
+                    logger.warning(f"Failed to sync case full status after accepting check: {sync_err}")
+                
                 return {"success": True, "message": "Check accepted"}
                 
             elif action == 'reject':
@@ -5593,6 +5623,12 @@ def review_check(request: HttpRequest, case_id: int, check_type: str, payload: A
                     actor_role=getattr(request.user, 'role', ''),
                     source='Cases'
                 )
+
+                try:
+                    from users.incident_case_db import sync_case_full_status_from_checks
+                    sync_case_full_status_from_checks(case_id, cursor=cursor)
+                except Exception as sync_err:
+                    logger.warning(f"Failed to sync case full status after rejecting check: {sync_err}")
                 
                 return {"success": True, "message": "Check rejected and reassigned"}
             
@@ -5699,11 +5735,17 @@ def upload_check_media(
 
     # Update DB
     with connections['default'].cursor() as cursor:
-        cursor.execute(f"SELECT {col_name} FROM {table} WHERE case_id = %s", [case_id])
+        cursor.execute(f"SELECT check_status, {col_name} FROM {table} WHERE case_id = %s", [case_id])
         row = cursor.fetchone()
+        if not row:
+            raise HttpError(404, "Check not found")
+        check_status_val = (row[0] or "").strip().lower()
+        if request.user.role in (CustomUser.Role.VENDOR, 'VENDOR') and check_status_val in ('under verification', 'submitted', 'verified', 'completed', 'unable to verify'):
+            raise HttpError(400, "This check is under verification and cannot be modified.")
+
         existing_list = []
-        if row and row[0]:
-            raw_val = row[0]
+        if row and row[1]:
+            raw_val = row[1]
             if isinstance(raw_val, str):
                 try:
                     existing_list = _json.loads(raw_val)
